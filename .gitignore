@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Caches locais (regenerados automaticamente)
+cache_certificados/*.pkl
+
+# Databases
+*.db
+
+# Backups e obsoletos
+backups/
+Obsoletos/
+migration_data/
+
+# Arquivos temporarios
+~$*
+*.tmp
+*.bak
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# Claude
+.claude/

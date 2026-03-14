@@ -1,0 +1,226 @@
+{
+  "CASCAVEL - PR": {
+    "lat": -24.9554996,
+    "lon": -53.4560544
+  },
+  "TOMAZINA - PR": {
+    "lat": -23.7795852,
+    "lon": -49.9568409
+  },
+  "ITAIPU - PR": {
+    "lat": -23.443892,
+    "lon": -51.9876146
+  },
+  "LAGES - SC": {
+    "lat": -27.8080877,
+    "lon": -50.3609863
+  },
+  "EM OBRAS DE PAVIMENTAÇÃO ASFÁLTICA VINCULADAS AO DER - PR": {
+    "lat": null,
+    "lon": null
+  },
+  "TERRA ROXA - PR": {
+    "lat": -24.1786124,
+    "lon": -54.0883586
+  },
+  "IBIPORÃ - PR": {
+    "lat": -23.2383184,
+    "lon": -51.048152
+  },
+  "CAMPO MOURÃO - PR": {
+    "lat": -24.0490324,
+    "lon": -52.3731789
+  },
+  "MARIPÁ - PR": {
+    "lat": -24.4202852,
+    "lon": -53.8294439
+  },
+  "SÃO MIGUEL DO IGUAÇU - PR": {
+    "lat": -25.3194575,
+    "lon": -54.2136803
+  },
+  "UBIRATÃ - PR": {
+    "lat": -24.5316335,
+    "lon": -53.0016951
+  },
+  "TRÊS BARRAS - SC": {
+    "lat": -26.1154952,
+    "lon": -48.8763151
+  },
+  "GUARAPUAVA - PR": {
+    "lat": -25.5659527,
+    "lon": -51.4747222
+  },
+  "MARECHAL CÂNDIDO RONDON - PR": {
+    "lat": -24.5578723,
+    "lon": -54.0541894
+  },
+  "SÃO JOSÉ DOS PINHAIS": {
+    "lat": -25.533816,
+    "lon": -49.2072163
+  },
+  "QUITANDINHA - PR": {
+    "lat": -25.8737269,
+    "lon": -49.4977717
+  },
+  "IRANI - SC": {
+    "lat": -27.0228809,
+    "lon": -51.9024681
+  },
+  "PASSO DO VITORINA - CAMAQUÃ/RS": {
+    "lat": null,
+    "lon": null
+  },
+  "SÃO JOSÉ DOS PINHAIS - PR": {
+    "lat": -25.6643904,
+    "lon": -49.1747715
+  },
+  "ARAPOTI - PR": {
+    "lat": -24.1338141,
+    "lon": -49.8308005
+  },
+  "CAMPO MOURÃO": {
+    "lat": -24.046329,
+    "lon": -52.37802
+  },
+  "TOLEDO E MARECHAL CANDIDO RONDON": {
+    "lat": -24.509459,
+    "lon": -54.3151068
+  },
+  "ITAJAÍ - SC": {
+    "lat": -26.9201424,
+    "lon": -48.647609
+  },
+  "PAULO FREITAS - PR": {
+    "lat": -26.8981649,
+    "lon": -48.7446041
+  },
+  "GUARAPUAVA": {
+    "lat": -25.3950986,
+    "lon": -51.4622016
+  },
+  "SANTA CATARINA": {
+    "lat": -27.0628367,
+    "lon": -51.114965
+  },
+  "PORTO UNIÃO - SC": {
+    "lat": -26.2336416,
+    "lon": -51.082771
+  },
+  "TOLEDO": {
+    "lat": -24.7246,
+    "lon": -53.7413
+  },
+  "SÃO JOÃO DO IVAÍ": {
+    "lat": -23.9914063,
+    "lon": -51.8232148
+  },
+  "LOCALIZADA EM MARECHAL CÂNDIDO RONDON": {
+    "lat": null,
+    "lon": null
+  },
+  "CIANORTE - PR": {
+    "lat": -23.6543051,
+    "lon": -52.611774
+  },
+  "CASACAVEL - PR": {
+    "lat": null,
+    "lon": null
+  },
+  "LAPA": {
+    "lat": -25.76709,
+    "lon": -49.716777
+  },
+  "PATO BRANCO - PR": {
+    "lat": -26.2266484,
+    "lon": -52.6765308
+  },
+  "PONTA GROSSA - PR": {
+    "lat": -25.0156835,
+    "lon": -50.1390555
+  },
+  "PASSO DO VITORINA - CAMAQUÃ - RS": {
+    "lat": null,
+    "lon": null
+  },
+  "LAPA - PR": {
+    "lat": -25.76709,
+    "lon": -49.716777
+  },
+  "LONDRINA-PR": {
+    "lat": -23.2982561,
+    "lon": -51.1957834
+  },
+  "SÃO MATHEUS - PR": {
+    "lat": -24.5355331,
+    "lon": -54.0430619
+  },
+  "NO ESTADO DE SÃO PAULO": {
+    "lat": -23.6796169,
+    "lon": -46.5332946
+  },
+  "SÃO JOSE DOS PNHAIS PR": {
+    "lat": null,
+    "lon": null
+  },
+  "CURITIBA PR": {
+    "lat": -25.4372457,
+    "lon": -49.3033661
+  },
+  "IRATI - PR": {
+    "lat": -25.4787238,
+    "lon": -50.6452804
+  },
+  "PAULA FREITAS - PR": {
+    "lat": -26.2092739,
+    "lon": -50.936462
+  },
+  "ARAPONGAS - PR": {
+    "lat": -23.4060078,
+    "lon": -51.4569965
+  },
+  "BUTIÁ - RS": {
+    "lat": -30.1456903,
+    "lon": -51.9678262
+  },
+  "SIQUEIRA CAMPOS - PR": {
+    "lat": -23.6883441,
+    "lon": -49.8336359
+  },
+  "MARECHAL CÂNDIDO RONDON-PR": {
+    "lat": -24.5578723,
+    "lon": -54.0541894
+  },
+  "IOMERÊ - SC": {
+    "lat": -27.0019673,
+    "lon": -51.2405514
+  },
+  "IBAITI - PR": {
+    "lat": -23.7746513,
+    "lon": -50.2866429
+  },
+  "IOMERE - SC": {
+    "lat": -27.0019673,
+    "lon": -51.2405514
+  },
+  "CORONEL VIVIDA - PR": {
+    "lat": -25.9319033,
+    "lon": -52.7096089
+  },
+  "IBIRAMA - SC": {
+    "lat": -27.0565,
+    "lon": -49.5183
+  },
+  "LONDRINA - PR": {
+    "lat": -23.3045,
+    "lon": -51.1696
+  },
+  "RIBEIRAO CLARO - PR": {
+    "lat": -23.1937,
+    "lon": -49.7595
+  },
+  "MARECHAL CANDIDO RONDON - PR": {
+    "lat": -24.5579,
+    "lon": -54.0542
+  }
+}
