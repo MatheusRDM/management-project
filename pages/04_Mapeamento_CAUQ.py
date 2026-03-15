@@ -397,127 +397,52 @@ def _combinar_pedreiras_cauq(intel_list: list, df_proj) -> list:
 
 
 def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=None) -> folium.Map:
-    lats = [k[0] for k in grupos_loc] or [-25.4]
-    lons = [k[1] for k in grupos_loc] or [-51.5]
-    lat_c = sum(lats) / len(lats)
-    lon_c = sum(lons) / len(lons)
- 
+    import unicodedata as _ud
+    def _n(s):
+        s2 = _ud.normalize("NFKD", str(s).upper())
+        s2 = "".join(c for c in s2 if not _ud.combining(c))
+        return " ".join(s2.split())
+
+    # --- Centro do mapa ---
+    all_lats = [k[0] for k in grupos_loc] or [-25.4]
+    all_lons = [k[1] for k in grupos_loc] or [-51.5]
+    if pedreiras:
+        for _p in pedreiras:
+            if _p.get("lat") is not None:
+                all_lats.append(_p["lat"])
+                all_lons.append(_p["lon"])
+    lat_c = sum(all_lats) / len(all_lats)
+    lon_c = sum(all_lons) / len(all_lons)
+
     m = folium.Map(location=[lat_c, lon_c], zoom_start=7, tiles=None)
- 
-    folium.TileLayer("CartoDB positron",  name="Mapa Claro",    attr="CartoDB").add_to(m)
-    folium.TileLayer("CartoDB dark_matter", name="Mapa Escuro", attr="CartoDB").add_to(m)
+
+    folium.TileLayer("CartoDB positron",   name="Mapa Claro",    attr="CartoDB").add_to(m)
+    folium.TileLayer("CartoDB dark_matter", name="Mapa Escuro",  attr="CartoDB").add_to(m)
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap",
                      attr="OpenStreetMap contributors").add_to(m)
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         attr="Esri", name="Satelite (Esri)",
     ).add_to(m)
- 
+
     Fullscreen(position="topleft", title="Tela cheia",
                title_cancel="Sair de tela cheia").add_to(m)
     MiniMap(toggle_display=True, tile_layer="CartoDB positron").add_to(m)
- 
-    mc_grupos = {
-        "DEINFRA": MarkerCluster(name="DEINFRA"),
-        "DER-PR":  MarkerCluster(name="DER-PR"),
-        "DNIT":    MarkerCluster(name="DNIT"),
-        "OUTRO":   MarkerCluster(name="Outras"),
+
+    # ══════════════════════════════════════════════════════════════════════
+    # MARCADORES UNIFICADOS POR PEDREIRA
+    # Cada pedreira = 1 marcador. Contém dados da pedreira + stats CAUQ.
+    # ══════════════════════════════════════════════════════════════════════
+    NATUREZA_COR = {
+        "BASALTO":  "#E65100", "GRANITO":  "#6A1B9A", "GNAISSE":  "#1A237E",
+        "DACITO":   "#558B2F", "DIABASIO": "#4E342E", "DIABÁSIO": "#4E342E",
+        "AREIA":    "#F9A825", "RIOLITO":  "#00695C", "MIGMATITO": "#5D4037",
     }
-    for g in mc_grupos.values():
-        g.add_to(m)
- 
-    fg_multi = folium.FeatureGroup(name="Multiplos Projetos")
-    fg_multi.add_to(m)
- 
-    # Build set of quarry positions to suppress overlapping project markers
-    from math import radians, cos, sin, asin, sqrt as _sqrt
-    def _hav_km(la1, lo1, la2, lo2):
-        R = 6371.0
-        la1, lo1, la2, lo2 = (radians(x) for x in (la1, lo1, la2, lo2))
-        dlat = la2 - la1; dlon = lo2 - lo1
-        a = sin(dlat/2)**2 + cos(la1)*cos(la2)*sin(dlon/2)**2
-        return 2 * R * asin(min(1.0, _sqrt(a)))
 
-    ped_locs = []
+    fg_pedreiras = folium.FeatureGroup(name="Pedreiras", show=True)
+    fg_pedreiras.add_to(m)
+
     if pedreiras:
-        for _p in pedreiras:
-            _pla = _p.get("lat"); _plo = _p.get("lon")
-            if _pla is not None and _plo is not None:
-                ped_locs.append((_pla, _plo))
-
-    for (lat, lon), rows in grupos_loc.items():
-        # Skip project markers that overlap a quarry marker (within 3 km)
-        if ped_locs and any(_hav_km(lat, lon, pla, plo) < 3.0 for pla, plo in ped_locs):
-            continue
-        if len(rows) == 1:
-            row = rows[0]
-            norma = str(row.get("norma", "OUTRO"))
-            cor = NORMA_CORES_FOLIUM.get(norma, "gray")
-            grupo = mc_grupos.get(norma, mc_grupos["OUTRO"])
- 
-            popup = folium.Popup(
-                folium.IFrame(html=_popup_html(row), width=420, height=440),
-                max_width=440,
-            )
-            tooltip = (
-                f"<b>{row.get('num_projeto','—')}</b><br>"
-                f"{row.get('procedencia','—')}<br>"
-                f"{row.get('localizacao','—')}<br>"
-                f"<span style='color:{NORMA_HEX.get(norma,'#555')}'>{norma}</span>"
-            )
-            folium.Marker(
-                location=[lat, lon],
-                popup=popup,
-                tooltip=folium.Tooltip(tooltip, sticky=True),
-                icon=folium.Icon(color=cor, icon="road", prefix="fa"),
-            ).add_to(grupo)
- 
-        else:
-            n = len(rows)
-            loc_name = rows[0].get("localizacao", "—")
-            proc_name = rows[0].get("procedencia", "—")
-            normas_presentes = ", ".join(sorted({str(r.get("norma","—")) for r in rows}))
-            folium.Marker(
-                location=[lat, lon],
-                tooltip=folium.Tooltip(
-                    f"<b>{n} projetos - {proc_name}</b><br>"
-                    f"{loc_name}<br>"
-                    f"<span style='color:#BFCF99;'>Normas: {normas_presentes}</span><br>"
-                    f"<i>Clique para comparar abaixo do mapa</i>",
-                    sticky=True,
-                ),
-                icon=folium.DivIcon(
-                    html=f"""
-                    <div style="
-                        background:#566E3D;color:#fff;border-radius:50%;
-                        width:36px;height:36px;
-                        display:flex;align-items:center;justify-content:center;
-                        font-size:15px;font-weight:bold;
-                        border:3px solid #fff;
-                        box-shadow:0 2px 6px rgba(0,0,0,0.45);
-                        cursor:pointer;
-                    ">{n}</div>""",
-                    icon_size=(36, 36),
-                    icon_anchor=(18, 18),
-                ),
-            ).add_to(fg_multi)
- 
-    # ── Camada de Pedreiras (Intel Geoespacial + Dados CAUQ) ──────────
-    if pedreiras:
-        NATUREZA_COR = {
-            "BASALTO":  "#E65100",
-            "GRANITO":  "#6A1B9A",
-            "GNAISSE":  "#1A237E",
-            "DACITO":   "#558B2F",
-            "DIABASIO": "#4E342E",
-            "DIABÁSIO": "#4E342E",
-            "AREIA":    "#F9A825",
-            "RIOLITO":  "#00695C",
-        }
-
-        fg_pedreiras = folium.FeatureGroup(name="Pedreiras (Fontes)", show=True)
-        fg_pedreiras.add_to(m)
-
         for ped in pedreiras:
             lat_p = ped.get("lat")
             lon_p = ped.get("lon")
@@ -527,6 +452,7 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
             nat      = str(ped.get("natureza", "")).upper().split("/")[0].strip()
             cor_ped  = NATUREZA_COR.get(nat, "#B71C1C")
             is_aprox = ped.get("_aprox", False)
+            loc_exata = ped.get("loc_exata", False)
 
             # Stats agregados do banco CAUQ
             st_d   = _stats_pedreira(df_projetos, ped.get("procedencias", []))
@@ -570,7 +496,6 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
                             "</td></tr>"
                         )
 
-            loc_exata  = ped.get("loc_exata", False)
             aprox_note = (
                 "<tr><td colspan='2' style='color:#F9A825;font-size:9px;padding:3px 4px;'>"
                 "⚠ Posicao aproximada (centroide dos projetos)</td></tr>"
@@ -607,22 +532,50 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
                 f"</table></div>"
             )
 
+            # ── Icone unificado: quadrado com contagem de projetos ──
+            border_col = "#00E676" if loc_exata else ("#fff" if not is_aprox else "#F9A825")
+            opacity    = "1.0" if not is_aprox else "0.75"
+
+            if n_proj > 0:
+                # Marcador com badge de contagem
+                icon_html = (
+                    f"<div style='position:relative;'>"
+                    f"<div style='background:{cor_ped};color:#fff;border-radius:5px;"
+                    f"width:30px;height:30px;display:flex;align-items:center;"
+                    f"justify-content:center;font-size:13px;font-weight:bold;"
+                    f"border:2.5px solid {border_col};"
+                    f"box-shadow:0 2px 6px rgba(0,0,0,0.5);"
+                    f"opacity:{opacity};'>⛏</div>"
+                    f"<div style='position:absolute;top:-8px;right:-10px;"
+                    f"background:#BFCF99;color:#1a1a1a;border-radius:50%;"
+                    f"width:20px;height:20px;display:flex;align-items:center;"
+                    f"justify-content:center;font-size:10px;font-weight:bold;"
+                    f"border:1.5px solid #fff;"
+                    f"box-shadow:0 1px 3px rgba(0,0,0,0.4);'>{n_proj}</div></div>"
+                )
+                icon_size = (40, 38)
+                icon_anchor = (15, 15)
+            else:
+                # Sem projetos: marcador simples menor
+                icon_html = (
+                    f"<div style='background:{cor_ped};color:#fff;border-radius:4px;"
+                    f"width:22px;height:22px;display:flex;align-items:center;"
+                    f"justify-content:center;font-size:11px;font-weight:bold;"
+                    f"border:2px solid {border_col};"
+                    f"box-shadow:0 2px 5px rgba(0,0,0,0.4);"
+                    f"opacity:{opacity};'>⛏</div>"
+                )
+                icon_size = (22, 22)
+                icon_anchor = (11, 11)
+
             n_label = f" ({n_proj})" if n_proj > 0 else ""
             tooltip_txt = (
                 f"<b>&#9935; {ped['nome']}</b>{n_label}<br>"
                 f"{ped['natureza']} | {ped['localizacao']}"
             )
-            border_col = "#00E676" if loc_exata else ("#fff" if not is_aprox else "#F9A825")
-            opacity    = "1.0"  if not is_aprox else "0.75"
-            icon_symbol = "📍" if loc_exata else "&#9935;"
-            icon_html  = (
-                f"<div style='background:{cor_ped};color:#fff;border-radius:4px;"
-                f"width:26px;height:26px;display:flex;align-items:center;"
-                f"justify-content:center;font-size:{'12' if loc_exata else '14'}px;font-weight:bold;"
-                f"border:2px solid {border_col};"
-                f"box-shadow:0 2px 6px rgba(0,0,0,0.5);"
-                f"opacity:{opacity};'>{icon_symbol}</div>"
-            )
+            if n_proj > 0:
+                tooltip_txt += f"<br><i style='color:#BFCF99;'>Clique para ver {n_proj} projetos</i>"
+
             popup_h = 390 if st_d else 220
             folium.Marker(
                 location=[lat_p, lon_p],
@@ -632,7 +585,7 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
                 ),
                 tooltip=folium.Tooltip(tooltip_txt, sticky=True),
                 icon=folium.DivIcon(
-                    html=icon_html, icon_size=(26, 26), icon_anchor=(13, 13),
+                    html=icon_html, icon_size=icon_size, icon_anchor=icon_anchor,
                 ),
             ).add_to(fg_pedreiras)
 
@@ -1156,14 +1109,19 @@ def main():
     # ── Legenda ──────────────────────────────────────────────────────────────────────
     st.markdown(
         f"""
-        <div style="display:flex;gap:1.5rem;margin-bottom:0.8rem;flex-wrap:wrap;align-items:center;">
-            <span style="color:{NORMA_HEX['DER-PR']};font-weight:600;">&#9679; DER-PR</span>
-            <span style="color:{NORMA_HEX['DNIT']};font-weight:600;">&#9679; DNIT</span>
-            <span style="color:{NORMA_HEX['DEINFRA']};font-weight:600;">&#9679; DEINFRA-SC</span>
-            <span style="color:{NORMA_HEX['OUTRO']};font-weight:600;">&#9679; Outras</span>
-            <span style="color:#888;font-size:0.85rem;">&nbsp;| Badge verde = multiplos projetos</span>
+        <div style="display:flex;gap:1.2rem;margin-bottom:0.8rem;flex-wrap:wrap;align-items:center;">
             <span style="background:#E65100;color:#fff;border-radius:4px;padding:2px 7px;
-                         font-size:0.8rem;font-weight:600;">&#9935; Pedreiras</span>
+                         font-size:0.8rem;font-weight:600;">&#9935; Basalto</span>
+            <span style="background:#6A1B9A;color:#fff;border-radius:4px;padding:2px 7px;
+                         font-size:0.8rem;font-weight:600;">&#9935; Granito</span>
+            <span style="background:#F9A825;color:#1a1a1a;border-radius:4px;padding:2px 7px;
+                         font-size:0.8rem;font-weight:600;">&#9935; Areia</span>
+            <span style="background:#1A237E;color:#fff;border-radius:4px;padding:2px 7px;
+                         font-size:0.8rem;font-weight:600;">&#9935; Gnaisse</span>
+            <span style="color:#888;font-size:0.82rem;">&nbsp;|&nbsp;</span>
+            <span style="color:#00E676;font-weight:600;">&#9632; GPS exato</span>
+            <span style="color:#F9A825;font-weight:600;">&#9632; Aproximado</span>
+            <span style="color:#BFCF99;font-size:0.82rem;">&nbsp;| Badge = n&ordm; projetos &nbsp;| Clique na pedreira para comparar</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1175,7 +1133,6 @@ def main():
         key = (round(float(row["lat"]), 4), round(float(row["lon"]), 4))
         grupos_loc.setdefault(key, []).append(row)
  
-    multi_locs = {k: v for k, v in grupos_loc.items() if len(v) > 1}
  
     # ── Mapa ─────────────────────────────────────────────────────────────────────────
     if df_geo.empty and mostrar_projetos:
@@ -1203,15 +1160,35 @@ def main():
  
         clk = (map_data or {}).get("last_object_clicked")
         if clk:
+            import unicodedata as _ud_c
+            def _nc(s):
+                s2 = _ud_c.normalize("NFKD", str(s).upper())
+                s2 = "".join(c for c in s2 if not _ud_c.combining(c))
+                return " ".join(s2.split())
+
             lat_c = float(clk.get("lat", 0))
             lon_c = float(clk.get("lng", 0))
-            matched = None
-            for (la, lo), rows in multi_locs.items():
-                if abs(la - lat_c) < 0.002 and abs(lo - lon_c) < 0.002:
-                    matched = rows
-                    break
-            if matched:
-                st.session_state["cauq_compare"] = matched
+
+            # Encontrar a pedreira clicada pela coordenada
+            matched_ped = None
+            if pedreiras_layer:
+                for _p in pedreiras_layer:
+                    _pla = _p.get("lat"); _plo = _p.get("lon")
+                    if _pla is not None and abs(_pla - lat_c) < 0.003 and abs(_plo - lon_c) < 0.003:
+                        matched_ped = _p
+                        break
+
+            if matched_ped and not df.empty:
+                proc_list = matched_ped.get("procedencias", [])
+                proc_norm_col = df["procedencia"].astype(str).apply(_nc)
+                mask = pd.Series(False, index=df.index)
+                for p in proc_list:
+                    mask |= proc_norm_col.str.contains(_nc(p), na=False, regex=False)
+                sub = df[mask]
+                if not sub.empty:
+                    st.session_state["cauq_compare"] = [row.to_dict() for _, row in sub.iterrows()]
+                else:
+                    st.session_state.pop("cauq_compare", None)
             else:
                 st.session_state.pop("cauq_compare", None)
  
