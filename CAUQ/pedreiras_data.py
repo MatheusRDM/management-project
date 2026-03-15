@@ -25,9 +25,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "CASCAVEL - PR",
         "natureza": "BASALTO",
         "endereco": "Rua Carlos Gomes, 1406/1448 e Rua Gandhi S/N Lote 67, Cascavel - PR",
-        "lat": -24.959,
-        "lon": -53.459,
+        "lat": -25.003409,
+        "lon": -53.450645,
         "estado": "PR",
+        "loc_exata": True,
     },
     {
         "nome": "PEDREIRA TREVO - TERRA ROXA",
@@ -35,9 +36,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "TERRA ROXA - PR",
         "natureza": "BASALTO",
         "endereco": "Rodovia BR-163, Km 316, Serra do Maracaju, Terra Roxa - PR",
-        "lat": -24.162,
-        "lon": -53.754,
+        "lat": -24.354607,
+        "lon": -54.143954,
         "estado": "PR",
+        "loc_exata": True,
     },
     {
         "nome": "PEDREIRA TREVO - SANTA TEREZA DO OESTE",
@@ -45,9 +47,21 @@ PEDREIRAS_INTEL = [
         "localizacao": "SANTA TEREZA DO OESTE - PR",
         "natureza": "BASALTO",
         "endereco": "Rodovia BR-163, KM 184, S/N, Santa Tereza do Oeste - PR",
-        "lat": -24.798,
-        "lon": -53.218,
+        "lat": -25.146849,
+        "lon": -53.590363,
         "estado": "PR",
+        "loc_exata": True,
+    },
+    {
+        "nome": "PEDREIRA TREVO - NOVA AURORA",
+        "procedencias": ["TREVO NOVA AURORA", "TREVO AURORA"],
+        "localizacao": "NOVA AURORA - PR",
+        "natureza": "BASALTO",
+        "endereco": "Nova Aurora - PR",
+        "lat": -24.593661,
+        "lon": -53.207614,
+        "estado": "PR",
+        "loc_exata": True,
     },
     # ── DELLAI ─────────────────────────────────────────────────────────────
     {
@@ -56,9 +70,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "TOMAZINA - PR",
         "natureza": "BASALTO",
         "endereco": "Fazenda Cristalina, S/N - Pedreira, Tomazina - PR (CEP 84935-000)",
-        "lat": -23.736,
-        "lon": -49.955,
+        "lat": -23.748016,
+        "lon": -49.973659,
         "estado": "PR",
+        "loc_exata": True,
     },
     {
         "nome": "PEDREIRA DELLAI - SIQUEIRA CAMPOS",
@@ -119,9 +134,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "IBAITI - PR",
         "natureza": "BASALTO",
         "endereco": "Ibaiti - PR | UTM: N 7.362.245 / E 582.687 (SIRGAS 2000)",
-        "lat": -23.839518,
-        "lon": -50.184718,
+        "lat": -23.914440,
+        "lon": -50.192769,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── ICA / COMPASA ──────────────────────────────────────────────────────
     {
@@ -130,9 +146,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "IBIPORÃ - PR",
         "natureza": "BASALTO",
         "endereco": "Rodovia PR-862 (Contorno Norte de Ibiporã), KM 9, Ibiporã - PR",
-        "lat": -23.271,
-        "lon": -51.046,
+        "lat": -23.259099,
+        "lon": -51.083885,
         "estado": "PR",
+        "loc_exata": True,
     },
     {
         "nome": "PEDREIRA COMPASA - IBIPORÃ",
@@ -140,9 +157,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "IBIPORÃ - PR",
         "natureza": "BASALTO / AREIA",
         "endereco": "Malha logística PR-862 / Rio Tibagi, Ibiporã - PR",
-        "lat": -23.273,
-        "lon": -51.060,
+        "lat": -23.216080,
+        "lon": -51.022837,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── SAMP ───────────────────────────────────────────────────────────────
     {
@@ -151,9 +169,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "SÃO MIGUEL DO IGUAÇU - PR",
         "natureza": "BASALTO",
         "endereco": "Rodovia BR-277, KM 687, Serra do Mico, São Miguel do Iguaçu - PR",
-        "lat": -25.404,
-        "lon": -54.253,
+        "lat": -25.336421,
+        "lon": -54.199246,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── GUARICANA ──────────────────────────────────────────────────────────
     {
@@ -184,9 +203,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "UBIRATÃ - PR",
         "natureza": "BASALTO",
         "endereco": "Ubiratã - PR (SIRGAS 2000: Lat -24.54, Lon -52.99)",
-        "lat": -24.540,
-        "lon": -52.990,
+        "lat": -24.509047,
+        "lon": -52.895339,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── KERBER ─────────────────────────────────────────────────────────────
     {
@@ -195,9 +215,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "PORTO UNIÃO - SC",
         "natureza": "BASALTO",
         "endereco": "Porto União - SC (Coordenadas: -26.217424, -51.126636)",
-        "lat": -26.217424,
-        "lon": -51.126636,
+        "lat": -26.276028,
+        "lon": -51.104373,
         "estado": "SC",
+        "loc_exata": True,
     },
     {
         "nome": "PEDREIRA KERBER - TRÊS BARRAS",
@@ -216,9 +237,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "MARECHAL CÂNDIDO RONDON - PR",
         "natureza": "BASALTO",
         "endereco": "Rodovia BR-163, KM 290,5, Marechal Cândido Rondon - PR",
-        "lat": -24.557,
-        "lon": -54.052,
+        "lat": -24.515766,
+        "lon": -54.072642,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── MARC ───────────────────────────────────────────────────────────────
     {
@@ -271,9 +293,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "CASCAVEL - PR",
         "natureza": "BASALTO",
         "endereco": "Rua Rio da Paz, KM 4, Cascavel - PR",
-        "lat": -24.970,
-        "lon": -53.482,
+        "lat": -25.013890,
+        "lon": -53.459934,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── ÁGUA AMARELA ───────────────────────────────────────────────────────
     {
@@ -315,9 +338,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "LONDRINA - PR",
         "natureza": "BASALTO",
         "endereco": "Rodovia Celso Garcia Cid (PR-445), KM 364, Londrina - PR",
-        "lat": -23.302,
-        "lon": -51.175,
+        "lat": -23.428243,
+        "lon": -51.139556,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── PEDRA NORTE ────────────────────────────────────────────────────────
     {
@@ -326,9 +350,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "CORNÉLIO PROCÓPIO - PR",
         "natureza": "BASALTO",
         "endereco": "Rodovia PR-160, S/N, Km 3,5, Cornélio Procópio - PR",
-        "lat": -23.179,
-        "lon": -50.649,
+        "lat": -23.226453,
+        "lon": -50.631346,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── CASTILHO ───────────────────────────────────────────────────────────
     {
@@ -337,9 +362,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "RIBEIRÃO CLARO - PR",
         "natureza": "BASALTO",
         "endereco": "Rodovia RM-100, KM 2,2, Estrada dos Baggios, Ribeirão Claro - PR",
-        "lat": -23.107,
-        "lon": -49.759,
+        "lat": -23.211803,
+        "lon": -49.769121,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── USINA NORTE ────────────────────────────────────────────────────────
     {
@@ -403,9 +429,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "CHOPINZINHO - PR",
         "natureza": "BASALTO",
         "endereco": "Rua 13 de Maio, S/N, Bairro São Miguel, Chopinzinho - PR",
-        "lat": -25.860372,
-        "lon": -52.517261,
+        "lat": -25.847586,
+        "lon": -52.530426,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── REMANSO ────────────────────────────────────────────────────────────
     {
@@ -425,9 +452,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "IMBAÚ - PR",
         "natureza": "DIABÁSIO",
         "endereco": "Proximidades do pedágio Imbaú/Ortigueira, Imbaú - PR",
-        "lat": -24.459,
-        "lon": -50.773,
+        "lat": -24.450831,
+        "lon": -50.764697,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── INFRASUL ───────────────────────────────────────────────────────────
     {
@@ -495,16 +523,17 @@ PEDREIRAS_INTEL = [
         "lon": -49.531,
         "estado": "PR",
     },
-    # ── ITAIPU ─────────────────────────────────────────────────────────────
+    # ── ITAIPU (coord CORRIGIDA via KMZ — era -24.870/-54.322 ERRADA) ─────
     {
         "nome": "PEDREIRA ITAIPU",
         "procedencias": ["PEDREIRA ITAIPU", "ITAIPU"],
-        "localizacao": "SANTA HELENA / CAMPO MOURÃO - PR",
+        "localizacao": "CAMPO MOURÃO - PR",
         "natureza": "BASALTO",
-        "endereco": "Reservatório da UHE Itaipu, Santa Helena - PR",
-        "lat": -24.870,
-        "lon": -54.322,
+        "endereco": "Campo Mourão - PR",
+        "lat": -24.044712,
+        "lon": -52.321646,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── DRISNER ────────────────────────────────────────────────────────────
     {
@@ -535,9 +564,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "CAMPO MOURÃO - PR",
         "natureza": "BASALTO",
         "endereco": "Entroncamento viário central do Paraná, Campo Mourão - PR (BR-369)",
-        "lat": -24.045,
-        "lon": -52.379,
+        "lat": -24.016427,
+        "lon": -52.347245,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── CMIX ───────────────────────────────────────────────────────────────
     {
@@ -546,9 +576,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "TOLEDO - PR",
         "natureza": "BASALTO",
         "endereco": "Toledo - PR (consórcio CMIX + DALMINA, BR-163)",
-        "lat": -24.721,
-        "lon": -53.744,
+        "lat": -24.748028,
+        "lon": -53.766104,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── NORTE SUL ──────────────────────────────────────────────────────────
     {
@@ -557,9 +588,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "SÃO JOÃO DO IVAÍ / APUCARANA - PR",
         "natureza": "BASALTO",
         "endereco": "Vale do Ivaí - Apucarana - PR",
-        "lat": -23.767,
-        "lon": -51.579,
+        "lat": -23.955447,
+        "lon": -51.858244,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── CIANORTE ───────────────────────────────────────────────────────────
     {
@@ -866,9 +898,10 @@ PEDREIRAS_INTEL = [
         "localizacao": "GUARAPUAVA - PR",
         "natureza": "BASALTO",
         "endereco": "Margem da Rodovia PR-170, Guarapuava - PR",
-        "lat": -25.436,
-        "lon": -51.510,
+        "lat": -25.436181,
+        "lon": -51.497741,
         "estado": "PR",
+        "loc_exata": True,
     },
     # ── PEDREIRA REMANSO — FOZ DO IGUAÇU ─────────────────────────────────────
     {
@@ -881,4 +914,47 @@ PEDREIRAS_INTEL = [
         "lon": -54.589,
         "estado": "PR",
     },
+
+    # ==========================================================================
+    # NOVAS ENTRADAS DO KMZ (coordenadas exatas verificadas em campo)
+    # ==========================================================================
+    {'nome': 'USINA ENGETRAN', 'procedencias': ['ENGETRAN', 'USINA ENGETRAN'], 'localizacao': 'UMUARAMA - PR', 'natureza': 'BASALTO', 'endereco': 'Umuarama - PR', 'lat': -23.196657, 'lon': -52.37309, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA EXTRACON', 'procedencias': ['EXTRACON', 'EXTRACON MINERACAO'], 'localizacao': 'MARINGA - PR', 'natureza': 'BASALTO', 'endereco': 'Maringa - PR', 'lat': -23.475447, 'lon': -51.943224, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA GUARAVERA - LONDRINA', 'procedencias': ['GUARAVERA LONDRINA', 'GUARAVERA'], 'localizacao': 'LONDRINA - PR', 'natureza': 'BASALTO / AREIA', 'endereco': 'Londrina - PR', 'lat': -23.624214, 'lon': -51.101957, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA GUARAVERA - IBIPORA', 'procedencias': ['GUARAVERA IBIPORA', 'GUARAVERA IBIPORA'], 'localizacao': 'IBIPORA - PR', 'natureza': 'BASALTO', 'endereco': 'Ibipora - PR', 'lat': -23.255461, 'lon': -51.096982, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'MINERPAL', 'procedencias': ['MINERPAL'], 'localizacao': 'PALOTINA - PR', 'natureza': 'BASALTO', 'endereco': 'Palotina - PR', 'lat': -24.348935, 'lon': -53.845359, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA ASFALTEC', 'procedencias': ['ASFALTEC', 'ASPHALTEC'], 'localizacao': 'ARAPONGAS - PR', 'natureza': 'BASALTO', 'endereco': 'Arapongas - PR', 'lat': -23.436607, 'lon': -51.424754, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA GENARO', 'procedencias': ['GENARO', 'PEDREIRA GENARO'], 'localizacao': 'PONTA GROSSA - PR', 'natureza': 'BASALTO', 'endereco': 'Ponta Grossa - PR', 'lat': -24.956715, 'lon': -50.030588, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA BASALTO 8', 'procedencias': ['BASALTO 8', 'BASALTO8'], 'localizacao': 'PIRAQUARA - PR', 'natureza': 'BASALTO', 'endereco': 'Piraquara - PR', 'lat': -25.360704, 'lon': -49.033839, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA BOSCARDIN - PIRAQUARA', 'procedencias': ['BOSCARDIN PIRAQUARA'], 'localizacao': 'PIRAQUARA - PR', 'natureza': 'BASALTO', 'endereco': 'Piraquara - PR', 'lat': -25.43996, 'lon': -49.013503, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA BOSCARDIN - PONTA GROSSA', 'procedencias': ['BOSCARDIN PONTA GROSSA', 'BOSCARDIN P. GROSSA'], 'localizacao': 'PONTA GROSSA - PR', 'natureza': 'BASALTO', 'endereco': 'Ponta Grossa - PR', 'lat': -24.979916, 'lon': -50.239212, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA BOSCARDIN - PALMEIRA', 'procedencias': ['BOSCARDIN CIA', 'BOSCARDIN PALMEIRA', 'BOSCARDIN & CIA'], 'localizacao': 'PALMEIRA - PR', 'natureza': 'BASALTO', 'endereco': 'Palmeira - PR', 'lat': -25.531078, 'lon': -50.65072, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'J. A. GAI EXTRACAO DE AREIA', 'procedencias': ['GAI', 'J.A. GAI'], 'localizacao': 'FAZENDA RIO GRANDE - PR', 'natureza': 'AREIA', 'endereco': 'Fazenda Rio Grande - PR', 'lat': -25.605125, 'lon': -49.329008, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'COTRAGON EXTRACAO AREIA', 'procedencias': ['COTRAGON'], 'localizacao': 'SAO JOSE DOS PINHAIS - PR', 'natureza': 'AREIA', 'endereco': 'Sao Jose dos Pinhais - PR', 'lat': -25.578089, 'lon': -49.224972, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'M. T. TORTATO EIRELI', 'procedencias': ['TORTATO'], 'localizacao': 'FAZENDA RIO GRANDE - PR', 'natureza': 'AREIA', 'endereco': 'Fazenda Rio Grande - PR', 'lat': -25.604946, 'lon': -49.314668, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA BARRA MANSA', 'procedencias': ['BARRA MANSA', 'PEDREIRA BARRA MANSA'], 'localizacao': 'ARAPOTI - PR', 'natureza': 'BASALTO', 'endereco': 'Arapoti - PR', 'lat': -24.125916, 'lon': -49.473021, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA VALE DO IVAI', 'procedencias': ['VALE DO IVAI', 'VALE IVAI'], 'localizacao': 'IVAIPORA - PR', 'natureza': 'BASALTO', 'endereco': 'Ivaipora - PR', 'lat': -24.141192, 'lon': -51.704454, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA SANTA HELENA', 'procedencias': ['SANTA HELENA', 'PED. SANTA HELENA'], 'localizacao': 'CAMPO MOURAO - PR', 'natureza': 'BASALTO', 'endereco': 'Campo Mourao - PR', 'lat': -23.930812, 'lon': -52.325522, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA ITATIBA', 'procedencias': ['ITATIBA'], 'localizacao': 'FOZ DO IGUACU - PR', 'natureza': 'BASALTO', 'endereco': 'Foz do Iguacu - PR', 'lat': -25.259693, 'lon': -53.994594, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA NOSSA SRA DA LUZ', 'procedencias': ['NOSSA SRA DA LUZ', 'NOSSA SRA LUZ', 'NS LUZ'], 'localizacao': 'PALMAS - PR', 'natureza': 'BASALTO', 'endereco': 'Palmas - PR', 'lat': -26.384748, 'lon': -52.333194, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA MOTTER', 'procedencias': ['MOTTER'], 'localizacao': 'FRANCISCO BELTRAO - PR', 'natureza': 'BASALTO', 'endereco': 'Francisco Beltrao - PR', 'lat': -26.073495, 'lon': -53.125185, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA INGA', 'procedencias': ['INGA', 'PEDREIRA INGA'], 'localizacao': 'MARINGA - PR', 'natureza': 'BASALTO', 'endereco': 'Maringa - PR', 'lat': -23.473948, 'lon': -51.955293, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA BRITAOESTE', 'procedencias': ['BRITAOESTE', 'BRITA OESTE'], 'localizacao': 'FOZ DO IGUACU - PR', 'natureza': 'BASALTO', 'endereco': 'Foz do Iguacu - PR', 'lat': -25.250806, 'lon': -53.983112, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA NOVA', 'procedencias': ['PEDREIRA NOVA'], 'localizacao': 'ARAPONGAS - PR', 'natureza': 'BASALTO', 'endereco': 'Arapongas - PR', 'lat': -23.43638, 'lon': -51.424941, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA SAO JOSE', 'procedencias': ['SAO JOSE', 'PEDREIRA SAO JOSE'], 'localizacao': 'CAMPO MOURAO - PR', 'natureza': 'BASALTO', 'endereco': 'Campo Mourao - PR', 'lat': -24.266254, 'lon': -52.204169, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'EURO MINERIOS', 'procedencias': ['EURO MINERIOS', 'EURO MINERACAO'], 'localizacao': 'ALMIRANTE TAMANDARE - PR', 'natureza': 'GRANITO', 'endereco': 'Almirante Tamandare - PR', 'lat': -25.723408, 'lon': -49.22991, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA GNATTA', 'procedencias': ['GNATTA'], 'localizacao': 'IRATI - PR', 'natureza': 'BASALTO', 'endereco': 'Irati - PR', 'lat': -25.207643, 'lon': -50.86522, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA SERRA DA PRATA', 'procedencias': ['SERRA DA PRATA', 'PEDREIRA SERRA PRATA'], 'localizacao': 'MORRETES - PR', 'natureza': 'GNAISSE / GRANITO', 'endereco': 'Morretes - PR', 'lat': -25.577382, 'lon': -48.584944, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRAS IAPO', 'procedencias': ['IAPO', 'PEDREIRAS IAPO'], 'localizacao': 'CASTRO - PR', 'natureza': 'BASALTO', 'endereco': 'Castro - PR', 'lat': -24.793709, 'lon': -49.998838, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA ZOTTI', 'procedencias': ['ZOTTI'], 'localizacao': 'PATO BRANCO - PR', 'natureza': 'BASALTO', 'endereco': 'Pato Branco - PR', 'lat': -25.731893, 'lon': -52.863172, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA CATEDRAL', 'procedencias': ['CATEDRAL', 'PEDREIRA CATEDRAL'], 'localizacao': 'APUCARANA - PR', 'natureza': 'BASALTO', 'endereco': 'Apucarana - PR', 'lat': -23.572475, 'lon': -51.82896, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA ITAPOA', 'procedencias': ['ITAPOA'], 'localizacao': 'UMUARAMA - PR', 'natureza': 'BASALTO', 'endereco': 'Umuarama - PR', 'lat': -23.196302, 'lon': -52.375014, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA BRASIL', 'procedencias': ['PEDREIRA BRASIL', 'BRASIL'], 'localizacao': 'ARAPONGAS - PR', 'natureza': 'BASALTO', 'endereco': 'Arapongas - PR', 'lat': -23.581271, 'lon': -51.418292, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA PAVIMAR', 'procedencias': ['PAVIMAR'], 'localizacao': 'FRANCISCO BELTRAO - PR', 'natureza': 'BASALTO', 'endereco': 'Francisco Beltrao - PR', 'lat': -26.063379, 'lon': -53.107153, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA SAO JORGE', 'procedencias': ['SAO JORGE', 'PEDREIRA SAO JORGE'], 'localizacao': 'CAMPO LARGO - PR', 'natureza': 'GRANITO', 'endereco': 'Campo Largo - PR', 'lat': -25.423104, 'lon': -49.3877, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA ARAPOTI', 'procedencias': ['ARAPOTI', 'PEDREIRA ARAPOTI'], 'localizacao': 'ARAPOTI - PR', 'natureza': 'BASALTO', 'endereco': 'Arapoti - PR', 'lat': -24.02393, 'lon': -49.836493, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA GRUPO SR', 'procedencias': ['GRUPO SR', 'SR MINERACAO'], 'localizacao': 'FOZ DO IGUACU - PR', 'natureza': 'BASALTO', 'endereco': 'Foz do Iguacu - PR', 'lat': -25.176286, 'lon': -54.255457, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA DALMINA - BELTRAO', 'procedencias': ['DALMINA BELTRAO', 'DALMINA FRANCISCO BELTRAO'], 'localizacao': 'FRANCISCO BELTRAO - PR', 'natureza': 'BASALTO', 'endereco': 'Francisco Beltrao - PR', 'lat': -25.379568, 'lon': -52.436262, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA CONCREVALLE', 'procedencias': ['CONCREVALLE', 'CONCREVALE'], 'localizacao': 'DOIS VIZINHOS - PR', 'natureza': 'BASALTO', 'endereco': 'Dois Vizinhos - PR', 'lat': -25.783494, 'lon': -53.105323, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'USINA SANTO ANTONIO DA PLATINA', 'procedencias': ['STO ANTONIO DA PLATINA', 'SANTO ANTONIO DA PLATINA', 'PLATINA'], 'localizacao': 'SANTO ANTONIO DA PLATINA - PR', 'natureza': 'BASALTO', 'endereco': 'Santo Antonio da Platina - PR', 'lat': -23.357061, 'lon': -50.062103, 'estado': 'PR', 'loc_exata': True},
 ]

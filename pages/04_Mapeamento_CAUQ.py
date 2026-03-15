@@ -24,7 +24,6 @@ from CAUQ.cauq_scanner import (
     escanear_projetos, anos_disponiveis, geocodificar_pendentes, SPEC_LIMITS,
 )
 from CAUQ.pedreiras_data import PEDREIRAS_INTEL
-from CAUQ.pedreiras_kmz import PEDREIRAS_KMZ
  
 # ======================================================================================
 # CONFIGURACAO DA PAGINA
@@ -489,12 +488,16 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
                             "</td></tr>"
                         )
 
+            loc_exata  = ped.get("loc_exata", False)
             aprox_note = (
                 "<tr><td colspan='2' style='color:#F9A825;font-size:9px;padding:3px 4px;'>"
                 "⚠ Posicao aproximada (centroide dos projetos)</td></tr>"
-            ) if is_aprox else ""
+            ) if is_aprox else (
+                "<tr><td colspan='2' style='color:#43A047;font-size:9px;padding:3px 4px;'>"
+                "📍 Coordenada exata (verificada via KMZ/ANM)</td></tr>"
+            ) if loc_exata else ""
 
-            badge_tipo = "⚡ INTEL" if not is_aprox else "~ CAUQ"
+            badge_tipo = "📍 GPS Exato" if loc_exata else ("⚡ INTEL" if not is_aprox else "~ CAUQ")
             sem_dados  = (
                 "<tr><td colspan='2' style='color:#aaa;padding:5px 4px;"
                 "border-top:1px solid #eee;'>Sem projetos no periodo filtrado</td></tr>"
@@ -527,15 +530,16 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
                 f"<b>&#9935; {ped['nome']}</b>{n_label}<br>"
                 f"{ped['natureza']} | {ped['localizacao']}"
             )
-            border_col = "#fff" if not is_aprox else "#F9A825"
+            border_col = "#00E676" if loc_exata else ("#fff" if not is_aprox else "#F9A825")
             opacity    = "1.0"  if not is_aprox else "0.75"
+            icon_symbol = "📍" if loc_exata else "&#9935;"
             icon_html  = (
                 f"<div style='background:{cor_ped};color:#fff;border-radius:4px;"
                 f"width:26px;height:26px;display:flex;align-items:center;"
-                f"justify-content:center;font-size:14px;font-weight:bold;"
+                f"justify-content:center;font-size:{'12' if loc_exata else '14'}px;font-weight:bold;"
                 f"border:2px solid {border_col};"
                 f"box-shadow:0 2px 6px rgba(0,0,0,0.5);"
-                f"opacity:{opacity};'>&#9935;</div>"
+                f"opacity:{opacity};'>{icon_symbol}</div>"
             )
             popup_h = 390 if st_d else 220
             folium.Marker(
@@ -549,63 +553,6 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
                     html=icon_html, icon_size=(26, 26), icon_anchor=(13, 13),
                 ),
             ).add_to(fg_pedreiras)
-
-    # ── Camada de Pedreiras KMZ (Localização Exata GPS) ──────────────
-    fg_kmz = folium.FeatureGroup(name="📍 Pedreiras PR (KMZ - Loc. Exata)", show=True)
-    fg_kmz.add_to(m)
-
-    for ped in PEDREIRAS_KMZ:
-        lat_k = ped.get("lat")
-        lon_k = ped.get("lon")
-        if lat_k is None or lon_k is None:
-            continue
-
-        desc_html = ""
-        if ped.get("descricao"):
-            linhas = ped["descricao"].replace("\n", "<br>")
-            desc_html = (
-                f"<div style='margin-top:6px;padding:4px;border-top:1px solid #eee;"
-                f"font-size:10px;color:#555;'>{linhas}</div>"
-            )
-
-        popup_html = (
-            f"<div style='font-family:Arial,sans-serif;min-width:220px;max-width:300px;'>"
-            f"<div style='background:#1565C0;color:#fff;padding:8px 10px;"
-            f"border-radius:6px 6px 0 0;margin-bottom:4px;'>"
-            f"<b style='font-size:12px;'>📍 {ped['nome']}</b><br>"
-            f"<span style='font-size:10px;opacity:0.85;'>Fonte: KMZ Oficial PR</span>"
-            f"</div>"
-            f"<table style='width:100%;font-size:11px;border-collapse:collapse;'>"
-            f"<tr><td style='color:#555;padding:2px 4px;'>Coord.</td>"
-            f"<td style='padding:2px 4px;font-size:10px;'>{lat_k:.6f}, {lon_k:.6f}</td></tr>"
-            f"</table>"
-            f"{desc_html}"
-            f"</div>"
-        )
-
-        icon_html = (
-            "<div style='background:#1565C0;color:#fff;border-radius:50%;"
-            "width:20px;height:20px;display:flex;align-items:center;"
-            "justify-content:center;font-size:11px;font-weight:bold;"
-            "border:2px solid #fff;"
-            "box-shadow:0 2px 5px rgba(0,0,0,0.5);'>📍</div>"
-        )
-
-        folium.Marker(
-            location=[lat_k, lon_k],
-            popup=folium.Popup(
-                folium.IFrame(html=popup_html, width=320, height=180),
-                max_width=330,
-            ),
-            tooltip=folium.Tooltip(
-                f"<b>📍 {ped['nome']}</b><br>"
-                f"<span style='font-size:10px;color:#aaa;'>KMZ - Loc. Exata</span>",
-                sticky=True,
-            ),
-            icon=folium.DivIcon(
-                html=icon_html, icon_size=(20, 20), icon_anchor=(10, 10),
-            ),
-        ).add_to(fg_kmz)
 
     folium.LayerControl(collapsed=True).add_to(m)
     return m
