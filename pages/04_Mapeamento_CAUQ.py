@@ -223,13 +223,17 @@ def _popup_html(row: pd.Series) -> str:
 
 def _stats_pedreira(df_proj, proc_list) -> dict | None:
     """Calcula estatísticas agregadas dos projetos CAUQ que usaram esta pedreira."""
+    import unicodedata as _ud
+    def _n(s):
+        s2 = _ud.normalize("NFKD", str(s).upper())
+        s2 = "".join(c for c in s2 if not _ud.combining(c))
+        return " ".join(s2.split())
     if df_proj is None or df_proj.empty or not proc_list:
         return None
+    proc_norm = df_proj["procedencia"].astype(str).apply(_n)
     mask = pd.Series(False, index=df_proj.index)
     for p in proc_list:
-        mask |= df_proj["procedencia"].astype(str).str.upper().str.contains(
-            p.upper(), na=False, regex=False
-        )
+        mask |= proc_norm.str.contains(_n(p), na=False, regex=False)
     sub = df_proj[mask]
     if sub.empty:
         return None
@@ -349,16 +353,19 @@ def _combinar_pedreiras_cauq(intel_list: list, df_proj) -> list:
         return intel_list
 
     # Conjunto de chaves já cobertas pelo intel
+    import unicodedata as _ud2
+    def _norm(s: str) -> str:
+        s2 = _ud2.normalize("NFKD", str(s).upper())
+        s2 = "".join(c for c in s2 if not _ud2.combining(c))
+        return " ".join(s2.split())
     covered: set[str] = set()
     for ped in intel_list:
         for p in ped.get("procedencias", []):
-            covered.add(p.upper())
+            covered.add(_norm(p))
 
-    def _norm(s: str) -> str:
-        return " ".join(s.upper().split())
     def _ja_cobre(proc_str: str) -> bool:
         pu = _norm(proc_str)
-        return any(_norm(c) in pu or pu in _norm(c) for c in covered)
+        return any(c in pu or pu in c for c in covered)
 
     df_geo_p = df_proj[df_proj["lat"].notna() & df_proj["lon"].notna()].copy()
     extra: list = []
