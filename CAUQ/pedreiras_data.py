@@ -378,17 +378,6 @@ PEDREIRAS_INTEL = [
         "lon": -49.276,
         "estado": "PR",
     },
-    # ── BOSCARDIN ──────────────────────────────────────────────────────────
-    {
-        "nome": "PEDREIRA BOSCARDIN",
-        "procedencias": ["BOSCARDIN"],
-        "localizacao": "PIRAQUARA - PR",
-        "natureza": "BASALTO",
-        "endereco": "Rua dos Miosótis, 43, Recreio da Serra, Piraquara - PR",
-        "lat": -25.454,
-        "lon": -49.072,
-        "estado": "PR",
-    },
     # ── GASPAR IOMERÊ ──────────────────────────────────────────────────────
     {
         "nome": "PEDREIRA GASPAR - IOMERÊ",
@@ -926,7 +915,7 @@ PEDREIRAS_INTEL = [
     {'nome': 'PEDREIRA ASFALTEC', 'procedencias': ['ASFALTEC', 'ASPHALTEC'], 'localizacao': 'ARAPONGAS - PR', 'natureza': 'BASALTO', 'endereco': 'Arapongas - PR', 'lat': -23.436607, 'lon': -51.424754, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'PEDREIRA GENARO', 'procedencias': ['GENARO', 'PEDREIRA GENARO'], 'localizacao': 'PONTA GROSSA - PR', 'natureza': 'BASALTO', 'endereco': 'Ponta Grossa - PR', 'lat': -24.956715, 'lon': -50.030588, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'PEDREIRA BASALTO 8', 'procedencias': ['BASALTO 8', 'BASALTO8'], 'localizacao': 'PIRAQUARA - PR', 'natureza': 'BASALTO', 'endereco': 'Piraquara - PR', 'lat': -25.360704, 'lon': -49.033839, 'estado': 'PR', 'loc_exata': True},
-    {'nome': 'PEDREIRA BOSCARDIN - PIRAQUARA', 'procedencias': ['BOSCARDIN PIRAQUARA'], 'localizacao': 'PIRAQUARA - PR', 'natureza': 'BASALTO', 'endereco': 'Piraquara - PR', 'lat': -25.43996, 'lon': -49.013503, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA BOSCARDIN - PIRAQUARA', 'procedencias': ['BOSCARDIN', 'BOSCARDIN PIRAQUARA'], 'localizacao': 'PIRAQUARA - PR', 'natureza': 'BASALTO', 'endereco': 'Rua dos Miosotis, 43, Recreio da Serra, Piraquara - PR', 'lat': -25.43996, 'lon': -49.013503, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'PEDREIRA BOSCARDIN - PONTA GROSSA', 'procedencias': ['BOSCARDIN PONTA GROSSA', 'BOSCARDIN P. GROSSA'], 'localizacao': 'PONTA GROSSA - PR', 'natureza': 'BASALTO', 'endereco': 'Ponta Grossa - PR', 'lat': -24.979916, 'lon': -50.239212, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'PEDREIRA BOSCARDIN - PALMEIRA', 'procedencias': ['BOSCARDIN CIA', 'BOSCARDIN PALMEIRA', 'BOSCARDIN & CIA'], 'localizacao': 'PALMEIRA - PR', 'natureza': 'BASALTO', 'endereco': 'Palmeira - PR', 'lat': -25.531078, 'lon': -50.65072, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'J. A. GAI EXTRACAO DE AREIA', 'procedencias': ['GAI', 'J.A. GAI'], 'localizacao': 'FAZENDA RIO GRANDE - PR', 'natureza': 'AREIA', 'endereco': 'Fazenda Rio Grande - PR', 'lat': -25.605125, 'lon': -49.329008, 'estado': 'PR', 'loc_exata': True},

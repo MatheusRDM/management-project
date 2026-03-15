@@ -284,10 +284,66 @@ def _filtrar_intel_pedreiras(
     return result
 
 
+def _dedup_pedreiras(lista: list, dist_km: float = 8.0) -> list:
+    """
+    Une marcadores de pedreira com nome similar E proximidade geografica.
+    Mantém coords do que tem loc_exata=True. Mescla procedencias.
+    """
+    from math import radians, cos, sin, asin, sqrt
+    import unicodedata as _ud
+
+    def _haver(lat1, lon1, lat2, lon2):
+        R = 6371.0
+        lat1, lon1, lat2, lon2 = (radians(x) for x in (lat1, lon1, lat2, lon2))
+        dlat = lat2 - lat1; dlon = lon2 - lon1
+        a = sin(dlat/2)**2 + cos(lat1)*cos(lat2)*sin(dlon/2)**2
+        return 2 * R * asin(min(1.0, sqrt(a)))
+
+    def _norm_nome(n):
+        n2 = _ud.normalize("NFKD", str(n).upper())
+        n2 = "".join(c for c in n2 if not _ud.combining(c))
+        for rem in ("PEDREIRA ", "PEDREIRAS ", "MINERACAO ", "BRITAGEM ", "USINA "):
+            n2 = n2.replace(rem, "")
+        return n2.split(" - ")[0].strip()
+
+    def _similares(n1, n2):
+        k1 = _norm_nome(n1); k2 = _norm_nome(n2)
+        if not k1 or not k2 or len(k1) < 4: return False
+        return k1 == k2 or k1 in k2 or k2 in k1
+
+    merged = []; used = set()
+    for i, p1 in enumerate(lista):
+        if i in used: continue
+        if p1.get("lat") is None:
+            merged.append(p1); used.add(i); continue
+        group = [p1]; used.add(i)
+        for j, p2 in enumerate(lista):
+            if j <= i or j in used or p2.get("lat") is None: continue
+            d = _haver(p1["lat"], p1["lon"], p2["lat"], p2["lon"])
+            if d <= dist_km and _similares(p1["nome"], p2["nome"]):
+                group.append(p2); used.add(j)
+        if len(group) == 1:
+            merged.append(p1)
+        else:
+            base = max(group, key=lambda x: (int(x.get("loc_exata", False)), len(x.get("procedencias", []))))
+            combined = dict(base)
+            seen = set(); all_procs = []
+            for g in group:
+                for proc in g.get("procedencias", []):
+                    k = proc.strip().upper()
+                    if k not in seen: seen.add(k); all_procs.append(proc)
+            combined["procedencias"] = all_procs
+            combined["nome"] = sorted([g["nome"] for g in group], key=len)[0]
+            if any(g.get("loc_exata") for g in group):
+                combined["loc_exata"] = True; combined["_aprox"] = False
+            merged.append(combined)
+    return merged
+
+
 def _combinar_pedreiras_cauq(intel_list: list, df_proj) -> list:
     """
     Retorna PEDREIRAS_INTEL + pedreiras do banco CAUQ sem entrada no intel,
-    posicionadas no centróide das localizações dos seus projetos (posição aproximada).
+    posicionadas no centroide das localizacoes. Aplica dedup por nome+proximidade.
     """
     if df_proj is None or df_proj.empty:
         return intel_list
@@ -330,7 +386,7 @@ def _combinar_pedreiras_cauq(intel_list: list, df_proj) -> list:
             "_aprox": True,
         })
 
-    return intel_list + extra
+    return _dedup_pedreiras(intel_list + extra)
 
 
 def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=None) -> folium.Map:
