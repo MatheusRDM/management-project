@@ -622,87 +622,322 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
  
  
 def _mostrar_painel_comparacao(projetos: list):
-    n = len(projetos)
+    import plotly.graph_objects as go
+    import random
+
+    n        = len(projetos)
+    nome_ped = projetos[0].get("procedencia", "—")
+    loc_ped  = projetos[0].get("localizacao",  "—")
+
     st.markdown(
         f"""
         <div style="background:#0a3d5f;border-radius:10px;padding:0.8rem 1.2rem;
                     border-left:4px solid #BFCF99;margin-bottom:1rem;">
             <b style="color:#BFCF99;font-size:1rem;">
-                {n} projetos na mesma pedreira - Comparacao
+                {n} projetos na mesma pedreira &mdash; Comparacao
             </b>
             <span style="color:#aaa;font-size:0.82rem;margin-left:1rem;">
-                {projetos[0].get('procedencia','—')} | {projetos[0].get('localizacao','—')}
+                {nome_ped} | {loc_ped}
             </span>
         </div>
         """,
         unsafe_allow_html=True,
     )
- 
-    max_cols = min(n, 4)
-    cols = st.columns(max_cols)
-    for i, row in enumerate(projetos[:max_cols]):
-        norma = str(row.get("norma", "OUTRO"))
-        cor = NORMA_HEX.get(norma, "#757575")
-        campos_agr = _get_norma_fields(norma)
- 
-        with cols[i]:
+
+    tab_fichas, tab_grafico = st.tabs([
+        f"📋 Fichas ({n} projetos)",
+        "📊 Analise Estatistica",
+    ])
+
+    # ── ABA FICHAS: todos em linhas de 4 ────────────────────────────────────────
+    with tab_fichas:
+        COLS_ROW = 4
+        for row_start in range(0, n, COLS_ROW):
+            batch = projetos[row_start : row_start + COLS_ROW]
+            cols = st.columns(len(batch))
+            for i, row in enumerate(batch):
+                norma      = str(row.get("norma", "OUTRO"))
+                cor        = NORMA_HEX.get(norma, "#757575")
+                campos_agr = _get_norma_fields(norma)
+
+                with cols[i]:
+                    st.markdown(
+                        f"""
+                        <div style="background:#0a3d5f;border-radius:8px;padding:0.7rem 1rem;
+                                    border-top:4px solid {cor};margin-bottom:0.6rem;">
+                            <b style="color:#fff;font-size:0.9rem;">{row.get("num_projeto","—")}</b><br>
+                            <span style="color:#BFCF99;font-size:0.8rem;">{row.get("faixa_granulometrica","—")}</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    def _lin(label, val, campo=None, _c=cols[i]):
+                        spec = ""
+                        if campo:
+                            cc = _check_spec(val if _is_valid(val) else None, norma, campo)
+                            if cc:
+                                spec = f"<span style='color:{cc};'>&#9679;</span> "
+                        v_str = _fmt(val) if _is_valid(val) else str(val)
+                        _c.markdown(
+                            f"<div style='font-size:0.82rem;padding:1px 0;'>"
+                            f"<span style='color:#aaa;'>{label}:</span> {spec}<b>{v_str}</b></div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    _lin("Ligante", row.get("ligante", "—"))
+                    _lin("Norma",   norma)
+                    _lin("Ano",     int(row.get("ano", 0)))
+
+                    cols[i].markdown(
+                        "<div style='margin:6px 0 2px;font-size:0.8rem;color:#BFCF99;'>"
+                        "<b>Agregado</b></div>",
+                        unsafe_allow_html=True,
+                    )
+                    for campo in campos_agr:
+                        val = row.get(campo)
+                        if _is_valid(val):
+                            _lin(LABELS[campo], val, campo)
+
+                    cols[i].markdown(
+                        "<div style='margin:6px 0 2px;font-size:0.8rem;color:#BFCF99;'>"
+                        "<b>Marshall</b></div>",
+                        unsafe_allow_html=True,
+                    )
+                    for campo in ["teor", "volume_vazios", "rbv", "vam", "rice",
+                                  "densidade_aparente", "dui", "filler_betume"]:
+                        val = row.get(campo)
+                        if _is_valid(val):
+                            _lin(LABELS[campo], val, campo)
+
+                    def_val = row.get("deformacao_permanente")
+                    if _is_valid(def_val):
+                        _lin("Def. Perm.", f"{_fmt(def_val)} mm", "deformacao_permanente")
+
             st.markdown(
-                f"""
-                <div style="background:#0a3d5f;border-radius:8px;padding:0.7rem 1rem;
-                            border-top:4px solid {cor};margin-bottom:0.6rem;">
-                    <b style="color:#fff;font-size:0.9rem;">{row.get('num_projeto','—')}</b><br>
-                    <span style="color:#BFCF99;font-size:0.8rem;">{row.get('faixa_granulometrica','—')}</span>
-                </div>
-                """,
+                "<hr style='border-color:#1a3d5f;margin:0.5rem 0;'>",
                 unsafe_allow_html=True,
             )
- 
-            def _lin(label, val, campo=None):
-                spec = ""
-                if campo:
-                    c = _check_spec(val if _is_valid(val) else None, norma, campo)
-                    if c:
-                        spec = f"<span style='color:{c};'>&#9679;</span> "
-                v_str = _fmt(val) if _is_valid(val) else str(val)
-                cols[i].markdown(
-                    f"<div style='font-size:0.82rem;padding:1px 0;'>"
-                    f"<span style='color:#aaa;'>{label}:</span> {spec}<b>{v_str}</b></div>",
+
+    # ── ABA GRAFICO: analise estatistica por parametro e ano ────────────────────
+    with tab_grafico:
+        CAMPOS_GRAF = {
+            "deformacao_permanente": "Def. Permanente (mm)",
+            "abrasao_la":            "Abrasao LA (%)",
+            "volume_vazios":         "Volume de Vazios (%)",
+            "rbv":                   "RBV (%)",
+            "teor":                  "Teor de Ligante (%)",
+            "vam":                   "VAM (%)",
+            "rice":                  "RICE (g/cm3)",
+            "densidade_aparente":    "Dens. Aparente (g/cm3)",
+            "equivalente_areia":     "Equivalente de Areia (%)",
+            "durabilidade_graudo":   "Durabilidade Graudo (%)",
+            "durabilidade_miudo":    "Durabilidade Miudo (%)",
+            "lamelaridade":          "Lamelaridade (%)",
+            "adesividade":           "Adesividade (%)",
+            "dui":                   "DUI (%)",
+            "filler_betume":         "Filler/Betume",
+        }
+
+        # Campos que têm pelo menos um valor
+        campos_com_dado = [
+            k for k in CAMPOS_GRAF
+            if any(_is_valid(p.get(k)) for p in projetos)
+        ]
+
+        if not campos_com_dado:
+            st.info("Nenhum dado numerico disponivel para os projetos desta pedreira.")
+        else:
+            col_sel, col_norm = st.columns([3, 2])
+            with col_sel:
+                campo_sel = st.selectbox(
+                    "Parametro",
+                    options=campos_com_dado,
+                    format_func=lambda x: CAMPOS_GRAF[x],
+                    key="ped_campo_sel",
+                )
+            with col_norm:
+                normas_disp = sorted(set(str(p.get("norma", "OUTRO")) for p in projetos))
+                norma_filtro = st.multiselect(
+                    "Norma",
+                    options=normas_disp,
+                    default=normas_disp,
+                    key="ped_norma_sel",
+                )
+
+            # DataFrame para o gráfico
+            df_g = pd.DataFrame([
+                {
+                    "ano":     int(p.get("ano", 0)),
+                    "valor":   p.get(campo_sel),
+                    "norma":   str(p.get("norma", "OUTRO")),
+                    "projeto": p.get("num_projeto", "—"),
+                    "faixa":   p.get("faixa_granulometrica", "—"),
+                }
+                for p in projetos
+                if norma_filtro and str(p.get("norma", "OUTRO")) in norma_filtro
+            ])
+            df_g = df_g[df_g["valor"].apply(lambda v: _is_valid(v))].copy()
+            df_g["valor"] = df_g["valor"].astype(float)
+
+            if df_g.empty:
+                st.warning("Nenhum dado disponivel para este parametro/norma.")
+            else:
+                lbl      = CAMPOS_GRAF[campo_sel]
+                anos_ord = sorted(df_g["ano"].unique())
+
+                # Resumo por ano
+                resumo = (
+                    df_g.groupby("ano")["valor"]
+                    .agg(["mean", "min", "max", "count"])
+                    .reset_index()
+                    .rename(columns={"mean": "Media", "min": "Min",
+                                     "max": "Max", "count": "N"})
+                )
+
+                NORMA_COLORS_GRAF = {
+                    "DEINFRA": "#7B2D8B",
+                    "DER-PR":  "#1565C0",
+                    "DER":     "#1565C0",
+                    "DNIT":    "#C62828",
+                    "OUTRO":   "#757575",
+                }
+
+                fig = go.Figure()
+
+                # Box por ano (fundo)
+                for ano in anos_ord:
+                    sub_ano = df_g[df_g["ano"] == ano]
+                    fig.add_trace(go.Box(
+                        y=sub_ano["valor"],
+                        name=str(ano),
+                        boxpoints=False,
+                        marker_color="#1E88E5",
+                        line_color="#1E88E5",
+                        fillcolor="rgba(30,136,229,0.12)",
+                        showlegend=False,
+                        hoverinfo="skip",
+                        width=0.4,
+                    ))
+
+                # Scatter pontos por norma
+                for nr in sorted(df_g["norma"].unique()):
+                    sub_nr = df_g[df_g["norma"] == nr]
+                    # jitter horizontal leve
+                    x_jit = []
+                    for ano in sub_nr["ano"]:
+                        cnt = int(df_g[df_g["ano"] == ano].shape[0])
+                        x_jit.append(
+                            str(ano) if cnt == 1
+                            else str(ano)
+                        )
+                    fig.add_trace(go.Scatter(
+                        x=[str(a) for a in sub_nr["ano"]],
+                        y=sub_nr["valor"],
+                        mode="markers",
+                        name=nr,
+                        marker=dict(
+                            color=NORMA_COLORS_GRAF.get(nr, "#757575"),
+                            size=11,
+                            line=dict(width=1.5, color="white"),
+                            opacity=0.92,
+                        ),
+                        text=sub_nr["projeto"] + "<br>" + sub_nr["faixa"],
+                        hovertemplate=(
+                            "<b>%{text}</b><br>"
+                            + lbl + ": <b>%{y:.2f}</b>"
+                            "<extra>" + nr + "</extra>"
+                        ),
+                    ))
+
+                # Linha de média por ano
+                fig.add_trace(go.Scatter(
+                    x=[str(a) for a in resumo["ano"]],
+                    y=resumo["Media"],
+                    mode="lines+markers",
+                    name="Média",
+                    line=dict(color="#BFCF99", width=2, dash="dot"),
+                    marker=dict(symbol="diamond", size=9, color="#BFCF99"),
+                    hovertemplate="Média %{x}: <b>%{y:.2f}</b><extra></extra>",
+                ))
+
+                # Linhas de limite de especificação
+                spec_drawn = set()
+                for nr in norma_filtro:
+                    if nr in spec_drawn:
+                        continue
+                    lim = SPEC_LIMITS.get(nr, {}).get(campo_sel, {})
+                    if lim.get("min") is not None:
+                        fig.add_hline(
+                            y=lim["min"], line_dash="dash",
+                            line_color="#E53935", line_width=1.5,
+                            annotation_text=f"Min {nr}: {lim['min']}",
+                            annotation_font_color="#E53935",
+                            annotation_position="bottom right",
+                        )
+                    if lim.get("max") is not None:
+                        fig.add_hline(
+                            y=lim["max"], line_dash="dash",
+                            line_color="#E53935", line_width=1.5,
+                            annotation_text=f"Max {nr}: {lim['max']}",
+                            annotation_font_color="#E53935",
+                            annotation_position="top right",
+                        )
+                    if lim:
+                        spec_drawn.add(nr)
+
+                fig.update_layout(
+                    title=dict(
+                        text=f"<b>{lbl}</b>  —  {nome_ped}  ({n} projetos)",
+                        font=dict(color="#BFCF99", size=15),
+                    ),
+                    paper_bgcolor="#0a1929",
+                    plot_bgcolor="#0d2137",
+                    font=dict(color="#ccc", size=12),
+                    xaxis=dict(
+                        title="Ano",
+                        tickfont=dict(color="#aaa"),
+                        gridcolor="#1a3d5f",
+                        categoryorder="array",
+                        categoryarray=[str(a) for a in anos_ord],
+                    ),
+                    yaxis=dict(
+                        title=lbl,
+                        tickfont=dict(color="#aaa"),
+                        gridcolor="#1a3d5f",
+                        zeroline=False,
+                    ),
+                    legend=dict(
+                        bgcolor="rgba(10,25,41,0.85)",
+                        bordercolor="#1a3d5f",
+                        borderwidth=1,
+                        font=dict(color="#ccc"),
+                    ),
+                    hovermode="closest",
+                    height=480,
+                    margin=dict(l=60, r=60, t=60, b=50),
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Tabela resumo por ano
+                st.markdown(
+                    "<div style='font-size:0.82rem;color:#BFCF99;"
+                    "margin-top:0.4rem;'><b>Resumo por Ano</b></div>",
                     unsafe_allow_html=True,
                 )
- 
-            _lin("Ligante",  row.get("ligante", "—"))
-            _lin("Norma",    norma)
-            _lin("Ano",      int(row.get("ano", 0)))
- 
-            st.markdown(
-                "<div style='margin:6px 0 2px;font-size:0.8rem;color:#BFCF99;'>"
-                "<b>Agregado</b></div>",
-                unsafe_allow_html=True,
-            )
-            for campo in campos_agr:
-                val = row.get(campo)
-                if _is_valid(val):
-                    _lin(LABELS[campo], val, campo)
- 
-            st.markdown(
-                "<div style='margin:6px 0 2px;font-size:0.8rem;color:#BFCF99;'>"
-                "<b>Marshall</b></div>",
-                unsafe_allow_html=True,
-            )
-            for campo in ["teor", "volume_vazios", "rbv", "vam", "rice",
-                          "densidade_aparente", "dui", "filler_betume"]:
-                val = row.get(campo)
-                if _is_valid(val):
-                    _lin(LABELS[campo], val, campo)
- 
-            def_val = row.get("deformacao_permanente")
-            if _is_valid(def_val):
-                _lin("Def. Perm.", f"{_fmt(def_val)} mm", "deformacao_permanente")
- 
-    if n > max_cols:
-        st.caption(f"Mostrando {max_cols} de {n} projetos")
- 
- 
+                tab_r = resumo.copy()
+                tab_r["Ano"]   = tab_r["ano"].astype(str)
+                tab_r["Media"] = tab_r["Media"].apply(lambda v: f"{v:.2f}")
+                tab_r["Min"]   = tab_r["Min"].apply(lambda v: f"{v:.2f}")
+                tab_r["Max"]   = tab_r["Max"].apply(lambda v: f"{v:.2f}")
+                st.dataframe(
+                    tab_r[["Ano", "N", "Min", "Media", "Max"]],
+                    use_container_width=False,
+                    hide_index=True,
+                )
+
+
 # ======================================================================================
 # LAYOUT PRINCIPAL
 # ======================================================================================
