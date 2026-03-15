@@ -442,12 +442,21 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
     fg_pedreiras = folium.FeatureGroup(name="Pedreiras", show=True)
     fg_pedreiras.add_to(m)
 
+    # Offset co-located quarries so they don't perfectly stack
+    _used_locs: dict[str, int] = {}
+
     if pedreiras:
         for ped in pedreiras:
             lat_p = ped.get("lat")
             lon_p = ped.get("lon")
             if lat_p is None or lon_p is None:
                 continue
+            loc_key = f"{round(lat_p, 3)},{round(lon_p, 3)}"
+            _used_locs[loc_key] = _used_locs.get(loc_key, 0) + 1
+            if _used_locs[loc_key] > 1:
+                offset = _used_locs[loc_key] * 0.003
+                lat_p = lat_p + offset
+                lon_p = lon_p + offset * 0.7
 
             nat      = str(ped.get("natureza", "")).upper().split("/")[0].strip()
             cor_ped  = NATUREZA_COR.get(nat, "#B71C1C")
@@ -532,41 +541,34 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
                 f"</table></div>"
             )
 
-            # ── Icone unificado: quadrado com contagem de projetos ──
+            # ── Icone: CIRCULO = tem projetos, QUADRADO = sem projetos ──
             border_col = "#00E676" if loc_exata else ("#fff" if not is_aprox else "#F9A825")
             opacity    = "1.0" if not is_aprox else "0.75"
 
             if n_proj > 0:
-                # Marcador com badge de contagem
+                # CÍRCULO com número de projetos dentro
                 icon_html = (
-                    f"<div style='position:relative;'>"
-                    f"<div style='background:{cor_ped};color:#fff;border-radius:5px;"
-                    f"width:30px;height:30px;display:flex;align-items:center;"
+                    f"<div style='background:{cor_ped};color:#fff;border-radius:50%;"
+                    f"width:32px;height:32px;display:flex;align-items:center;"
                     f"justify-content:center;font-size:13px;font-weight:bold;"
                     f"border:2.5px solid {border_col};"
                     f"box-shadow:0 2px 6px rgba(0,0,0,0.5);"
-                    f"opacity:{opacity};'>⛏</div>"
-                    f"<div style='position:absolute;top:-8px;right:-10px;"
-                    f"background:#BFCF99;color:#1a1a1a;border-radius:50%;"
-                    f"width:20px;height:20px;display:flex;align-items:center;"
-                    f"justify-content:center;font-size:10px;font-weight:bold;"
-                    f"border:1.5px solid #fff;"
-                    f"box-shadow:0 1px 3px rgba(0,0,0,0.4);'>{n_proj}</div></div>"
+                    f"opacity:{opacity};'>{n_proj}</div>"
                 )
-                icon_size = (40, 38)
-                icon_anchor = (15, 15)
+                icon_size = (32, 32)
+                icon_anchor = (16, 16)
             else:
-                # Sem projetos: marcador simples menor
+                # QUADRADO pequeno sem projetos
                 icon_html = (
-                    f"<div style='background:{cor_ped};color:#fff;border-radius:4px;"
-                    f"width:22px;height:22px;display:flex;align-items:center;"
-                    f"justify-content:center;font-size:11px;font-weight:bold;"
+                    f"<div style='background:{cor_ped};color:#fff;border-radius:3px;"
+                    f"width:18px;height:18px;display:flex;align-items:center;"
+                    f"justify-content:center;font-size:9px;font-weight:bold;"
                     f"border:2px solid {border_col};"
-                    f"box-shadow:0 2px 5px rgba(0,0,0,0.4);"
+                    f"box-shadow:0 2px 4px rgba(0,0,0,0.4);"
                     f"opacity:{opacity};'>⛏</div>"
                 )
-                icon_size = (22, 22)
-                icon_anchor = (11, 11)
+                icon_size = (18, 18)
+                icon_anchor = (9, 9)
 
             n_label = f" ({n_proj})" if n_proj > 0 else ""
             tooltip_txt = (
@@ -1109,19 +1111,21 @@ def main():
     # ── Legenda ──────────────────────────────────────────────────────────────────────
     st.markdown(
         f"""
-        <div style="display:flex;gap:1.2rem;margin-bottom:0.8rem;flex-wrap:wrap;align-items:center;">
-            <span style="background:#E65100;color:#fff;border-radius:4px;padding:2px 7px;
-                         font-size:0.8rem;font-weight:600;">&#9935; Basalto</span>
-            <span style="background:#6A1B9A;color:#fff;border-radius:4px;padding:2px 7px;
-                         font-size:0.8rem;font-weight:600;">&#9935; Granito</span>
-            <span style="background:#F9A825;color:#1a1a1a;border-radius:4px;padding:2px 7px;
-                         font-size:0.8rem;font-weight:600;">&#9935; Areia</span>
-            <span style="background:#1A237E;color:#fff;border-radius:4px;padding:2px 7px;
-                         font-size:0.8rem;font-weight:600;">&#9935; Gnaisse</span>
-            <span style="color:#888;font-size:0.82rem;">&nbsp;|&nbsp;</span>
-            <span style="color:#00E676;font-weight:600;">&#9632; GPS exato</span>
-            <span style="color:#F9A825;font-weight:600;">&#9632; Aproximado</span>
-            <span style="color:#BFCF99;font-size:0.82rem;">&nbsp;| Badge = n&ordm; projetos &nbsp;| Clique na pedreira para comparar</span>
+        <div style="display:flex;gap:1rem;margin-bottom:0.8rem;flex-wrap:wrap;align-items:center;">
+            <span style="background:#E65100;color:#fff;border-radius:50%;padding:3px 8px;
+                         font-size:0.78rem;font-weight:700;">N</span><span style="font-size:0.8rem;color:#ccc;">Basalto</span>
+            <span style="background:#6A1B9A;color:#fff;border-radius:50%;padding:3px 8px;
+                         font-size:0.78rem;font-weight:700;">N</span><span style="font-size:0.8rem;color:#ccc;">Granito</span>
+            <span style="background:#F9A825;color:#1a1a1a;border-radius:50%;padding:3px 8px;
+                         font-size:0.78rem;font-weight:700;">N</span><span style="font-size:0.8rem;color:#ccc;">Areia</span>
+            <span style="background:#1A237E;color:#fff;border-radius:50%;padding:3px 8px;
+                         font-size:0.78rem;font-weight:700;">N</span><span style="font-size:0.8rem;color:#ccc;">Gnaisse</span>
+            <span style="color:#666;font-size:0.82rem;">&nbsp;|&nbsp;</span>
+            <span style="background:#4E342E;color:#fff;border-radius:3px;padding:2px 6px;
+                         font-size:0.72rem;">&#9935;</span><span style="font-size:0.8rem;color:#999;"> = sem projetos</span>
+            <span style="color:#666;font-size:0.82rem;">&nbsp;|&nbsp;</span>
+            <span style="color:#00E676;font-weight:600;font-size:0.8rem;">&#9679; Borda verde = GPS exato</span>
+            <span style="color:#BFCF99;font-size:0.82rem;">&nbsp;| Clique no circulo para comparar projetos</span>
         </div>
         """,
         unsafe_allow_html=True,

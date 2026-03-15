@@ -437,7 +437,7 @@ PEDREIRAS_INTEL = [
     # ── AGRO ROQUE ─────────────────────────────────────────────────────────
     {
         "nome": "PEDREIRA AGRO ROQUE",
-        "procedencias": ["AGRO ROQUE", "PEDREIRA IMBAÚ", "PEDREIRA IMBAÚ RESERVA", "PEDREIRA 02 (IMBAÚ)", "PEDREIRA IMBAÚ RESERVA", "IMBAÚ"],
+        "procedencias": ["AGRO ROQUE", "PEDREIRA IMBAÚ", "PEDREIRA IMBAÚ RESERVA", "PEDREIRA 02 (IMBAÚ)", "IMBAÚ"],
         "localizacao": "IMBAÚ - PR",
         "natureza": "DIABÁSIO",
         "endereco": "Proximidades do pedágio Imbaú/Ortigueira, Imbaú - PR",
@@ -446,17 +446,7 @@ PEDREIRAS_INTEL = [
         "estado": "PR",
         "loc_exata": True,
     },
-    # ── INFRASUL ───────────────────────────────────────────────────────────
-    {
-        "nome": "PEDREIRA INFRASUL",
-        "procedencias": ["INFRASUL"],
-        "localizacao": "JOINVILLE - SC",
-        "natureza": "GNAISSE",
-        "endereco": "Rodovia Rio Zoada (Joinville - Jaraguá do Sul) | Escritório: R. Gothard Kaesemodel, 254, Joinville - SC",
-        "lat": -26.304,
-        "lon": -48.846,
-        "estado": "SC",
-    },
+    # ── INFRASUL (removido duplicata — ver MINA RIO ZOADA abaixo) ──────────
     # ── TCE ────────────────────────────────────────────────────────────────
     {
         "nome": "PEDREIRA TCE",
@@ -910,7 +900,7 @@ PEDREIRAS_INTEL = [
     {'nome': 'USINA ENGETRAN', 'procedencias': ['ENGETRAN', 'USINA ENGETRAN'], 'localizacao': 'UMUARAMA - PR', 'natureza': 'BASALTO', 'endereco': 'Umuarama - PR', 'lat': -23.196657, 'lon': -52.37309, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'PEDREIRA EXTRACON', 'procedencias': ['EXTRACON', 'EXTRACON MINERACAO'], 'localizacao': 'MARINGA - PR', 'natureza': 'BASALTO', 'endereco': 'Maringa - PR', 'lat': -23.475447, 'lon': -51.943224, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'PEDREIRA GUARAVERA - LONDRINA', 'procedencias': ['GUARAVERA LONDRINA', 'GUARAVERA'], 'localizacao': 'LONDRINA - PR', 'natureza': 'BASALTO / AREIA', 'endereco': 'Londrina - PR', 'lat': -23.624214, 'lon': -51.101957, 'estado': 'PR', 'loc_exata': True},
-    {'nome': 'PEDREIRA GUARAVERA - IBIPORA', 'procedencias': ['GUARAVERA IBIPORA', 'GUARAVERA IBIPORA'], 'localizacao': 'IBIPORA - PR', 'natureza': 'BASALTO', 'endereco': 'Ibipora - PR', 'lat': -23.255461, 'lon': -51.096982, 'estado': 'PR', 'loc_exata': True},
+    {'nome': 'PEDREIRA GUARAVERA - IBIPORA', 'procedencias': ['GUARAVERA IBIPORA'], 'localizacao': 'IBIPORA - PR', 'natureza': 'BASALTO', 'endereco': 'Ibipora - PR', 'lat': -23.255461, 'lon': -51.096982, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'MINERPAL', 'procedencias': ['MINERPAL'], 'localizacao': 'PALOTINA - PR', 'natureza': 'BASALTO', 'endereco': 'Palotina - PR', 'lat': -24.348935, 'lon': -53.845359, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'PEDREIRA ASFALTEC', 'procedencias': ['ASFALTEC', 'ASPHALTEC'], 'localizacao': 'ARAPONGAS - PR', 'natureza': 'BASALTO', 'endereco': 'Arapongas - PR', 'lat': -23.436607, 'lon': -51.424754, 'estado': 'PR', 'loc_exata': True},
     {'nome': 'PEDREIRA GENARO', 'procedencias': ['GENARO', 'PEDREIRA GENARO'], 'localizacao': 'PONTA GROSSA - PR', 'natureza': 'BASALTO', 'endereco': 'Ponta Grossa - PR', 'lat': -24.956715, 'lon': -50.030588, 'estado': 'PR', 'loc_exata': True},
