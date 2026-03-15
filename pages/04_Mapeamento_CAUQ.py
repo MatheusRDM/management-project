@@ -429,7 +429,26 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
     fg_multi = folium.FeatureGroup(name="Multiplos Projetos")
     fg_multi.add_to(m)
  
+    # Build set of quarry positions to suppress overlapping project markers
+    from math import radians, cos, sin, asin, sqrt as _sqrt
+    def _hav_km(la1, lo1, la2, lo2):
+        R = 6371.0
+        la1, lo1, la2, lo2 = (radians(x) for x in (la1, lo1, la2, lo2))
+        dlat = la2 - la1; dlon = lo2 - lo1
+        a = sin(dlat/2)**2 + cos(la1)*cos(la2)*sin(dlon/2)**2
+        return 2 * R * asin(min(1.0, _sqrt(a)))
+
+    ped_locs = []
+    if pedreiras:
+        for _p in pedreiras:
+            _pla = _p.get("lat"); _plo = _p.get("lon")
+            if _pla is not None and _plo is not None:
+                ped_locs.append((_pla, _plo))
+
     for (lat, lon), rows in grupos_loc.items():
+        # Skip project markers that overlap a quarry marker (within 3 km)
+        if ped_locs and any(_hav_km(lat, lon, pla, plo) < 3.0 for pla, plo in ped_locs):
+            continue
         if len(rows) == 1:
             row = rows[0]
             norma = str(row.get("norma", "OUTRO"))
