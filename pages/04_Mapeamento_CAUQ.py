@@ -19,6 +19,7 @@ from streamlit_folium import st_folium
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
  
 from styles import aplicar_estilos, CORES
+from page_auth import proteger_pagina
 from CAUQ.cauq_scanner import (
     escanear_projetos, anos_disponiveis, geocodificar_pendentes, SPEC_LIMITS,
 )
@@ -36,6 +37,7 @@ st.set_page_config(
 )
  
 aplicar_estilos()
+proteger_pagina("Mapeamento de Projetos CAUQ")
  
 # ======================================================================================
 # CONSTANTES

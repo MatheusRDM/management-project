@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Importar estilos globais padronizados
 from styles import aplicar_estilos, renderizar_sidebar, renderizar_footer, CORES, PLOTLY_LAYOUT, CORES_GRAFICOS
+from page_auth import proteger_pagina
 
 # Importar utilitários específicos para certificados
 from utils_certificados import (
@@ -41,6 +42,7 @@ st.set_page_config(
 
 # Aplicar estilos globais padronizados
 aplicar_estilos()
+proteger_pagina("Cronograma de Ensaios")
 
 # ======================================================================================
 # CORES CORPORATIVAS ADICIONAIS (USADAS EM PAINÉIS ESPECIAIS)

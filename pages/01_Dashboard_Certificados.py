@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Importar estilos globais padronizados
 from styles import aplicar_estilos
+from page_auth import proteger_pagina
 
 # ======================================================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -28,6 +29,7 @@ st.set_page_config(
 
 # Aplicar estilos
 aplicar_estilos()
+proteger_pagina("Dashboard de Certificados")
 
 # ======================================================================================
 # CARREGAR DASHBOARD FORM 067
