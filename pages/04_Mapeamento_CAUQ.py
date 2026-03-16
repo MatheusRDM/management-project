@@ -806,21 +806,20 @@ def _mostrar_painel_comparacao(projetos: list):
                         width=0.4,
                     ))
 
+                # Formato de casas decimais por campo
+                _dec = 3 if campo_sel in ("rice", "densidade_aparente") else 2
+                _yfmt = f"%.{_dec}f"
+
                 # Scatter pontos por norma
                 for nr in sorted(df_g["norma"].unique()):
                     sub_nr = df_g[df_g["norma"] == nr]
-                    # jitter horizontal leve
-                    x_jit = []
-                    for ano in sub_nr["ano"]:
-                        cnt = int(df_g[df_g["ano"] == ano].shape[0])
-                        x_jit.append(
-                            str(ano) if cnt == 1
-                            else str(ano)
-                        )
+                    # Labels de valor nos pontos
+                    text_labels = [f"{v:.{_dec}f}" for v in sub_nr["valor"]]
+                    hover_texts = sub_nr["projeto"] + "<br>" + sub_nr["faixa"]
                     fig.add_trace(go.Scatter(
                         x=[str(a) for a in sub_nr["ano"]],
                         y=sub_nr["valor"],
-                        mode="markers",
+                        mode="markers+text",
                         name=nr,
                         marker=dict(
                             color=NORMA_COLORS_GRAF.get(nr, "#757575"),
@@ -828,10 +827,13 @@ def _mostrar_painel_comparacao(projetos: list):
                             line=dict(width=1.5, color="white"),
                             opacity=0.92,
                         ),
-                        text=sub_nr["projeto"] + "<br>" + sub_nr["faixa"],
+                        text=text_labels,
+                        textposition="top center",
+                        textfont=dict(size=10, color="#ddd"),
+                        customdata=hover_texts,
                         hovertemplate=(
-                            "<b>%{text}</b><br>"
-                            + lbl + ": <b>%{y:.2f}</b>"
+                            "<b>%{customdata}</b><br>"
+                            + lbl + f": <b>%{{y:.{_dec}f}}</b>"
                             "<extra>" + nr + "</extra>"
                         ),
                     ))
@@ -844,7 +846,7 @@ def _mostrar_painel_comparacao(projetos: list):
                     name="Média",
                     line=dict(color="#BFCF99", width=2, dash="dot"),
                     marker=dict(symbol="diamond", size=9, color="#BFCF99"),
-                    hovertemplate="Média %{x}: <b>%{y:.2f}</b><extra></extra>",
+                    hovertemplate=f"Média %{{x}}: <b>%{{y:.{_dec}f}}</b><extra></extra>",
                 ))
 
                 # Linhas de limite de especificação
@@ -914,9 +916,9 @@ def _mostrar_painel_comparacao(projetos: list):
                 )
                 tab_r = resumo.copy()
                 tab_r["Ano"]   = tab_r["ano"].astype(str)
-                tab_r["Media"] = tab_r["Media"].apply(lambda v: f"{v:.2f}")
-                tab_r["Min"]   = tab_r["Min"].apply(lambda v: f"{v:.2f}")
-                tab_r["Max"]   = tab_r["Max"].apply(lambda v: f"{v:.2f}")
+                tab_r["Media"] = tab_r["Media"].apply(lambda v: f"{v:.{_dec}f}")
+                tab_r["Min"]   = tab_r["Min"].apply(lambda v: f"{v:.{_dec}f}")
+                tab_r["Max"]   = tab_r["Max"].apply(lambda v: f"{v:.{_dec}f}")
                 st.dataframe(
                     tab_r[["Ano", "N", "Min", "Media", "Max"]],
                     use_container_width=True,
