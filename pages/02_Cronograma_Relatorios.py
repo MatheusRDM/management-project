@@ -68,11 +68,19 @@ from cloud_config import IS_CLOUD
 def carregar_clientes_contrato_continuo():
     """
     Carrega a lista de clientes com Contrato Contínuo (CC).
-    Cloud: retorna set vazio (dados CC não disponíveis offline).
+    Cloud: carrega de clientes_cc.json (cache estático).
     Local: lê do FORM 067 Excel.
     """
     if IS_CLOUD or not os.path.exists(CAMINHO_FORM_067):
-        return set()
+        # Fallback: carregar do JSON cache estático
+        import json
+        _cc_json = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                "cache_certificados", "clientes_cc.json")
+        try:
+            with open(_cc_json, 'r', encoding='utf-8') as f:
+                return set(json.load(f))
+        except Exception:
+            return set()
     try:
         df = pd.read_excel(
             CAMINHO_FORM_067,

@@ -3346,7 +3346,8 @@ def carregar_dados_epr_raw(mes_filtro=None, cliente_filtro=None):
     """
     if bridge.is_cloud:
         from cloud_config import carregar_parquet_cache
-        df = carregar_parquet_cache("db_recebimentos")
+        # Usa epr_raw_all (dados brutos SEM dedup) — NÃO db_recebimentos (que é deduplicated)
+        df = carregar_parquet_cache("epr_raw_all")
         if not df.empty:
             if 'DATA_RECEBIMENTO' in df.columns:
                 df['DATA_RECEBIMENTO'] = pd.to_datetime(df['DATA_RECEBIMENTO'], errors='coerce')
