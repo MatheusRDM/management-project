@@ -2902,12 +2902,15 @@ def main():
                     )
                 with col_right:
                     st.markdown("#### Datas e Observações")
-                    if pd.notna(data_aceite_pc):
-                        st.markdown(f"**Aceite:** {pd.to_datetime(data_aceite_pc).strftime('%d/%m/%Y')}")
-                    if pd.notna(data_receb_pc):
-                        st.markdown(f"**Recebimento (022A):** {pd.to_datetime(data_receb_pc).strftime('%d/%m/%Y')}")
-                    if pd.notna(data_entrega_pc):
-                        st.markdown(f"**Entrega (FAS):** {pd.to_datetime(data_entrega_pc).strftime('%d/%m/%Y')}")
+                    _dt_aceite = pd.to_datetime(data_aceite_pc, errors='coerce')
+                    _dt_receb = pd.to_datetime(data_receb_pc, errors='coerce')
+                    _dt_entrega = pd.to_datetime(data_entrega_pc, errors='coerce')
+                    if pd.notna(_dt_aceite):
+                        st.markdown(f"**Aceite:** {_dt_aceite.strftime('%d/%m/%Y')}")
+                    if pd.notna(_dt_receb):
+                        st.markdown(f"**Recebimento (022A):** {_dt_receb.strftime('%d/%m/%Y')}")
+                    if pd.notna(_dt_entrega):
+                        st.markdown(f"**Entrega (FAS):** {_dt_entrega.strftime('%d/%m/%Y')}")
                     if obs_pc:
                         st.info(f"Observações: {obs_pc}")
 
