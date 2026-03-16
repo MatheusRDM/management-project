@@ -162,7 +162,7 @@ def get_usuarios() -> dict:
         },
         "Dev": {
             "senha": "Afirmaevias",
-            "paginas": ["Dashboard de Certificados", "Cronograma de Ensaios", "EPR Litoral Pioneiro", "Mapeamento de Projetos CAUQ"]
+            "paginas": ["Dashboard de Certificados", "Cronograma de Ensaios", "EPR Litoral Pioneiro", "Mapeamento de Projetos CAUQ", "Performance de Contratos"]
         }
     }
 
