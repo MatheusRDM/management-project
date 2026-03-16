@@ -47,7 +47,7 @@ def mostrar_tela_login():
         .dev-label-fixed {
             position: fixed;
             bottom: 12px;
-            left: 16px;
+            right: 16px;
             font-size: 11px;
             color: #BFCF99;
             font-family: 'Poppins', sans-serif;
