@@ -1,46 +1,65 @@
 # =============================================================================
 # Dockerfile — Afirma E-vias Management System
-# Deploy: Google Cloud Run
+# Build: multi-stage | Segurança: non-root user | Target: Google Cloud Run
 # =============================================================================
 
-FROM python:3.11-slim
+# ── Stage 1: Builder (instala dependências) ───────────────────────────────────
+FROM python:3.11-slim AS builder
 
-# Variáveis de ambiente
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PORT=8080
+    PYTHONUNBUFFERED=1
 
-# Diretório de trabalho
-WORKDIR /app
+WORKDIR /build
 
-# Instalar dependências do sistema (necessárias para python-Levenshtein e folium)
+# Dependências do sistema para compilação
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar apenas requirements primeiro (aproveita cache do Docker)
+# Instalar dependências em pasta isolada (wheel cache)
 COPY requirements.txt .
-
-# Instalar dependências Python
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Copiar todo o projeto
-COPY . .
+# ── Stage 2: Runtime (imagem final enxuta) ────────────────────────────────────
+FROM python:3.11-slim AS runtime
 
-# Criar diretório de cache se não existir
-RUN mkdir -p cache_certificados
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080 \
+    PYTHONPATH=/app
 
-# Porta exposta pelo Cloud Run
+WORKDIR /app
+
+# Copiar apenas os pacotes instalados (sem build tools)
+COPY --from=builder /install /usr/local
+
+# Criar usuário não-root (segurança)
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copiar código da aplicação
+COPY --chown=appuser:appuser . .
+
+# Garantir que o diretório de cache existe e tem permissão
+RUN mkdir -p cache_certificados && chown -R appuser:appuser cache_certificados
+
+# Usar usuário não-root
+USER appuser
+
+# Porta Cloud Run
 EXPOSE 8080
 
-# Comando de inicialização
-# Cloud Run injeta $PORT automaticamente (default 8080)
-CMD streamlit run app.py \
-    --server.port=$PORT \
+# Health check (Cloud Run verifica este endpoint)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/_stcore/health')" || exit 1
+
+# Entrypoint de produção
+CMD ["sh", "-c", "streamlit run app.py \
+    --server.port=${PORT} \
     --server.address=0.0.0.0 \
     --server.headless=true \
     --server.enableCORS=false \
     --server.enableXsrfProtection=false \
-    --browser.gatherUsageStats=false
+    --browser.gatherUsageStats=false \
+    --logger.level=warning"]
