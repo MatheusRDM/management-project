@@ -5,20 +5,20 @@ import streamlit as st
 
 # Usuários e senhas
 USUARIOS = {
-    "Gestão": {
-        "senha": "1234",
+    "Gestor": {
+        "senha": "Afirmaevias",
         "paginas": ["Dashboard de Certificados", "Cronograma de Ensaios", "Mapeamento de Projetos CAUQ"]
     },
     "Geoloc": {
-        "senha": "1234", 
+        "senha": "Afirmaevias",
         "paginas": ["Mapeamento de Projetos CAUQ"]
     },
     "EPR": {
-        "senha": "1234",
+        "senha": "Afirmaevias",
         "paginas": ["EPR Litoral Pioneiro"]
     },
     "Dev": {
-        "senha": "1234",
+        "senha": "Afirmaevias",
         "paginas": ["Dashboard de Certificados", "Cronograma de Ensaios", "EPR Litoral Pioneiro", "Mapeamento de Projetos CAUQ"]
     }
 }

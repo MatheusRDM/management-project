@@ -1,31 +1,36 @@
 """
-Proteção de autenticação para páginas individuais
+Proteção de autenticação para páginas individuais.
+A senha só é solicitada ao abrir o app pela primeira vez ou após clicar em Sair.
+Navegação entre páginas não requer nova autenticação (session_state persiste).
 """
 import streamlit as st
 from auth import verificar_autenticacao, tem_acesso_pagina, fazer_logout
 
 def proteger_pagina(nome_pagina):
     """
-    Protege uma página verificando autenticação e permissão
-    Se não estiver autenticado, redireciona para a página principal
-    Se não tiver permissão, mostra mensagem de acesso negado
+    Protege uma página verificando autenticação e permissão.
+    Se não autenticado, redireciona automaticamente para o login (app.py).
     """
-    # Verificar se está autenticado
+    # Se não estiver autenticado, redireciona silenciosamente para o login
     if not verificar_autenticacao():
-        st.error("Você precisa fazer login para acessar esta página.")
-        st.markdown("[Ir para página de login](app.py)")
+        st.switch_page("app.py")
         st.stop()
-    
+
     # Verificar permissão para a página específica
     usuario = st.session_state.get('usuario', '')
     if not tem_acesso_pagina(usuario, nome_pagina):
-        st.error(f"Você não tem permissão para acessar: {nome_pagina}")
-        st.markdown("[Voltar para o Dashboard](app.py)")
+        st.error(f"Sem permissão para acessar: {nome_pagina}")
+        if st.button("Voltar ao Menu"):
+            st.switch_page("app.py")
         st.stop()
-    
-    # Mostrar informações do usuário na sidebar
+
+    # Info do usuário + botão Sair na sidebar
     st.sidebar.markdown("---")
-    st.sidebar.markdown(f"**Usuário:** {usuario}")
-    st.sidebar.markdown(f"**Página:** {nome_pagina}")
-    if st.sidebar.button("Logout", use_container_width=True):
+    st.sidebar.markdown(
+        f"<span style='font-size:0.82rem;color:#BFCF99;'>👤 {usuario}</span>"
+        f"<br><span style='font-size:0.75rem;color:#aaa;'>{nome_pagina}</span>",
+        unsafe_allow_html=True,
+    )
+    st.sidebar.markdown("")
+    if st.sidebar.button("🚪 Sair", use_container_width=True, key=f"logout_{nome_pagina}"):
         fazer_logout()

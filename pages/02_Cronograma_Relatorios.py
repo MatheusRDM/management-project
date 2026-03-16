@@ -1574,6 +1574,25 @@ def main():
     _filtro_ano_num = None
 
     with st.sidebar:
+        # Botão Menu Principal
+        st.markdown("""<style>
+        div[data-testid="stButton"][key="back_to_menu_cronograma"] > button {
+            background: transparent !important;
+            border: 1px solid rgba(191,207,153,0.3) !important;
+            color: rgba(191,207,153,0.7) !important;
+            font-size: 0.78rem !important;
+            padding: 0.2rem 0.6rem !important;
+            border-radius: 6px !important;
+            margin-bottom: 0.5rem !important;
+        }
+        div[data-testid="stButton"][key="back_to_menu_cronograma"] > button:hover {
+            background: rgba(191,207,153,0.1) !important;
+            color: #BFCF99 !important;
+        }
+        </style>""", unsafe_allow_html=True)
+        if st.button("< Menu Principal", key="back_to_menu_cronograma"):
+            st.switch_page("app.py")
+
         # Logo grande na sidebar
         logo_sidebar = "Imagens/AE - Logo Hor Principal_2.png"
         if os.path.exists(logo_sidebar):
