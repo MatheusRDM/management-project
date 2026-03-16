@@ -113,7 +113,8 @@ class DataBridgeNovo:
 
 # Instância global do gerenciador
 bridge_novo = DataBridgeNovo()
-bridge_novo.init_db()
+if not bridge_novo.is_cloud:
+    bridge_novo.init_db()
 
 
 # ======================================================================================
@@ -446,17 +447,20 @@ def carregar_dados_em_execucao():
     Carrega dados de propostas em execução (FORM 022A).
     Usa a mesma lógica do dashboard principal.
     """
+    if bridge_novo.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("db_novo_dashboard_067")
+        if not df.empty and 'PT' in df.columns:
+            df = df[df['PT'].notna()].rename(columns={'PT': 'NUMERO_PROPOSTA'})[['NUMERO_PROPOSTA', 'CLIENTE']].copy()
+        return df if not df.empty else pd.DataFrame(columns=['NUMERO_PROPOSTA', 'CLIENTE'])
     try:
         with bridge_novo.get_db_conn() as conn:
-            # Assume tabela de execucao existe ou usar dados do FORM 067 como proxy
-            # Para FAS, precisamos de NUMERO_PROPOSTA, CLIENTE
-            # Usar dados do FORM 067 como proxy para execucao
             df = pd.read_sql_query("SELECT PT as NUMERO_PROPOSTA, CLIENTE FROM novo_dashboard_067 WHERE PT IS NOT NULL", conn)
             logger.info(f"Dados em execução carregados: {len(df)} registros")
             return df
     except Exception as e:
         logger.error(f"Erro ao carregar dados em execução: {e}")
-        return pd.DataFrame(lista_processamento).drop_duplicates(subset=['PC'])
+        return pd.DataFrame(columns=['NUMERO_PROPOSTA', 'CLIENTE'])
 
 # ======================================================================================
 # 6. FUNÇÕES AUXILIARES

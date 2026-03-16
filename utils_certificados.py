@@ -200,7 +200,8 @@ class DataBridge:
                 pass # Coluna já existe
 
 bridge = DataBridge()
-bridge.init_db()
+if not bridge.is_cloud:
+    bridge.init_db()
 
 # ======================================================================================
 # 3. FUNÇÕES AUXILIARES

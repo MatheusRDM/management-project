@@ -96,7 +96,8 @@ class DataBridge:
                 STATUS_PROPOSTA TEXT, DATA_ACEITE_PROPOSTA DATETIME)''')
 
 bridge = DataBridge()
-bridge.init_db()
+if not bridge.is_cloud:
+    bridge.init_db()
 
 # ======================================================================================
 # 3. FUNÇÕES AUXILIARES
