@@ -332,6 +332,8 @@ def sync_propostas():
 
 def sync_certificados_067():
     """Sincroniza dados do FORM 067 (Certificados) - INDEPENDENTE do FORM 022 A"""
+    if bridge.is_cloud:
+        return  # No cloud, dados vêm do parquet cache estático
     todos = []
     for ano in ['2026', '2025']:
         path = FILES_CONFIG[f'certificados_{ano}']['local_path']
@@ -409,6 +411,8 @@ def sync_certificados_067():
         logger.info("Tabela certificados_067 atualizada com sucesso")
 
 def sync_recebimento():
+    if bridge.is_cloud:
+        return  # No cloud, dados vêm do parquet cache estático
     todos_dados = []
     keys = [k for k in FILES_CONFIG if FILES_CONFIG[k]['tipo'] == 'recebimento']
     cc_list = get_lista_cc_from_excel()
@@ -465,10 +469,12 @@ def sync_recebimento():
 
 def sync_all_data():
     """Sincroniza todos os dados - limpa cache e recarrega do Excel"""
+    if bridge.is_cloud:
+        return  # No cloud, dados vêm do parquet cache estático
     try:
         st.cache_data.clear()
     except: pass
-    
+
     # Deletar banco antigo para forçar recriação
     import os
     if os.path.exists(DB_NAME):
@@ -487,14 +493,20 @@ def sync_all_data():
     logger.info("Sincronização completa - todos os dados recarregados")
 
 def carregar_dados_consolidados_sql():
+    if bridge.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        return carregar_parquet_cache("db_recebimentos")
     with bridge.get_db_conn() as conn:
         try: return pd.read_sql_query("SELECT * FROM recebimentos", conn)
         except: return pd.DataFrame()
 
 def carregar_dados_certificados_sql():
     """Carrega dados APENAS da tabela certificados_067 (FORM 067) - SEM FORM 022 A"""
+    if bridge.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        return carregar_parquet_cache("db_certificados_067")
     with bridge.get_db_conn() as conn:
-        try: 
+        try:
             df = pd.read_sql_query("SELECT * FROM certificados_067", conn)
             logger.info(f"Certificados carregados do SQLite: {len(df)} registros")
             return df

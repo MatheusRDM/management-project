@@ -410,6 +410,11 @@ def carregar_form103c() -> pd.DataFrame:
     Para cada aba PT_XXXX extrai: PT, rodovia, estaca, datas, resultados Fc7/Fc28.
     Retorna DataFrame com colunas de resultado para merge com FORM 022A.
     """
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    from cloud_config import IS_CLOUD
+    if IS_CLOUD:
+        return pd.DataFrame()  # FORM 103C não disponível no cloud
+    # ─────────────────────────────────────────────────────────────────────────
     import openpyxl
 
     arquivos = glob.glob(os.path.join(FORM103C_PASTA, "FORM 103*.xlsx"))
@@ -498,6 +503,13 @@ def carregar_form103c() -> pd.DataFrame:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def carregar_dados_epr_form022a() -> pd.DataFrame:
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    from cloud_config import IS_CLOUD
+    if IS_CLOUD:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("db_epr_form022a")
+        return df if not df.empty else pd.DataFrame()
+    # ─────────────────────────────────────────────────────────────────────────
     keys_recebimento = [k for k in FILES_CONFIG if FILES_CONFIG[k].get("tipo") == "recebimento"]
     if not keys_recebimento:
         return pd.DataFrame()

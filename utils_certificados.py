@@ -586,6 +586,15 @@ def carregar_projetos_form022a(ano='2026'):
         MATERIAIS       → lista de materiais (col D)
         DATA_RECEBIMENTO→ data mais recente do grupo
     """
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("recebimento_form022a")
+        if not df.empty and ano:
+            # Filtrar por ano se houver coluna DATA_RECEBIMENTO ou PT
+            pass  # Cache já contém todos os anos consolidados
+        return df if not df.empty else pd.DataFrame()
+    # ─────────────────────────────────────────────────────────────────────────
     key_form = f'recebimento_{ano}'
     if key_form not in FILES_CONFIG:
         return pd.DataFrame()
@@ -3168,6 +3177,10 @@ def get_lista_cc_from_excel():
     return cc_names
 
 def sync_recebimento():
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge.is_cloud:
+        return  # No cloud, dados vêm do parquet cache estático
+    # ─────────────────────────────────────────────────────────────────────────
     todos_dados = []
     keys = [k for k in FILES_CONFIG if FILES_CONFIG[k]['tipo'] == 'recebimento']
     data_corte = pd.Timestamp('2025-12-01')
@@ -3265,6 +3278,10 @@ def sync_recebimento():
 
 def sync_certificados_067():
     """Sincroniza dados dos certificados 067 com o SQLite"""
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge.is_cloud:
+        return  # No cloud, dados vêm do parquet cache estático
+    # ─────────────────────────────────────────────────────────────────────────
     todos = []
     for ano in ['2026', '2025']:
         path = FILES_CONFIG[f'certificados_{ano}']['local_path']

@@ -32,7 +32,11 @@ logger = logging.getLogger(__name__)
 CAUQ_BASE_DIR = r"G:\.shortcut-targets-by-id\1NUJ7pNAqedohSrLjiwFErFrtVqVZkrjk\006 - Lab. Central\0.2 PROJETOS CAUQ MARSHALL\006-PROJETOS"
 
 # Detecta se estamos no modo cloud (sem acesso ao Google Drive)
-_CLOUD_MODE = not os.path.isdir(CAUQ_BASE_DIR)
+# Usa detecção unificada via cloud_config para consistência
+try:
+    from cloud_config import IS_CLOUD as _CLOUD_MODE
+except ImportError:
+    _CLOUD_MODE = not os.path.isdir(CAUQ_BASE_DIR)
 
 GEOCODE_CACHE_FILE = os.path.join(
     os.path.dirname(__file__), "..", "cache_certificados", "cauq_geocode_cache.json"
@@ -1488,36 +1492,49 @@ def escanear_projetos(anos_filtro=None, com_geocode: bool = True,
     """
     anos  = anos_filtro or list(YEAR_DIRS.keys())
 
-    # ── Modo cloud: retorna apenas dados do cache JSON ──────────────────────
+    # ── Modo cloud: retorna dados do cache JSON → fallback parquet ──────────
     if _CLOUD_MODE:
         cache = _load_scan_cache()
-        if not cache:
-            return pd.DataFrame()
         todos = []
-        for chave, entrada in cache.items():
-            dados = entrada.get("dados")
-            if not dados:
-                continue
-            ano_cache = dados.get("ano")
-            if anos_filtro and ano_cache not in anos_filtro:
-                continue
-            todos.append(dados)
-        if not todos:
-            return pd.DataFrame()
-        df = pd.DataFrame(todos)
-        df = _normalizar_localizacoes(df)
-        df = _normalizar_faixas(df)
-        if com_geocode:
-            geo_cache = _load_geocache()
-            for idx, row in df.iterrows():
-                loc = str(row.get("localizacao", "")).strip()
-                if not loc or loc in ("-", "", "N/A"):
+        if cache:
+            for chave, entrada in cache.items():
+                dados = entrada.get("dados")
+                if not dados:
                     continue
-                chave_loc = loc.upper()
-                if chave_loc in geo_cache:
-                    df.at[idx, "lat"] = geo_cache[chave_loc].get("lat")
-                    df.at[idx, "lon"] = geo_cache[chave_loc].get("lon")
-        return df
+                ano_cache = dados.get("ano")
+                if anos_filtro and ano_cache not in anos_filtro:
+                    continue
+                todos.append(dados)
+
+        if todos:
+            df = pd.DataFrame(todos)
+            df = _normalizar_localizacoes(df)
+            df = _normalizar_faixas(df)
+            if com_geocode:
+                geo_cache = _load_geocache()
+                for idx, row in df.iterrows():
+                    loc = str(row.get("localizacao", "")).strip()
+                    if not loc or loc in ("-", "", "N/A"):
+                        continue
+                    chave_loc = loc.upper()
+                    if chave_loc in geo_cache:
+                        df.at[idx, "lat"] = geo_cache[chave_loc].get("lat")
+                        df.at[idx, "lon"] = geo_cache[chave_loc].get("lon")
+            return df
+
+        # ── Fallback: parquet cache estático ──────────────────────────────
+        try:
+            from cloud_config import carregar_parquet_cache
+            df_pq = carregar_parquet_cache("cauq_projetos")
+            if not df_pq.empty:
+                logger.info(f"[CLOUD] CAUQ fallback parquet: {len(df_pq)} projetos")
+                if anos_filtro:
+                    df_pq = df_pq[df_pq["ano"].isin(anos_filtro)]
+                return df_pq
+        except Exception as e:
+            logger.warning(f"[CLOUD] Erro ao carregar parquet CAUQ: {e}")
+
+        return pd.DataFrame()
     cache = _load_scan_cache() if usar_cache else {}
 
     # Coletar todas as pastas de projeto
@@ -1667,15 +1684,25 @@ def geocodificar_pendentes(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
 
 def anos_disponiveis() -> list:
     """Retorna lista de anos com diretório existente e não vazio."""
-    # Modo cloud: extrai anos do cache
+    # Modo cloud: extrai anos do cache JSON → fallback parquet → fallback config
     if _CLOUD_MODE:
         cache = _load_scan_cache()
         anos_set = set()
-        for chave, entrada in cache.items():
-            dados = entrada.get("dados", {})
-            ano = dados.get("ano")
-            if ano:
-                anos_set.add(int(ano))
+        if cache:
+            for chave, entrada in cache.items():
+                dados = entrada.get("dados", {})
+                ano = dados.get("ano")
+                if ano:
+                    anos_set.add(int(ano))
+        if not anos_set:
+            # Fallback: extrair anos do parquet cache
+            try:
+                from cloud_config import carregar_parquet_cache
+                df_pq = carregar_parquet_cache("cauq_projetos")
+                if not df_pq.empty and "ano" in df_pq.columns:
+                    anos_set = set(df_pq["ano"].dropna().astype(int).unique())
+            except Exception:
+                pass
         return sorted(anos_set) if anos_set else list(YEAR_DIRS.keys())
 
     anos = []

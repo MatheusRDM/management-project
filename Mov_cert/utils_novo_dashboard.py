@@ -174,8 +174,17 @@ def carregar_dados_do_excel():
     - N (13): Nº CERTIFICADO
     - P (15): DATA
     """
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge_novo.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("db_novo_dashboard_067")
+        if not df.empty:
+            logger.info(f"[CLOUD] carregar_dados_do_excel → parquet: {len(df)} registros")
+            return df
+        return pd.DataFrame()
+    # ─────────────────────────────────────────────────────────────────────────
     todos = []
-    
+
     for ano_arquivo in ['2026', '2025']:
         key = f'certificados_{ano_arquivo}'
         if key not in FILES_CONFIG:
@@ -391,6 +400,15 @@ def carregar_form044():
     Carrega dados do FORM 044 (Controle de Propostas).
     Estrutura baseada no arquivo Excel FORM 044.
     """
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge_novo.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("propostas_form044")
+        if not df.empty:
+            logger.info(f"[CLOUD] carregar_form044 → parquet: {len(df)} registros")
+            return df
+        return pd.DataFrame()
+    # ─────────────────────────────────────────────────────────────────────────
     try:
         path = FILES_CONFIG['propostas_comerciais']['local_path']
         if not os.path.exists(path):
@@ -669,6 +687,10 @@ def buscar_e_extrair_form045(pc_numero, empresa_nome=""):
     Busca o arquivo FORM 045 no diretório comercial com base no ano da PC
     e extrai os serviços e quantidades (E20:G42).
     """
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge_novo.is_cloud:
+        return pd.DataFrame()  # Dados detalhados do FORM 045 não disponíveis no cloud
+    # ─────────────────────────────────────────────────────────────────────────
     # 1. Normalização do número da PC (Ex: 041/25 -> 041.25)
     pc_original = str(pc_numero).strip().upper()
     pc_clean = pc_original.replace('/', '.')
