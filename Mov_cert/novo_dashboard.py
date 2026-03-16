@@ -447,13 +447,13 @@ def main():
             color_discrete_sequence=['#566E3D', '#6a8a4a', '#7da058', '#BFCF99', '#89a26c', '#a8c78a', '#c5d9a8', '#d4e4bc', '#e3efd0', '#EFEBDC']
         )
         fig.update_traces(
-            textposition='outside', 
-            textinfo='percent+label', 
-            textfont=dict(color='#FFFFFF', size=16),
+            textposition='outside',
+            textinfo='percent+label',
+            textfont=dict(color='#FFFFFF', size=13),
             hovertemplate='<b>%{label}</b><br>Quantidade: %{value}<br>%{percent}<extra></extra>'
         )
         fig.update_layout(
-            height=400,
+            height=700,
             showlegend=True,
             dragmode=False,
             hovermode='closest',
@@ -464,15 +464,16 @@ def main():
             ),
             font=dict(family="Poppins, sans-serif", color="#FFFFFF", size=13),
             paper_bgcolor='rgba(26, 31, 46, 0.8)',
-            margin=dict(l=15, r=15, t=35, b=80),
+            margin=dict(l=80, r=80, t=40, b=120),
             legend=dict(
                 orientation='h',
                 xanchor='center', x=0.5,
-                yanchor='top', y=-0.05,
+                yanchor='top', y=-0.08,
                 bgcolor='rgba(26, 31, 46, 0.8)',
                 bordercolor='#566E3D',
                 font=dict(color='#FFFFFF', size=11),
-                itemwidth=30
+                itemwidth=30,
+                traceorder='normal'
             )
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'scrollZoom': False})
