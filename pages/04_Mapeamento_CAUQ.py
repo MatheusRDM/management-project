@@ -900,13 +900,29 @@ def _mostrar_painel_comparacao(projetos: list):
                         bordercolor="#1a3d5f",
                         borderwidth=1,
                         font=dict(color="#ccc"),
+                        itemclick="toggle",
+                        itemdoubleclick="toggleothers",
                     ),
-                    hovermode="closest",
-                    height=420,
+                    hovermode="x unified",
+                    hoverlabel=dict(
+                        bgcolor="#0a1929",
+                        bordercolor="#1a3d5f",
+                        font=dict(color="#fff", size=12),
+                    ),
+                    dragmode=False,
+                    height=480,
                     margin=dict(l=50, r=30, t=55, b=45),
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(
+                    fig, use_container_width=True,
+                    config={
+                        "displayModeBar": False,
+                        "scrollZoom": False,
+                        "doubleClick": False,
+                        "staticPlot": False,
+                    },
+                )
 
                 # Tabela resumo por ano
                 st.markdown(

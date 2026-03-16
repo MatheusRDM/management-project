@@ -339,9 +339,11 @@ class _Sheet:
         self._lib = lib
         if lib == "xlrd":
             self._s    = sheet
+            self.name  = sheet.name
             self.nrows = sheet.nrows
             self.ncols = sheet.ncols
         else:
+            self.name  = sheet.title  # openpyxl usa .title
             # Pré-carrega todas as linhas para acesso O(1) (compatível com read_only=True)
             rows = list(sheet.iter_rows(values_only=True))
             self._rows = rows
@@ -834,10 +836,18 @@ def _ler_secao_ensaios(sh_pf, row_start: int, row_max: int) -> dict:
             campos["vam"] = val
 
         elif "MAXIMA" in label and "MEDIDA" in label and "rice" not in campos:
-            campos["rice"] = val
+            # RICE (DMM) deve estar entre 1.5 e 3.5 g/cm³
+            if val is not None and 1.5 <= val <= 3.5:
+                campos["rice"] = val
+            else:
+                logger.debug(f"RICE descartado (fora do range 1.5-3.5): {val}")
 
         elif "APARENTE" in label and "densidade_aparente" not in campos:
-            campos["densidade_aparente"] = val
+            # Densidade aparente deve estar entre 1.5 e 3.5 g/cm³
+            if val is not None and 1.5 <= val <= 3.5:
+                campos["densidade_aparente"] = val
+            else:
+                logger.debug(f"Dens. Aparente descartada (fora do range 1.5-3.5): {val}")
 
         elif (("UMIDADE" in label and "INDUZ" in label) or "DUI" in label) and "dui" not in campos:
             campos["dui"] = val
@@ -851,11 +861,36 @@ def _ler_secao_ensaios(sh_pf, row_start: int, row_max: int) -> dict:
 # EXTRAÇÃO — DEFORMAÇÃO PERMANENTE
 # ======================================================================================
 
-def _ler_deformacao(sh_def) -> float | None:
+def _ler_deformacao(sh_def, ano: int = 0) -> float | None:
     """
-    Lê Deformação Permanente dinamicamente:
-    Encontra linha com 'DEFORMA' + 'MEDIA' e retorna o 1º float plausível (0.01–50 mm).
+    Lê Deformação Permanente com estratégia adaptada por layout:
+
+    1. Tentativa por células fixas conhecidas:
+       - 2022: aba "DP" célula I58 (row=57, col=8)
+       - 2023-2026: aba "DP" célula D83 (row=82, col=3)
+       - 2019: aba "DEFORMAÇÃO PERMANENTE" célula D203 (row=202, col=3)
+    2. Fallback: busca dinâmica por label 'DEFORMA' + 'MEDIA'
     """
+    # ── Tentativa 1: célula fixa por layout/ano ──
+    # Mapeamento validado por inspeção dos arquivos reais:
+    #   - Aba "DP":  D83 (row=82, col=3) → "Deformação Média das Amostras (mm)"
+    #   - Aba "DEFORMAÇÃO PERMANENTE":  D203 (row=202, col=3) para 2019
+    _celulas_fixas = []
+    nome_aba = sh_def.name.upper().strip() if hasattr(sh_def, 'name') else ""
+
+    if nome_aba == "DP":
+        # Todas as versões (2022+): D83 = row 82, col 3 (0-indexed)
+        _celulas_fixas = [(82, 3), (82, 4)]  # D83 e E83 como fallback
+    elif "DEFORMA" in nome_aba:
+        _celulas_fixas = [(202, 3)]           # D203
+
+    for row_f, col_f in _celulas_fixas:
+        if row_f < sh_def.nrows and col_f < sh_def.ncols:
+            val = _safe_float(sh_def, row_f, col_f)
+            if val is not None and 0.01 < abs(val) < 50:
+                return abs(val)
+
+    # ── Tentativa 2: busca dinâmica por label ──
     row_m = _encontrar_linha(sh_def, "DEFORMA", "MEDIA", row_max=sh_def.nrows)
     if row_m is None:
         row_m = _encontrar_linha(sh_def, "DEFORMACAO", row_max=sh_def.nrows)
@@ -1003,7 +1038,7 @@ def _extrair_dados_projeto(pasta: str, ano: int) -> dict | None:
             None,
         )
         if aba_def:
-            val = _ler_deformacao(wb.sheet_by_name(aba_def))
+            val = _ler_deformacao(wb.sheet_by_name(aba_def), ano=ano)
             if val is not None:
                 dados["deformacao_permanente"] = val
     except Exception as e:
@@ -1594,21 +1629,21 @@ def escanear_projetos(anos_filtro=None, com_geocode: bool = True,
 
     df = pd.DataFrame(todos)
 
-    # ── Validação: detectar deformação template (valores idênticos por ano) ────
+    # ── Validação: detectar deformação template (valores repetidos por ano) ────
+    # Qualquer valor que aparece >=5x no mesmo ano E representa >30% dos registros
+    # é considerado template (valor padrão da planilha, não medido).
     for ano in df["ano"].unique():
         mask_ano = (df["ano"] == ano) & df["deformacao_permanente"].notna()
         vals = df.loc[mask_ano, "deformacao_permanente"]
         if len(vals) > 3:
-            # Se >80% dos valores são idênticos, é template
-            moda = vals.mode()
-            if not moda.empty:
-                n_moda = (vals == moda.iloc[0]).sum()
-                if n_moda / len(vals) > 0.8:
+            contagem = vals.value_counts()
+            for valor, n_rep in contagem.items():
+                if n_rep >= 5 and n_rep / len(vals) > 0.30:
                     logger.info(
-                        f"Ano {ano}: {n_moda}/{len(vals)} deformacoes identicas "
-                        f"({moda.iloc[0]:.4f}) - marcando como template"
+                        f"Ano {ano}: {n_rep}/{len(vals)} deformacoes identicas "
+                        f"({valor:.4f}) - marcando como template"
                     )
-                    df.loc[mask_ano & (df["deformacao_permanente"] == moda.iloc[0]),
+                    df.loc[mask_ano & (df["deformacao_permanente"] == valor),
                            "deformacao_permanente"] = None
 
     # ── Vincular deformação permanente de diretórios separados (2020-2021) ───
