@@ -112,6 +112,8 @@ def carregar_parquet_cache(nome: str) -> pd.DataFrame:
         - 'dados_recebimento'       → Dados recebimento
         - 'relatorios_tecnicos'     → Relatórios técnicos
         - 'cauq_projetos'           → Projetos CAUQ Marshall
+        - 'todos_projetos'          → Scan completo de projetos (Cronograma)
+        - 'empresa_finalidade'      → Empresa × Finalidade FORM 022A (Cronograma)
     """
     path = os.path.join(CACHE_DIR, f"{nome}.parquet")
     if os.path.exists(path):

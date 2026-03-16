@@ -2687,6 +2687,7 @@ def _localizar_pasta_por_pt(tipo_key, tipo_cfg, pt_num, pedreira='', codigo_obs=
 def escanear_todos_projetos(df_compasa_db=None):
     """
     VERSÃO ROBUSTA — DIRETÓRIO É A FONTE PRIMÁRIA.
+    CLOUD: carrega de todos_projetos.parquet (cache estático).
 
     Fluxo:
       1ª ETAPA → Varredura de todos os 6 diretórios de rede
@@ -2715,6 +2716,15 @@ def escanear_todos_projetos(df_compasa_db=None):
 
     Parâmetro df_compasa_db: mantido por retrocompatibilidade.
     """
+
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("todos_projetos")
+        if not df.empty:
+            return df
+        return pd.DataFrame()
+    # ─────────────────────────────────────────────────────────────────────────
 
     # =========================================================================
     # ETAPA 1 — VARREDURA DE TODOS OS DIRETÓRIOS (com leitura Excel profunda)
@@ -3395,7 +3405,16 @@ def carregar_empresa_finalidade_raw():
     Carrega dados brutos de EMPRESA (Col B) × FINALIDADE (Col M) do FORM 022A.
     Retorna DataFrame com colunas: EMPRESA, FINALIDADE, DATA_RECEBIMENTO, QUANTIDADE.
     Usado no gráfico de Quantitativo por Empresa × Finalidade.
+    CLOUD: carrega de empresa_finalidade.parquet (cache estático).
     """
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("empresa_finalidade")
+        if not df.empty:
+            return df
+        return pd.DataFrame()
+    # ─────────────────────────────────────────────────────────────────────────
     todos_dados = []
     keys = [k for k in FILES_CONFIG if FILES_CONFIG[k]['tipo'] == 'recebimento']
     data_corte = pd.Timestamp('2025-12-01')
