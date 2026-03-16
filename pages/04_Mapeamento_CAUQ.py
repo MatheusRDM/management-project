@@ -1061,10 +1061,10 @@ def main():
 
             st.divider()
             st.checkbox(
-                "⛏ Pedreiras (Fontes)",
+                "⛏ Pedreiras - Sem projeto",
                 value=True,
-                key="show_pedreiras",
-                help="Exibe no mapa as pedreiras e minerações fornecedoras de agregados",
+                key="show_pedreiras_sem_projeto",
+                help="Exibe no mapa as pedreiras que NÃO possuem projetos vinculados no período filtrado",
             )
 
         mostrar_projetos = True
@@ -1161,8 +1161,9 @@ def main():
         )
     else:
         import hashlib as _hl
+        _show_sem_proj = st.session_state.get("show_pedreiras_sem_projeto", True)
         _filter_key = _hl.md5(
-            f"{len(df)}_{nat_sel}_{loc_sel}_{proc_sel}_{st.session_state.get('show_pedreiras', True)}".encode()
+            f"{len(df)}_{nat_sel}_{loc_sel}_{proc_sel}_{_show_sem_proj}".encode()
         ).hexdigest()
 
         # Cache pedreiras layer — só recalcula quando filtros mudam
@@ -1173,11 +1174,15 @@ def main():
                 loc_sel  if loc_sel  != "Todas" else None,
                 proc_sel if proc_sel != "Todas" else None,
             )
-            pedreiras_layer = (
-                _combinar_pedreiras_cauq(_intel, df)
-                if st.session_state.get("show_pedreiras", True)
-                else None
-            )
+            pedreiras_layer = _combinar_pedreiras_cauq(_intel, df)
+
+            # Se o toggle "Sem projeto" está desmarcado, remove pedreiras sem projetos
+            if not _show_sem_proj and pedreiras_layer:
+                pedreiras_layer = [
+                    p for p in pedreiras_layer
+                    if (_stats_pedreira(df, p.get("procedencias", [])) or {}).get("n", 0) > 0
+                ]
+
             st.session_state["_ped_cache"] = pedreiras_layer
             st.session_state["_ped_hash"] = _filter_key
         else:
