@@ -1255,7 +1255,7 @@ def _cached_dev_label():
     .dev-label-fixed {
         position: fixed;
         bottom: 12px;
-        right: 16px;
+        left: 16px;
         font-size: 11px;
         color: #BFCF99;
         font-family: 'Poppins', sans-serif;
