@@ -216,8 +216,10 @@ def main():
     col_logo, col_titulo = st.columns([0.8, 4])
     with col_logo:
         try:
-            logo_path = r"G:\.shortcut-targets-by-id\1JbWwLDR6PaShh0-_xJZLFAvEXQKn65V1\008 - Comercial\010 - Marketing\00 - Identidade Visual Afirma Evias\Manual Completo\Identidade Visual\Logotipo e Variações\Símbolo e Selos\PNG\Selo C Ass\Selo C Ass_4.png"
-            st.image(logo_path, use_container_width=True)
+            from cloud_config import get_logo_path
+            _selo = get_logo_path("selo_c_ass")
+            if _selo:
+                st.image(_selo, use_container_width=True)
         except Exception:
             pass
     
@@ -254,7 +256,7 @@ def main():
     acreditados_nao = stats['acreditados_nao']
     acreditados_nao_informado = stats['acreditados_nao_informado']
     
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3, k4 = st.columns([1, 1, 1, 1], gap="small")
     
     with k1:
         st.metric("Total Certificados", formatar_numero(total_certificados))
@@ -302,7 +304,7 @@ def main():
     
     # Segunda linha de KPIs - Acreditados (apenas SIM e NÃO - Coluna H vazia é desconsiderada)
     st.markdown("")
-    k5, k6, _, _ = st.columns(4)
+    k5, k6, _, _ = st.columns([1, 1, 1, 1], gap="small")
     
     with k5:
         st.metric("Acreditados (Sim)", formatar_numero(acreditados_sim))
@@ -425,7 +427,7 @@ def main():
             font=dict(family="Poppins, sans-serif", color="#FFFFFF", size=13),
             paper_bgcolor='rgba(26, 31, 46, 0.8)',
             plot_bgcolor='rgba(26, 31, 46, 0.8)',
-            margin=dict(l=20, r=20, t=40, b=160),
+            margin=dict(l=15, r=15, t=35, b=100),
             xaxis=dict(gridcolor='#566E3D', tickcolor='#566E3D', tickfont=dict(size=12), fixedrange=True),
             yaxis=dict(gridcolor='#566E3D', tickcolor='#566E3D', tickfont=dict(size=12), fixedrange=True)
         )
@@ -451,7 +453,7 @@ def main():
             hovertemplate='<b>%{label}</b><br>Quantidade: %{value}<br>%{percent}<extra></extra>'
         )
         fig.update_layout(
-            height=460,
+            height=400,
             showlegend=True,
             dragmode=False,
             hovermode='closest',
@@ -462,7 +464,7 @@ def main():
             ),
             font=dict(family="Poppins, sans-serif", color="#FFFFFF", size=13),
             paper_bgcolor='rgba(26, 31, 46, 0.8)',
-            margin=dict(l=20, r=20, t=40, b=120),
+            margin=dict(l=15, r=15, t=35, b=80),
             legend=dict(
                 orientation='h',
                 xanchor='center', x=0.5,

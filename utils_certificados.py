@@ -146,9 +146,12 @@ __all__ = [
 # ======================================================================================
 class DataBridge:
     def __init__(self):
-        self.is_cloud = False
-        
+        from cloud_config import IS_CLOUD
+        self.is_cloud = IS_CLOUD
+
     def get_file_content(self, config_key):
+        if config_key not in FILES_CONFIG:
+            return None
         config = FILES_CONFIG[config_key]
         local_path = config["local_path"]
         if os.path.exists(local_path):
@@ -3287,6 +3290,9 @@ def sync_propostas():
     pass
 
 def sync_all_data():
+    # No cloud, sync não faz nada (dados vêm do cache estático)
+    if bridge.is_cloud:
+        return
     for func in dir(sys.modules[__name__]):
         if hasattr(getattr(sys.modules[__name__], func), 'clear_cache'):
             getattr(sys.modules[__name__], func).clear_cache()
@@ -3298,6 +3304,9 @@ def sync_all_data():
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_dados_consolidados_sql():
+    if bridge.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        return carregar_parquet_cache("db_recebimentos")
     with bridge.get_db_conn() as conn:
         try: return pd.read_sql_query("SELECT * FROM recebimentos", conn)
         except: return pd.DataFrame()
@@ -3308,6 +3317,15 @@ def carregar_dados_epr_raw(mes_filtro=None, cliente_filtro=None):
     Carrega dados brutos (SEM DEDUPLICAÇÃO) para contagem exata de amostras.
     Inclui a coluna OBS_RECEBIMENTO.
     """
+    if bridge.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("db_recebimentos")
+        if not df.empty:
+            if 'DATA_RECEBIMENTO' in df.columns:
+                df['DATA_RECEBIMENTO'] = pd.to_datetime(df['DATA_RECEBIMENTO'], errors='coerce')
+            if cliente_filtro and 'CLIENTE' in df.columns:
+                df = df[df['CLIENTE'].astype(str).str.upper().str.contains(cliente_filtro.upper(), na=False)]
+        return df
     todos_dados = []
     keys = [k for k in FILES_CONFIG if FILES_CONFIG[k]['tipo'] == 'recebimento']
     data_corte = pd.Timestamp('2025-12-01')

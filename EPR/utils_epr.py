@@ -555,6 +555,9 @@ def carregar_dados_epr_form022a() -> pd.DataFrame:
 # =============================================================================
 
 def sincronizar_epr() -> bool:
+    from cloud_config import IS_CLOUD
+    if IS_CLOUD:
+        return False  # No cloud, dados vêm do cache estático
     import sqlite3
     st.cache_data.clear()
     df = carregar_dados_epr_form022a()
@@ -570,6 +573,10 @@ def sincronizar_epr() -> bool:
 
 
 def carregar_do_db() -> pd.DataFrame:
+    from cloud_config import IS_CLOUD
+    if IS_CLOUD:
+        from cloud_config import carregar_parquet_cache
+        return carregar_parquet_cache("db_epr_form022a")
     import sqlite3
     db_path = os.path.join(_ROOT, DB_NAME)
     try:
@@ -580,6 +587,9 @@ def carregar_do_db() -> pd.DataFrame:
 
 
 def carregar_dados(forcar_excel: bool = False) -> pd.DataFrame:
+    from cloud_config import IS_CLOUD
+    if IS_CLOUD:
+        return carregar_do_db()  # Sempre do cache no cloud
     if not forcar_excel:
         df = carregar_do_db()
         if not df.empty:

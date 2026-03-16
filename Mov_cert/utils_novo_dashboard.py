@@ -62,7 +62,8 @@ class DataBridgeNovo:
     """
     
     def __init__(self):
-        self.is_cloud = False
+        from cloud_config import IS_CLOUD
+        self.is_cloud = IS_CLOUD
         
     def get_file_content(self, config_key):
         """Retorna o caminho do arquivo se existir"""
@@ -134,7 +135,14 @@ def carregar_dados():
     """
     Carrega dados da tabela do Novo Dashboard.
     Estrutura FORM 067: PT, CLIENTE, ENSAIO, NORMA, QUANTIDADE, ACREDITADO, DATA, ANO
+    Cloud: usa cache parquet estático.
     """
+    if bridge_novo.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("db_novo_dashboard_067")
+        if not df.empty:
+            logger.info(f"[CLOUD] Dados carregados do parquet: {len(df)} registros")
+            return df
     try:
         with bridge_novo.get_db_conn() as conn:
             df = pd.read_sql_query(f"SELECT * FROM {TABELA_NOVO_DASHBOARD}", conn)
@@ -493,8 +501,10 @@ def exportar_csv(df, nome_arquivo="dados_exportados"):
 def sync_dados():
     """
     Sincroniza dados do Excel para o SQLite.
-    Se as fontes reais não existirem, cria dados de demonstração.
+    No cloud, não faz nada (dados vêm do parquet cache).
     """
+    if bridge_novo.is_cloud:
+        return
     try:
         # Limpar cache do Streamlit
         st.cache_data.clear()

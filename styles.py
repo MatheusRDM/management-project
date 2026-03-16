@@ -840,6 +840,9 @@ def get_css_global():
     ============================================================ */
 
     /* ── Tablet: ≤ 768px ── */
+    /* ══════════════════════════════════════════════════════════════
+       TABLET: ≤ 768px
+       ══════════════════════════════════════════════════════════════ */
     @media (max-width: 768px) {{
 
         /* Colunas: empilhamento em pares (50% cada) */
@@ -853,71 +856,79 @@ def get_css_global():
         }}
 
         /* Tipografia reduzida */
-        h1 {{ font-size: 1.9rem !important; }}
-        h2 {{ font-size: 1.4rem !important; }}
-        h3 {{ font-size: 1.1rem !important; }}
+        h1 {{ font-size: 1.8rem !important; }}
+        h2 {{ font-size: 1.35rem !important; }}
+        h3 {{ font-size: 1.05rem !important; }}
 
         /* Container principal */
-        .main-container {{ padding: 1rem 0.5rem !important; }}
-        .block-container {{ padding: 1.5rem 1rem !important; }}
+        .main-container {{ padding: 0.8rem 0.4rem !important; }}
+        .block-container {{ padding: 1.2rem 0.8rem !important; }}
 
         /* Nav-cards compactos */
         .nav-card {{
-            min-height: 160px !important;
-            padding: 1.25rem !important;
+            min-height: 140px !important;
+            padding: 1rem !important;
         }}
-        .nav-card .icon {{ font-size: 2.5rem !important; margin-bottom: 0.5rem !important; }}
-        .nav-card h3 {{ font-size: 1.2rem !important; }}
+        .nav-card .icon {{ font-size: 2.2rem !important; margin-bottom: 0.4rem !important; }}
+        .nav-card h3 {{ font-size: 1.1rem !important; }}
         .nav-card:hover {{ transform: none !important; }}
 
         /* Header container em coluna */
         .header-container {{
             flex-direction: column !important;
-            padding: 0.75rem 1rem !important;
+            padding: 0.6rem 0.8rem !important;
             text-align: center !important;
         }}
-        .header-logo {{ max-width: 120px !important; margin-bottom: 0.5rem !important; }}
-        .header-title {{ font-size: 1.3rem !important; }}
+        .header-logo {{ max-width: 110px !important; margin-bottom: 0.4rem !important; }}
+        .header-title {{ font-size: 1.2rem !important; }}
 
-        /* Métricas compactas */
+        /* KPIs: forçar wrap em 3 cols */
         div[data-testid="stMetric"] {{
-            padding: 0.5rem !important;
+            padding: 0.4rem !important;
         }}
         div[data-testid="stMetric"] [data-testid="stMetricValue"] {{
-            font-size: 1.5rem !important;
+            font-size: 1.3rem !important;
+        }}
+        div[data-testid="stMetric"] label {{
+            font-size: 0.68rem !important;
         }}
 
-        /* Gráficos: scroll horizontal quando necessário */
-        .stPlotlyChart {{ overflow-x: auto !important; }}
+        /* Graficos: scroll horizontal + altura maxima */
+        .stPlotlyChart {{
+            overflow-x: auto !important;
+        }}
+        .stPlotlyChart > div {{
+            max-height: 400px !important;
+        }}
+        .plot-container.plotly {{ max-width: 100% !important; }}
 
         /* Tabelas: scroll horizontal */
         [data-testid="stDataFrame"] {{
             overflow-x: auto !important;
             max-width: 100% !important;
         }}
+        [data-testid="stDataFrame"] table {{
+            font-size: 12px !important;
+        }}
 
         /* Scrollable containers adaptativos */
-        .scrollable-container {{ max-height: 60vh !important; }}
+        .scrollable-container {{ max-height: 55vh !important; }}
 
-        /* Footer fixo: ocultar (sobrepõe conteúdo em mobile) */
-        .fixed-footer-label {{ display: none !important; }}
-
-        /* ── Plotly: container scroll horizontal ── */
-        .stPlotlyChart {{ overflow-x: auto !important; }}
-        .plot-container.plotly {{ max-width: 100% !important; }}
+        /* Dev label: menor em tablet */
+        .dev-label-fixed {{ font-size: 9px !important; opacity: 0.5 !important; }}
 
         /* Modebar oculta em telas pequenas */
         .modebar-container {{ display: none !important; }}
 
         /* Eixos: fontes menores para caber */
         .xtick text, .ytick text {{ font-size: 9px !important; }}
-        .gtitle {{ font-size: 14px !important; }}
+        .gtitle {{ font-size: 13px !important; }}
         .legend text {{ font-size: 10px !important; }}
 
         /* ── Mapa Folium: iframe reduzido em tablet ── */
         iframe[title*="st_folium"],
         .stCustomComponentV1 iframe {{
-            height: 440px !important;
+            height: 420px !important;
         }}
 
         /* ── Folium LayerControl colapsado em tablet ── */
@@ -925,12 +936,20 @@ def get_css_global():
             max-width: 36px !important;
         }}
         .leaflet-control-layers-expanded {{
-            max-width: 220px !important;
-            font-size: 13px !important;
+            max-width: 200px !important;
+            font-size: 12px !important;
+        }}
+
+        /* ── Plotly containers fixos ── */
+        .st-emotion-cache-1wbqy5l,
+        .stContainer {{
+            max-height: 220px !important;
         }}
     }}
 
-    /* ── Smartphone: ≤ 480px ── */
+    /* ══════════════════════════════════════════════════════════════
+       SMARTPHONE: ≤ 480px
+       ══════════════════════════════════════════════════════════════ */
     @media (max-width: 480px) {{
 
         /* Empilhamento total — todas as colunas em 100% */
@@ -939,38 +958,39 @@ def get_css_global():
             flex: 1 1 100% !important;
         }}
 
-        /* Tipografia menor */
-        .stApp {{ font-size: 14px !important; line-height: 1.5 !important; }}
-        h1 {{ font-size: 1.5rem !important; }}
-        h2 {{ font-size: 1.2rem !important; }}
-        h3 {{ font-size: 1rem !important; }}
-        p, label, span {{ font-size: 13px !important; }}
+        /* Tipografia compacta */
+        .stApp {{ font-size: 13px !important; line-height: 1.45 !important; }}
+        h1 {{ font-size: 1.35rem !important; }}
+        h2 {{ font-size: 1.1rem !important; }}
+        h3 {{ font-size: 0.95rem !important; }}
+        p, label, span {{ font-size: 12px !important; }}
 
         /* Padding geral mínimo */
-        .main-container {{ padding: 0.5rem 0.25rem !important; }}
-        .block-container {{ padding: 1rem 0.5rem !important; }}
+        .main-container {{ padding: 0.3rem 0.2rem !important; }}
+        .block-container {{ padding: 0.6rem 0.3rem !important; }}
 
         /* Nav-cards mínimos */
         .nav-card {{
-            min-height: 110px !important;
-            padding: 1rem !important;
+            min-height: 100px !important;
+            padding: 0.8rem !important;
         }}
-        .nav-card .icon {{ font-size: 2rem !important; }}
-        .nav-card h3 {{ font-size: 0.95rem !important; margin-bottom: 0.4rem !important; }}
+        .nav-card .icon {{ font-size: 1.8rem !important; }}
+        .nav-card h3 {{ font-size: 0.9rem !important; margin-bottom: 0.3rem !important; }}
+        .nav-card p {{ font-size: 11px !important; }}
 
         /* Métricas ultra-compactas */
         div[data-testid="stMetric"] [data-testid="stMetricValue"] {{
-            font-size: 1.2rem !important;
+            font-size: 1.05rem !important;
         }}
         div[data-testid="stMetric"] label {{
-            font-size: 0.7rem !important;
+            font-size: 0.6rem !important;
         }}
 
         /* Botões full width */
         .stButton > button {{
             width: 100% !important;
-            padding: 0.6rem !important;
-            font-size: 13px !important;
+            padding: 0.5rem !important;
+            font-size: 12px !important;
         }}
 
         /* Inputs full width */
@@ -980,17 +1000,17 @@ def get_css_global():
             width: 100% !important;
         }}
 
-        /* Sidebar em overlay sem quebrar layout */
+        /* Sidebar em overlay */
         section[data-testid="stSidebar"] {{
             z-index: 9999 !important;
-            max-width: min(85vw, 320px) !important;
+            max-width: min(85vw, 300px) !important;
         }}
 
-        /* Imagem do header */
-        .header-logo {{ max-width: 70px !important; }}
+        /* Header image menor */
+        .header-logo {{ max-width: 60px !important; }}
 
         /* Scrollable containers menores */
-        .scrollable-container {{ max-height: 45vh !important; }}
+        .scrollable-container {{ max-height: 40vh !important; }}
 
         /* Expanders ocupam 100% */
         .stExpander {{ width: 100% !important; }}
@@ -1000,45 +1020,62 @@ def get_css_global():
             overflow-x: auto !important;
             flex-wrap: nowrap !important;
         }}
+        .stTabs [data-baseweb="tab"] {{
+            font-size: 12px !important;
+            padding: 0.4rem 0.6rem !important;
+        }}
 
-        /* ── Plotly: fontes ainda menores em phone ── */
-        .xtick text, .ytick text {{ font-size: 8px !important; }}
-        .gtitle {{ font-size: 12px !important; }}
-        .legend text {{ font-size: 9px !important; }}
+        /* Dev label: ocultar em phone */
+        .dev-label-fixed {{ display: none !important; }}
+
+        /* ── Plotly: fontes menores em phone ── */
+        .xtick text, .ytick text {{ font-size: 7px !important; }}
+        .gtitle {{ font-size: 11px !important; }}
+        .legend text {{ font-size: 8px !important; }}
         .modebar-container {{ display: none !important; }}
+        .stPlotlyChart > div {{
+            max-height: 320px !important;
+        }}
 
-        /* ── Mapa Folium: iframe compacto em mobile ── */
+        /* ── Mapa Folium: compacto em mobile ── */
         iframe[title*="st_folium"],
         .stCustomComponentV1 iframe {{
-            height: 380px !important;
-            max-height: 55vw !important;
+            height: 340px !important;
+            max-height: 50vh !important;
         }}
 
-        /* ── Folium LayerControl: compacto (collapsed=True já ajuda,
-               este CSS garante que fique pequeno e não sobreponha o mapa) ── */
+        /* ── Folium LayerControl colapsado ── */
         .leaflet-control-layers {{
-            max-width: 36px !important;
-            max-height: 36px !important;
+            max-width: 34px !important;
+            max-height: 34px !important;
             overflow: hidden !important;
-            border-radius: 6px !important;
+            border-radius: 5px !important;
         }}
         .leaflet-control-layers-expanded {{
-            max-width: 200px !important;
-            max-height: 60vh !important;
+            max-width: 180px !important;
+            max-height: 55vh !important;
             overflow-y: auto !important;
-            font-size: 12px !important;
+            font-size: 11px !important;
         }}
         .leaflet-control-layers-toggle {{
-            width: 34px !important;
-            height: 34px !important;
-            background-size: 20px !important;
+            width: 32px !important;
+            height: 32px !important;
+            background-size: 18px !important;
         }}
 
         /* ── Legenda do mapa: wrap em mobile ── */
-        div[style*="display:flex"][style*="gap:1.5rem"] {{
-            gap: 0.6rem !important;
-            font-size: 12px !important;
+        div[style*="display:flex"][style*="gap:1"] {{
+            gap: 0.4rem !important;
+            font-size: 11px !important;
         }}
+    }}
+
+    /* ══════════════════════════════════════════════════════════════
+       ULTRA-WIDE: ≥ 1440px — Aproveitar espaço
+       ══════════════════════════════════════════════════════════════ */
+    @media (min-width: 1440px) {{
+        .block-container {{ max-width: 1280px !important; margin: 0 auto !important; }}
+        h1 {{ font-size: 2.6rem !important; }}
     }}
 </style>
 """
@@ -1295,9 +1332,10 @@ def renderizar_header(titulo, subtitulo=""):
     
     with col1:
         try:
-            # Selo para o header principal
-            logo_path = r"G:\.shortcut-targets-by-id\1JbWwLDR6PaShh0-_xJZLFAvEXQKn65V1\008 - Comercial\010 - Marketing\00 - Identidade Visual Afirma Evias\Manual Completo\Identidade Visual\Logotipo e Variações\Símbolo e Selos\PNG\Selo\Selo_1.png"
-            st.image(logo_path, use_container_width=True)
+            from cloud_config import get_logo_path
+            _selo = get_logo_path("selo")
+            if _selo:
+                st.image(_selo, use_container_width=True)
         except Exception:
             pass
     

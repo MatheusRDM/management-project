@@ -25,6 +25,7 @@ from CAUQ.cauq_scanner import (
     carregar_parquet_cache,
 )
 from CAUQ.pedreiras_data import PEDREIRAS_INTEL
+from cloud_config import get_logo_path
  
 # ======================================================================================
 # CONFIGURACAO DA PAGINA
@@ -529,7 +530,7 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
             )
 
             popup_html = (
-                f"<div style='font-family:Arial,sans-serif;min-width:280px;max-width:360px;'>"
+                f"<div style='font-family:Arial,sans-serif;min-width:220px;max-width:340px;width:max-content;'>"
                 f"<div style='background:{cor_ped};color:#fff;padding:8px 12px;"
                 f"border-radius:6px 6px 0 0;margin-bottom:6px;'>"
                 f"<b style='font-size:13px;'>&#9935; {ped['nome']}</b><br>"
@@ -591,8 +592,8 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
             folium.Marker(
                 location=[lat_p, lon_p],
                 popup=folium.Popup(
-                    folium.IFrame(html=popup_html, width=390, height=popup_h),
-                    max_width=410,
+                    folium.IFrame(html=popup_html, width=360, height=popup_h),
+                    max_width=380,
                 ),
                 tooltip=folium.Tooltip(tooltip_txt, sticky=True),
                 icon=folium.DivIcon(
@@ -634,9 +635,9 @@ def _mostrar_painel_comparacao(projetos: list):
         "📊 Analise Estatistica",
     ])
 
-    # ── ABA FICHAS: todos em linhas de 4 ────────────────────────────────────────
+    # ── ABA FICHAS: grid responsivo (até 4 cols desktop, 2 tablet, 1 mobile) ───
     with tab_fichas:
-        COLS_ROW = 4
+        COLS_ROW = min(4, max(1, n))
         for row_start in range(0, n, COLS_ROW):
             batch = projetos[row_start : row_start + COLS_ROW]
             cols = st.columns(len(batch))
@@ -744,7 +745,7 @@ def _mostrar_painel_comparacao(projetos: list):
             with col_norm:
                 normas_disp = sorted(set(str(p.get("norma", "OUTRO")) for p in projetos))
                 norma_filtro = st.multiselect(
-                    "Norma",
+                    "Especificação:",
                     options=normas_disp,
                     default=normas_disp,
                     key="ped_norma_sel",
@@ -899,8 +900,8 @@ def _mostrar_painel_comparacao(projetos: list):
                         font=dict(color="#ccc"),
                     ),
                     hovermode="closest",
-                    height=480,
-                    margin=dict(l=60, r=60, t=60, b=50),
+                    height=420,
+                    margin=dict(l=50, r=30, t=55, b=45),
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
@@ -918,7 +919,7 @@ def _mostrar_painel_comparacao(projetos: list):
                 tab_r["Max"]   = tab_r["Max"].apply(lambda v: f"{v:.2f}")
                 st.dataframe(
                     tab_r[["Ano", "N", "Min", "Media", "Max"]],
-                    use_container_width=False,
+                    use_container_width=True,
                     hide_index=True,
                 )
 
@@ -929,12 +930,15 @@ def _mostrar_painel_comparacao(projetos: list):
  
 def main():
     # ── Header ──────────────────────────────────────────────────────────────────────
-    col_logo, col_titulo = st.columns([0.8, 4])
+    col_logo, col_titulo = st.columns([1, 5])
     with col_logo:
-        try:
-            logo_path = r"G:\.shortcut-targets-by-id\1JbWwLDR6PaShh0-_xJZLFAvEXQKn65V1\008 - Comercial\010 - Marketing\00 - Identidade Visual Afirma Evias\Manual Completo\Identidade Visual\Logotipo e Variações\Símbolo e Selos\PNG\Selo C Ass\Selo C Ass_4.png"
-            st.image(logo_path, width=160)
-        except Exception:
+        _logo = get_logo_path("selo_c_ass")
+        if _logo:
+            try:
+                st.image(_logo, use_container_width=True)
+            except Exception:
+                _logo = None
+        if not _logo:
             st.markdown(
                 f'<div style="background:{CORES["secundario"]};padding:1rem;'
                 f'border-radius:8px;text-align:center;">'
@@ -946,7 +950,7 @@ def main():
         st.markdown(
             f"""
             <div style="padding-left:1rem;">
-                <h1 style="margin:0;font-size:2.2rem !important;">Mapeamento de Projetos CAUQ</h1>
+                <h1 style="margin:0;font-size:clamp(1.3rem, 4vw, 2.2rem) !important;">Mapeamento de Projetos CAUQ</h1>
                 <p style="color:{CORES['destaque']};font-size:1.1rem;margin-top:0.4rem;">
                     Distribuicao Geografica | Projetos Marshall | Ensaios de Agregados
                 </p>
@@ -1026,7 +1030,7 @@ def main():
                 df = df[df["ano"] == int(ano_sel)]
 
             norma_opts = ["Todas"] + _opts(df["norma"])
-            norma_sel  = st.selectbox("Norma:", norma_opts, key="f_norma")
+            norma_sel  = st.selectbox("Especificação:", norma_opts, key="f_norma")
             if norma_sel != "Todas":
                 df = df[df["norma"].astype(str) == norma_sel]
 
@@ -1095,11 +1099,12 @@ def main():
     def _kpi(col, label, value, cor="#BFCF99"):
         col.markdown(
             f"""
-            <div style="background:#0a3d5f;border-radius:10px;padding:0.7rem 0.8rem;
-                        border-left:4px solid {cor};text-align:center;">
-                <div style="color:{cor};font-size:0.7rem;text-transform:uppercase;
-                            letter-spacing:0.05em;">{label}</div>
-                <div style="color:#fff;font-size:1.3rem;font-weight:700;">{value}</div>
+            <div style="background:#0a3d5f;border-radius:8px;padding:0.5rem 0.6rem;
+                        border-left:3px solid {cor};text-align:center;min-width:0;">
+                <div style="color:{cor};font-size:0.65rem;text-transform:uppercase;
+                            letter-spacing:0.04em;white-space:nowrap;overflow:hidden;
+                            text-overflow:ellipsis;">{label}</div>
+                <div style="color:#fff;font-size:1.15rem;font-weight:700;">{value}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1182,6 +1187,7 @@ def main():
         map_data = st_folium(
             mapa, width="100%", height=560,
             returned_objects=["last_object_clicked"], key="cauq_map",
+            # CSS handles responsive height via media queries (420px tablet, 340px mobile)
         )
  
         clk = (map_data or {}).get("last_object_clicked")
@@ -1307,11 +1313,11 @@ def main():
         with col_a:
             st.markdown("**Projetos por Ano**")
             df_ano = df.groupby("ano").size().reset_index(name="Projetos")
-            st.bar_chart(df_ano.set_index("ano"), height=250)
+            st.bar_chart(df_ano.set_index("ano"), height=220)
         with col_b:
             st.markdown("**Norma por Ano**")
             ct = pd.crosstab(df["ano"], df["norma"])
-            st.bar_chart(ct, height=250)
+            st.bar_chart(ct, height=220)
  
     # ── Conformidade com Especificacoes ──────────────────────────────────────────
     with tab_specs:
@@ -1419,7 +1425,7 @@ def main():
             if not nat_counts.empty:
                 nat_df = nat_counts.value_counts().reset_index()
                 nat_df.columns = ["Natureza", "Projetos"]
-                st.bar_chart(nat_df.set_index("Natureza"), height=300)
+                st.bar_chart(nat_df.set_index("Natureza"), height=260)
  
         with col_m2:
             st.markdown("**Ligante Asfaltico**")
@@ -1428,7 +1434,7 @@ def main():
             if not lig_counts.empty:
                 lig_df = lig_counts.value_counts().reset_index()
                 lig_df.columns = ["Ligante", "Projetos"]
-                st.bar_chart(lig_df.set_index("Ligante"), height=300)
+                st.bar_chart(lig_df.set_index("Ligante"), height=260)
  
         st.markdown(
             f"<h4 style='color:{CORES['destaque']};margin-top:1rem;'>"

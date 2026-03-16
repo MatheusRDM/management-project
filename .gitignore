@@ -8,10 +8,10 @@ build/
 
 # Caches locais (regenerados automaticamente)
 cache_certificados/*.pkl
-# Nota: cauq_projetos.parquet eh commitado (necessario para Streamlit Cloud)
+# Nota: *.parquet e *.json no cache_certificados sao commitados (Streamlit Cloud)
 
-# Databases
-*.db
+# Databases (o .db principal eh commitado para cloud)
+# *.db — removido: lab_central_master.db precisa ir para o cloud
 
 # Backups e obsoletos
 backups/
@@ -31,6 +31,9 @@ migration_data/
 desktop.ini
 Thumbs.db
 .DS_Store
+
+# Secrets (NUNCA commitar!)
+.streamlit/secrets.toml
 
 # Claude
 .claude/

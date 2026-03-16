@@ -1,27 +1,12 @@
 """
 Módulo de Autenticação e Controle de Acesso
+Credenciais carregadas de st.secrets (cloud) ou fallback local (dev).
 """
 import streamlit as st
+from cloud_config import get_usuarios, get_logo_path
 
-# Usuários e senhas
-USUARIOS = {
-    "Gestor": {
-        "senha": "Afirmaevias",
-        "paginas": ["Dashboard de Certificados", "Cronograma de Ensaios", "Mapeamento de Projetos CAUQ"]
-    },
-    "Geoloc": {
-        "senha": "Afirmaevias",
-        "paginas": ["Mapeamento de Projetos CAUQ"]
-    },
-    "EPR": {
-        "senha": "Afirmaevias",
-        "paginas": ["EPR Litoral Pioneiro"]
-    },
-    "Dev": {
-        "senha": "Afirmaevias",
-        "paginas": ["Dashboard de Certificados", "Cronograma de Ensaios", "EPR Litoral Pioneiro", "Mapeamento de Projetos CAUQ"]
-    }
-}
+# Usuários e senhas — carregados dinamicamente
+USUARIOS = get_usuarios()
 
 # Mapeamento de páginas para arquivos
 PAGINA_ARQUIVO = {
@@ -87,13 +72,16 @@ def mostrar_tela_login():
         st.write("")
         
         # Logo centralizada
-        try:
-            logo_path = r"G:\.shortcut-targets-by-id\1JbWwLDR6PaShh0-_xJZLFAvEXQKn65V1\008 - Comercial\010 - Marketing\00 - Identidade Visual Afirma Evias\Manual Completo\Identidade Visual\Logotipo e Variações\Logotipo\PNG\AE - Logo Hor Principal_2.png"
-            st.image(logo_path, width=840, use_container_width=False)
-        except Exception:
+        _logo = get_logo_path("horizontal")
+        if _logo:
+            try:
+                st.image(_logo, width=840, use_container_width=False)
+            except Exception:
+                _logo = None
+        if not _logo:
             st.markdown("""
-            <div style="background: linear-gradient(135deg, #566E3D 0%, #6a8a4a 100%); 
-                        padding: 1.5rem; border-radius: 16px; border: 3px solid #BFCF99; 
+            <div style="background: linear-gradient(135deg, #566E3D 0%, #6a8a4a 100%);
+                        padding: 1.5rem; border-radius: 16px; border: 3px solid #BFCF99;
                         text-align: center; margin-bottom: 1.5rem;">
                 <h2 style="color: white; margin: 0; font-size: 1.8rem;">AFIRMA E-VIAS</h2>
                 <p style="color: #BFCF99; margin: 0.5rem 0 0 0;">Sistema de Gestão de Ensaios</p>

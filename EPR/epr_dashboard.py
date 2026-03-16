@@ -771,13 +771,10 @@ def main():
     col_logo, col_titulo = st.columns([0.8, 4])
     with col_logo:
         try:
-            st.image(
-                r"G:\.shortcut-targets-by-id\1JbWwLDR6PaShh0-_xJZLFAvEXQKn65V1"
-                r"\008 - Comercial\010 - Marketing\00 - Identidade Visual Afirma Evias"
-                r"\Manual Completo\Identidade Visual\Logotipo e Variações\Símbolo e Selos"
-                r"\PNG\Selo C Ass\Selo C Ass_4.png",
-                width=110,
-            )
+            from cloud_config import get_logo_path
+            _selo = get_logo_path("selo_c_ass")
+            if _selo:
+                st.image(_selo, width=110)
         except Exception:
             pass
 

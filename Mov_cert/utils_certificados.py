@@ -59,9 +59,12 @@ DB_NAME = "lab_central_master.db"
 # ======================================================================================
 class DataBridge:
     def __init__(self):
-        self.is_cloud = False
-        
+        from cloud_config import IS_CLOUD
+        self.is_cloud = IS_CLOUD
+
     def get_file_content(self, config_key):
+        if config_key not in FILES_CONFIG:
+            return None
         config = FILES_CONFIG[config_key]
         local_path = config["local_path"]
         if os.path.exists(local_path):

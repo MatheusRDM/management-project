@@ -7,6 +7,7 @@ import streamlit as st
 # Importar estilos globais padronizados
 from styles import aplicar_estilos, renderizar_footer, CORES
 from auth import mostrar_tela_login, verificar_autenticacao, fazer_logout, get_paginas_permitidas
+from cloud_config import get_logo_path
 
 # ======================================================================================
 # CONFIGURAÇÃO DA PÁGINA PRINCIPAL
@@ -46,12 +47,15 @@ def main():
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
     # Header com Logo e botão de logout
-    col_logo, col_titulo, col_logout = st.columns([0.8, 4, 1])
+    col_logo, col_titulo, col_logout = st.columns([1, 4, 1])
     with col_logo:
-        try:
-            logo_path = r"G:\.shortcut-targets-by-id\1JbWwLDR6PaShh0-_xJZLFAvEXQKn65V1\008 - Comercial\010 - Marketing\00 - Identidade Visual Afirma Evias\Manual Completo\Identidade Visual\Logotipo e Variações\Símbolo e Selos\PNG\Selo C Ass\Selo C Ass_4.png"
-            st.image(logo_path, width=195)
-        except Exception:
+        _logo = get_logo_path("selo_c_ass")
+        if _logo:
+            try:
+                st.image(_logo, use_container_width=True)
+            except Exception:
+                pass
+        if not _logo:
             st.markdown(f"""
             <div style="background: {CORES['secundario']}; padding: 1rem; border-radius: 8px; text-align: center;">
                 <h3 style="color: white; margin: 0;">AFIRMA E-VIAS</h3>
@@ -141,7 +145,7 @@ def main():
     # Card informativo
     st.markdown("""
     <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #566E3D 0%, #6a8a4a 100%);
-                border-radius: 16px; border: 3px solid #BFCF99; max-width: 600px; margin: 0 auto;">
+                border-radius: 16px; border: 3px solid #BFCF99; max-width: min(600px, 90vw); margin: 0 auto;">
         <h4 style="color: #FFFFFF; margin-bottom: 1rem; font-size: 1.3rem;">Laboratório Acreditado - ISO 17025</h4>
         <p style="color: #EFEBDC; font-size: 1.1rem; margin: 0;">Centro de Pesquisa Rodoviária</p>
     </div>

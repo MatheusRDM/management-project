@@ -59,40 +59,33 @@ COR_DESTAQUE_BORDAS = "#566E3D"
 # ======================================================================================
 CAMINHO_FORM_067 = r"G:\.shortcut-targets-by-id\1NUJ7pNAqedohSrLjiwFErFrtVqVZkrjk\006 - Lab. Central\1.0 CONTROLES\00.CERTIFICADOS\FORM 067 - REV 00 - Controle de Certificados(2025).xlsm"
 
+from cloud_config import IS_CLOUD
+
 # ======================================================================================
 # FUNÇÃO PARA CARREGAR CLIENTES COM CONTRATO CONTÍNUO (CC)
 # ======================================================================================
 @st.cache_data(ttl=3600)  # Cache por 1 hora
 def carregar_clientes_contrato_continuo():
     """
-    Carrega a lista de clientes com Contrato Contínuo (CC) do arquivo Excel.
-    Aba: CLIENTES CAD
-    Coluna K (10): Nome do cliente
-    Coluna Q (16): Contrato (se contém 'CC' = Contrato Contínuo)
-    
-    Returns:
-        set: Conjunto de nomes de clientes com contrato contínuo
+    Carrega a lista de clientes com Contrato Contínuo (CC).
+    Cloud: retorna set vazio (dados CC não disponíveis offline).
+    Local: lê do FORM 067 Excel.
     """
+    if IS_CLOUD or not os.path.exists(CAMINHO_FORM_067):
+        return set()
     try:
         df = pd.read_excel(
             CAMINHO_FORM_067,
             sheet_name='CLIENTES CAD',
             header=None,
-            skiprows=1  # Pular cabeçalho
+            skiprows=1
         )
-        
-        # Coluna K (10) = Nome do Cliente, Coluna Q (16) = Contrato
         df_clientes = df.iloc[:, [10, 16]].copy()
         df_clientes.columns = ['CLIENTE', 'CONTRATO']
-        
-        # Filtrar clientes com contrato contínuo (CC)
-        # CC pode aparecer como "CC", "CC CONSULTORIA", etc.
         mask_cc = df_clientes['CONTRATO'].astype(str).str.upper().str.startswith('CC')
         clientes_cc = set(df_clientes[mask_cc]['CLIENTE'].dropna().str.strip().str.upper().tolist())
-        
         return clientes_cc
     except Exception as e:
-        st.warning(f"⚠️ Não foi possível carregar clientes CC: {e}")
         return set()
 
 def verificar_cliente_cc(nome_cliente, clientes_cc):

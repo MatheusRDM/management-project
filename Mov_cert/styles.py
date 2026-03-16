@@ -894,9 +894,10 @@ def renderizar_header(titulo, subtitulo=""):
     
     with col1:
         try:
-            # Selo para o header principal
-            logo_path = r"G:\.shortcut-targets-by-id\1JbWwLDR6PaShh0-_xJZLFAvEXQKn65V1\008 - Comercial\010 - Marketing\00 - Identidade Visual Afirma Evias\Manual Completo\Identidade Visual\Logotipo e Variações\Símbolo e Selos\PNG\Selo\Selo_1.png"
-            st.image(logo_path, width=240)
+            from cloud_config import get_logo_path
+            _selo = get_logo_path("selo")
+            if _selo:
+                st.image(_selo, width=240)
         except Exception:
             pass
     
