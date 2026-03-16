@@ -46,28 +46,21 @@ def mostrar_tela_login():
         }
         .dev-label-fixed {
             position: fixed;
-            bottom: 14px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 12.5px;
+            bottom: 12px;
+            left: 16px;
+            font-size: 11px;
             color: #BFCF99;
             font-family: 'Poppins', sans-serif;
-            font-weight: 600;
-            opacity: 1;
+            font-weight: 500;
+            opacity: 0.55;
             z-index: 99999;
-            letter-spacing: 0.7px;
-            background: rgba(10, 25, 41, 0.82);
-            border: 1px solid rgba(191, 207, 153, 0.35);
-            border-radius: 20px;
-            padding: 5px 13px 5px 10px;
-            backdrop-filter: blur(6px);
-            box-shadow: 0 2px 12px rgba(0,0,0,0.45);
-            text-shadow: 0 0 10px rgba(191,207,153,0.4);
-            transition: all 0.25s ease;
+            letter-spacing: 0.5px;
+            text-shadow: 0 0 6px rgba(191,207,153,0.3);
+            transition: opacity 0.25s ease;
             pointer-events: none;
         }
     </style>
-    <div class="dev-label-fixed">⚡ Developed By: Matheus Resende</div>
+    <div class="dev-label-fixed">Developed By: Matheus Resende</div>
     """, unsafe_allow_html=True)
     
     # Criar colunas para centralização [margem_esq, centro, margem_dir]
