@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Caches de desenvolvimento local
+cache_certificados/*.pkl
+cache_certificados/*.json
+# Manter apenas os parquets e o JSON do cauq
+
+# Banco local duplicado (manter só o da raiz)
+Mov_cert/lab_central_master.db
+
+# Backups e obsoletos
+backups/
+Obsoletos/
+migration_data/
+
+# IDE e OS
+.vscode/
+.idea/
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Claude
+.claude/
+
+# Secrets locais (nunca no container!)
+.streamlit/secrets.toml
+
+# Arquivos temporários
+~$*
+*.tmp
+*.bak
+
+# Textos e docs de projeto
+*.txt
+Correlact_.txt
+Potugol.txt
+TURN OVER.txt

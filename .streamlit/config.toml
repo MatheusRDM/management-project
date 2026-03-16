@@ -4,3 +4,15 @@ backgroundColor = "#00233B"
 secondaryBackgroundColor = "#0a3d5f"
 textColor = "#FFFFFF"
 font = "sans serif"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false
+
+[runner]
+fastReruns = true
