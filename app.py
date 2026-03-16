@@ -118,6 +118,15 @@ def main():
             "btn_key": "cauq_btn",
             "arquivo": "pages/04_Mapeamento_CAUQ.py"
         },
+        {
+            "pagina": "Performance de Contratos",
+            "icon": "📊",
+            "titulo": "Performance de Contratos",
+            "descricao": "Rateio de Pessoal · Alocação por Contrato · Medições",
+            "btn_label": "Acessar Performance",
+            "btn_key": "performance_btn",
+            "arquivo": "pages/05_Performance_Contratos.py"
+        },
     ]
 
     # Filtrar apenas as páginas que o usuário tem acesso
