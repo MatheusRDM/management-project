@@ -922,29 +922,7 @@ def renderizar_footer():
     </div>
     """, unsafe_allow_html=True)
     
-    # Rótulo fixo discreto no rodapé da página
-    st.markdown(f"""
-    <style>
-        .fixed-footer-label {{
-            position: fixed;
-            bottom: 10px;
-            right: 15px;
-            font-size: 11px;
-            color: {CORES['borda_sutil']};
-            font-family: 'Poppins', sans-serif;
-            font-weight: 400;
-            opacity: 0.6;
-            z-index: 9999;
-            letter-spacing: 0.5px;
-            transition: opacity 0.3s ease;
-        }}
-        .fixed-footer-label:hover {{
-            opacity: 1;
-            color: {CORES['destaque']};
-        }}
-    </style>
-    <div class="fixed-footer-label">Developed By: Matheus Resende</div>
-    """, unsafe_allow_html=True)
+    # Rótulo já injetado globalmente via aplicar_estilos() — sem duplicar aqui
 
 # ======================================================================================
 # CONFIGURAÇÃO DE GRÁFICOS PLOTLY - ALTO CONTRASTE

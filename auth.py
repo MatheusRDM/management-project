@@ -50,7 +50,7 @@ def tem_acesso_pagina(usuario, pagina):
 
 def mostrar_tela_login():
     """Mostra a tela de login centralizada usando colunas do Streamlit"""
-    # CSS mínimo para esconder sidebar apenas
+    # CSS mínimo para esconder sidebar + rótulo dev fixo
     st.markdown("""
     <style>
         div[data-testid="stSidebar"] {
@@ -59,7 +59,22 @@ def mostrar_tela_login():
         div[data-testid="collapsedControl"] {
             display: none !important;
         }
+        .dev-label-fixed {
+            position: fixed;
+            bottom: 12px;
+            right: 16px;
+            font-size: 11px;
+            color: #BFCF99;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 500;
+            opacity: 0.75;
+            z-index: 99999;
+            letter-spacing: 0.6px;
+            text-shadow: 0 0 8px rgba(191,207,153,0.5);
+            pointer-events: none;
+        }
     </style>
+    <div class="dev-label-fixed">Developed By: Matheus Resende</div>
     """, unsafe_allow_html=True)
     
     # Criar colunas para centralização [margem_esq, centro, margem_dir]

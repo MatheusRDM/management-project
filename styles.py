@@ -1210,11 +1210,39 @@ def _cached_js():
     """Gera e cacheia o JS responsivo (1x por sessão)."""
     return _get_js_responsivo()
 
+@st.cache_resource
+def _cached_dev_label():
+    """Rótulo fixo 'Developed By: Matheus Resende' — aparece em todas as páginas."""
+    return """
+<style>
+    .dev-label-fixed {
+        position: fixed;
+        bottom: 12px;
+        right: 16px;
+        font-size: 11px;
+        color: #BFCF99;
+        font-family: 'Poppins', sans-serif;
+        font-weight: 500;
+        opacity: 0.75;
+        z-index: 99999;
+        letter-spacing: 0.6px;
+        text-shadow: 0 0 8px rgba(191,207,153,0.5);
+        transition: opacity 0.25s ease, text-shadow 0.25s ease;
+        pointer-events: none;
+    }
+    .dev-label-fixed:hover {
+        opacity: 1;
+        text-shadow: 0 0 14px rgba(191,207,153,0.9);
+    }
+</style>
+<div class="dev-label-fixed">Developed By: Matheus Resende</div>
+"""
+
 def aplicar_estilos():
-    """Aplica os estilos CSS globais e JS responsivo na página"""
+    """Aplica os estilos CSS globais, JS responsivo e rótulo dev em todas as páginas."""
     st.markdown(_cached_css(), unsafe_allow_html=True)
-    # JS de adaptação dos gráficos Plotly para mobile (só injeta o script; sem custo em desktop)
     st.markdown(_cached_js(), unsafe_allow_html=True)
+    st.markdown(_cached_dev_label(), unsafe_allow_html=True)
 
 # ======================================================================================
 # FUNÇÃO PARA RENDERIZAR SIDEBAR PADRÃO
@@ -1295,29 +1323,7 @@ def renderizar_footer():
     </div>
     """, unsafe_allow_html=True)
     
-    # Rótulo fixo discreto no rodapé da página
-    st.markdown(f"""
-    <style>
-        .fixed-footer-label {{
-            position: fixed;
-            bottom: 10px;
-            right: 15px;
-            font-size: 11px;
-            color: {CORES['borda_sutil']};
-            font-family: 'Poppins', sans-serif;
-            font-weight: 400;
-            opacity: 0.6;
-            z-index: 9999;
-            letter-spacing: 0.5px;
-            transition: opacity 0.3s ease;
-        }}
-        .fixed-footer-label:hover {{
-            opacity: 1;
-            color: {CORES['destaque']};
-        }}
-    </style>
-    <div class="fixed-footer-label">Developed By: Matheus Resende</div>
-    """, unsafe_allow_html=True)
+    # Rótulo já injetado globalmente via aplicar_estilos() — sem duplicar aqui
 
 # ======================================================================================
 # CONFIGURAÇÃO DE GRÁFICOS PLOTLY - ALTO CONTRASTE
