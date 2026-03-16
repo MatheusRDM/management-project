@@ -22,6 +22,7 @@ from styles import aplicar_estilos, CORES
 from page_auth import proteger_pagina
 from CAUQ.cauq_scanner import (
     escanear_projetos, anos_disponiveis, geocodificar_pendentes, SPEC_LIMITS,
+    carregar_parquet_cache,
 )
 from CAUQ.pedreiras_data import PEDREIRAS_INTEL
  
@@ -64,7 +65,15 @@ NORMA_HEX = {
  
 @st.cache_data(ttl=86400, show_spinner=False)
 def carregar_dados(anos_selecionados: tuple[int, ...]) -> pd.DataFrame:
-    """Cache persistente por 24h. Só recarrega ao clicar 'Atualizar Dados'."""
+    """Cache persistente por 24h com fallback Parquet instantaneo."""
+    # Tenta Parquet primeiro (instantaneo, <100ms)
+    df_pq = carregar_parquet_cache()
+    if df_pq is not None and not df_pq.empty:
+        if anos_selecionados:
+            df_pq = df_pq[df_pq["ano"].isin(anos_selecionados)]
+        if not df_pq.empty:
+            return df_pq
+    # Fallback: scan completo (lento, ~15-60s)
     return escanear_projetos(
         anos_filtro=list(anos_selecionados),
         com_geocode=True, com_geocode_api=False,
@@ -595,7 +604,9 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
     return m
  
  
+@st.fragment
 def _mostrar_painel_comparacao(projetos: list):
+    """Fragment: re-renderiza somente este painel, sem rerun da pagina inteira."""
     import plotly.graph_objects as go
     import random
 
@@ -1138,13 +1149,19 @@ def main():
         grupos_loc.setdefault(key, []).append(row)
  
  
-    # ── Mapa ─────────────────────────────────────────────────────────────────────────
+    # ── Mapa (com cache de pedreiras por hash de filtros) ────────────────────────
     if df_geo.empty and mostrar_projetos:
         st.warning(
             "Nenhum projeto com localizacao geocodificada nos filtros selecionados."
         )
     else:
-        with st.spinner("Renderizando mapa..."):
+        import hashlib as _hl
+        _filter_key = _hl.md5(
+            f"{len(df)}_{nat_sel}_{loc_sel}_{proc_sel}_{st.session_state.get('show_pedreiras', True)}".encode()
+        ).hexdigest()
+
+        # Cache pedreiras layer — só recalcula quando filtros mudam
+        if st.session_state.get("_ped_hash") != _filter_key:
             _intel = _filtrar_intel_pedreiras(
                 PEDREIRAS_INTEL,
                 nat_sel  if nat_sel  != "Todas" else None,
@@ -1156,11 +1173,16 @@ def main():
                 if st.session_state.get("show_pedreiras", True)
                 else None
             )
-            mapa = _criar_mapa(grupos_loc, pedreiras=pedreiras_layer, df_projetos=df)
-            map_data = st_folium(
-                mapa, width="100%", height=560,
-                returned_objects=["last_object_clicked"], key="cauq_map",
-            )
+            st.session_state["_ped_cache"] = pedreiras_layer
+            st.session_state["_ped_hash"] = _filter_key
+        else:
+            pedreiras_layer = st.session_state.get("_ped_cache")
+
+        mapa = _criar_mapa(grupos_loc, pedreiras=pedreiras_layer, df_projetos=df)
+        map_data = st_folium(
+            mapa, width="100%", height=560,
+            returned_objects=["last_object_clicked"], key="cauq_map",
+        )
  
         clk = (map_data or {}).get("last_object_clicked")
         if clk:

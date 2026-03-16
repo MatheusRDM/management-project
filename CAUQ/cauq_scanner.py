@@ -1388,6 +1388,9 @@ def _vincular_dp_aos_projetos(df: pd.DataFrame, dp_list: list[dict]) -> pd.DataF
 SCAN_CACHE_FILE = os.path.join(
     os.path.dirname(__file__), "..", "cache_certificados", "cauq_scan_cache.json"
 )
+PARQUET_CACHE_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "cache_certificados", "cauq_projetos.parquet"
+)
 
 
 def _load_scan_cache() -> dict:
@@ -1619,7 +1622,25 @@ def escanear_projetos(anos_filtro=None, com_geocode: bool = True,
                 df.at[idx, "lon"] = lon
             # Se não tem cache nem API autorizada, lat/lon ficam None
 
+    # ── Salvar cache Parquet para carregamento rapido ──
+    try:
+        os.makedirs(os.path.dirname(PARQUET_CACHE_FILE), exist_ok=True)
+        df.to_parquet(PARQUET_CACHE_FILE, index=False)
+        logger.info(f"Parquet cache salvo: {len(df)} projetos")
+    except Exception as e:
+        logger.warning(f"Nao salvou parquet: {e}")
+
     return df
+
+
+def carregar_parquet_cache() -> pd.DataFrame | None:
+    """Carrega o cache Parquet pre-computado (instantaneo)."""
+    try:
+        if os.path.exists(PARQUET_CACHE_FILE):
+            return pd.read_parquet(PARQUET_CACHE_FILE)
+    except Exception:
+        pass
+    return None
 
 
 def geocodificar_pendentes(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:

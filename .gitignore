@@ -8,6 +8,7 @@ build/
 
 # Caches locais (regenerados automaticamente)
 cache_certificados/*.pkl
+# Nota: cauq_projetos.parquet eh commitado (necessario para Streamlit Cloud)
 
 # Databases
 *.db

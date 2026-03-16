@@ -1200,11 +1200,21 @@ def _get_js_responsivo():
 </script>
 """
 
+@st.cache_resource
+def _cached_css():
+    """Gera e cacheia o CSS global (1x por sessão, não toda rerun)."""
+    return get_css_global()
+
+@st.cache_resource
+def _cached_js():
+    """Gera e cacheia o JS responsivo (1x por sessão)."""
+    return _get_js_responsivo()
+
 def aplicar_estilos():
     """Aplica os estilos CSS globais e JS responsivo na página"""
-    st.markdown(get_css_global(), unsafe_allow_html=True)
+    st.markdown(_cached_css(), unsafe_allow_html=True)
     # JS de adaptação dos gráficos Plotly para mobile (só injeta o script; sem custo em desktop)
-    st.markdown(_get_js_responsivo(), unsafe_allow_html=True)
+    st.markdown(_cached_js(), unsafe_allow_html=True)
 
 # ======================================================================================
 # FUNÇÃO PARA RENDERIZAR SIDEBAR PADRÃO
