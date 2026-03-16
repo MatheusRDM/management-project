@@ -1,12 +1,32 @@
 """
 utils_performance.py — Dados de Performance de Contratos
 Correlaciona: Centro de Custo · Rateio Mensal · Medições
+Cloud guard: quando Z:\ não disponível usa parquets em cache_certificados/
 """
 
 import os
 import re
 import glob
+import sys
 import pandas as pd
+
+# detecta se está no cloud (sem acesso à rede Z:\)
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _ROOT)
+try:
+    from cloud_config import IS_CLOUD
+except Exception:
+    IS_CLOUD = not os.path.isdir(r"Z:\CONTROLE OPERACIONAL")
+
+_CACHE_DIR = os.path.join(_ROOT, "cache_certificados")
+
+
+def _load_parquet(nome: str) -> pd.DataFrame:
+    path = os.path.join(_CACHE_DIR, f"{nome}.parquet")
+    if os.path.exists(path):
+        return pd.read_parquet(path)
+    return pd.DataFrame()
+
 
 # =============================================================================
 # CAMINHOS BASE
@@ -36,8 +56,9 @@ MESES_ABREV = {
 
 def carregar_centro_custo() -> pd.DataFrame:
     """Retorna tabela de centros de custo: COD | Descrição | Código e Nome"""
-    if not os.path.exists(CENTRO_CUSTO_FILE):
-        return pd.DataFrame(columns=["COD", "Descricao", "Codigo_e_Nome"])
+    if IS_CLOUD or not os.path.exists(CENTRO_CUSTO_FILE):
+        df = _load_parquet("perf_centro_custo")
+        return df if not df.empty else pd.DataFrame(columns=["COD", "Descricao", "Codigo_e_Nome"])
     xf = pd.ExcelFile(CENTRO_CUSTO_FILE)
     sheet = "Cadastro de Plano de Custos" if "Cadastro de Plano de Custos" in xf.sheet_names else xf.sheet_names[0]
     df = pd.read_excel(CENTRO_CUSTO_FILE, sheet_name=sheet, dtype=str)
@@ -114,6 +135,11 @@ def _detectar_mes(texto: str) -> int:
 
 
 def meses_disponiveis_labels() -> list[str]:
+    if IS_CLOUD or not os.path.isdir(BASE_RATEIO):
+        df = _load_parquet("perf_rateio_all")
+        if not df.empty and "MES_LABEL" in df.columns:
+            return sorted(df["MES_LABEL"].dropna().unique().tolist(), reverse=True)
+        return []
     return [m["label"] for m in _meses_disponiveis()]
 
 
@@ -133,6 +159,12 @@ def carregar_rateio(label: str) -> pd.DataFrame:
     Carrega e unifica as abas CLT e PJ do arquivo de rateio do mês/ano.
     Retorna DataFrame com colunas normalizadas.
     """
+    if IS_CLOUD or not os.path.isdir(BASE_RATEIO):
+        df = _load_parquet("perf_rateio_all")
+        if not df.empty and "MES_LABEL" in df.columns:
+            return df[df["MES_LABEL"] == label].copy()
+        return pd.DataFrame()
+
     info = _info_por_label(label)
     if info is None:
         return pd.DataFrame()
@@ -219,6 +251,9 @@ def _normalizar_rateio(df: pd.DataFrame, tipo: str) -> pd.DataFrame:
     df = df.rename(columns=col_map)
     df["TIPO"] = tipo
 
+    # Remove colunas duplicadas (Excel pode ter repetidas) — mantém a primeira
+    df = df.loc[:, ~df.columns.duplicated(keep="first")]
+
     obrigatorias = ["COD", "CENTRO_CUSTO", "COLABORADOR", "FUNCAO",
                     "STATUS", "PERC_CUSTO", "PRODUTIVIDADE", "TIPO",
                     "GESTOR", "DATA_INI", "DATA_FIM",
@@ -229,7 +264,7 @@ def _normalizar_rateio(df: pd.DataFrame, tipo: str) -> pd.DataFrame:
 
     df = df[obrigatorias].copy()
 
-    # limpa
+    # limpa — garante Series (não DataFrame) em cada coluna
     df["COLABORADOR"] = df["COLABORADOR"].astype(str).str.strip()
     df = df[df["COLABORADOR"].str.len() > 2]
     df = df[~df["COLABORADOR"].str.lower().isin(["nan", "none", "colaborador", "total", ""])]
@@ -259,8 +294,11 @@ def carregar_resumo_medicoes(ano: int | None = None) -> pd.DataFrame:
     Lê Resumo Medições.xlsx — aba do ano solicitado.
     Retorna DataFrame: CONTRATANTE | CENTRO_CUSTO | GRUPO | ESCOPO | STATUS | {colunas mensais...}
     """
-    if not os.path.exists(RESUMO_MEDICOES):
-        return pd.DataFrame()
+    if IS_CLOUD or not os.path.exists(RESUMO_MEDICOES):
+        df = _load_parquet("perf_resumo_medicoes")
+        if not df.empty and ano and "ANO" in df.columns:
+            return df[df["ANO"].astype(str) == str(ano)].copy()
+        return df
 
     try:
         xf = pd.ExcelFile(RESUMO_MEDICOES)
@@ -300,10 +338,18 @@ def carregar_resumo_medicoes(ano: int | None = None) -> pd.DataFrame:
             rename[c] = "STATUS"
 
     df = df.rename(columns=rename)
+    # Remove colunas duplicadas
+    df = df.loc[:, ~df.columns.duplicated(keep="first")]
 
-    # identifica colunas de valor mensal (float/datetime cabeçalhos)
-    colunas_fixas = {"CONTRATANTE", "CENTRO_CUSTO", "GRUPO", "ESCOPO", "DIA_MEDICAO", "STATUS"}
-    colunas_mes = [c for c in df.columns if c not in colunas_fixas]
+    # se não encontrou CENTRO_CUSTO, tenta pela segunda coluna
+    if "CENTRO_CUSTO" not in df.columns:
+        for c in df.columns:
+            if df[c].astype(str).str.contains(r"OBRA|PROJ|LABO|LOCA|SOND|LEV", na=False).sum() > 2:
+                df = df.rename(columns={c: "CENTRO_CUSTO"})
+                break
+
+    if "CENTRO_CUSTO" not in df.columns:
+        return pd.DataFrame()
 
     df = df.dropna(subset=["CENTRO_CUSTO"])
     df["ANO"] = ano
@@ -338,6 +384,13 @@ def carregar_unificado(ano: int, mes: int) -> pd.DataFrame:
     Retorna DataFrame com colunas: MES | MEDICAO | CONTRATO | OBRA | CLIENTE |
       SERVICO | COLABORADOR | MATRICULA | PRODUTIVIDADE | QTDE | PRECO_UNIT | VALOR_TOTAL
     """
+    if IS_CLOUD or not os.path.isdir(BASE_MEDICOES):
+        df = _load_parquet("perf_unificado_recent")
+        if not df.empty and "ANO" in df.columns and "MES_NUM" in df.columns:
+            return df[(df["ANO"].astype(str) == str(ano)) &
+                      (df["MES_NUM"].astype(str) == str(mes))].copy()
+        return df
+
     path = _path_medicoes_mensais(ano, mes)
     if not path or not os.path.exists(path):
         return pd.DataFrame()
