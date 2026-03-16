@@ -3526,7 +3526,7 @@ def carregar_form044():
     """
     Carrega dados do FORM 044 - Controle de Propostas.
     Retorna DataFrame com propostas aprovadas desde 01/12/2025.
-    
+
     Mapeamento de colunas:
     - COL A (0) = ANO
     - COL C (2) = FAS (número da proposta)
@@ -3534,6 +3534,15 @@ def carregar_form044():
     - COL H (7) = STATUS (deve ser "Aprovada")
     - COL P (15) = DATA_ACEITE (deve ser > 01/12/2025)
     """
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("propostas_form044")
+        if not df.empty:
+            logger.info(f"[CLOUD] carregar_form044 → parquet: {len(df)} registros")
+            return df
+        return pd.DataFrame()
+    # ─────────────────────────────────────────────────────────────────────────
     path = FILES_CONFIG['propostas_comerciais']['local_path']
     if not os.path.exists(path):
         logger.warning(f"FORM 044 não encontrado: {path}")
@@ -3694,6 +3703,15 @@ def carregar_form045(pc_number):
 @st.cache_data(ttl=300, show_spinner=False)
 def consolidar_fas_totais(df_recebimentos, data_inicio='2025-12-01'):
     """Combina FORM 022A e FORM 045 para gerar visão detalhada das FAS."""
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge.is_cloud:
+        from cloud_config import carregar_parquet_cache
+        df = carregar_parquet_cache("fas_consolidadas")
+        if not df.empty:
+            logger.info(f"[CLOUD] consolidar_fas_totais → parquet: {len(df)} registros")
+            return df
+        return pd.DataFrame()
+    # ─────────────────────────────────────────────────────────────────────────
     data_corte = pd.Timestamp(data_inicio)
 
     # --- Tratamento dos dados do FORM 022A (recebimentos) ---
@@ -4019,6 +4037,10 @@ def buscar_e_extrair_form045(pc_numero, empresa_nome=""):
     """
     Versão com tratamento de erro melhorado e log para depuração.
     """
+    # ── CLOUD GUARD ──────────────────────────────────────────────────────────
+    if bridge.is_cloud:
+        return pd.DataFrame()  # FORM 045 não disponível no cloud
+    # ─────────────────────────────────────────────────────────────────────────
     # 1. Normalização (Ex: 041/25 -> 041.25)
     pc_original = str(pc_numero).strip().upper()
     pc_clean = pc_original.replace('/', '.')
