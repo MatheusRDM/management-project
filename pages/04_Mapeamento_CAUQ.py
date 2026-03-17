@@ -970,7 +970,7 @@ CORES_LOTES = [
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def _carregar_promac_geojson() -> dict | None:
+def _carregar_promac_geojson(_v: int = 2) -> dict | None:
     _path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "cache_certificados", "promac_lotes.geojson",
@@ -982,7 +982,7 @@ def _carregar_promac_geojson() -> dict | None:
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def _carregar_promac_info() -> dict:
+def _carregar_promac_info(_v: int = 2) -> dict:
     """Retorna dict {num_lote: {extensao_km, cnpj, empresa, situacao}}."""
     _path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
