@@ -997,7 +997,7 @@ def _carregar_promac_info() -> dict:
 
 def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
                             lote_filtro: str = "Todos") -> None:
-    """Adiciona lotes PROMAC como UM único GeoJson — leve, sem lambdas por feature."""
+    """Adiciona lotes PROMAC via PolyLine — 1 por lote, sem GeoJson/GeoJsonPopup."""
     features = [
         f for f in geojson.get("features", [])
         if lote_filtro == "Todos" or f["properties"].get("lote") == lote_filtro
@@ -1005,40 +1005,38 @@ def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
     if not features:
         return
 
-    # Injeta legenda HTML como campo para o popup (pré-renderizado)
+    fg = folium.FeatureGroup(name="Lotes PROMAC")
+
     for feat in features:
         p = feat["properties"]
-        p["_popup"] = (
-            f"<b style='color:{p.get('cor','#aaa')}'>{p.get('lote','')}</b><br>"
+        cor = p.get("cor", "#aaa")
+        popup_html = (
+            f"<b style='color:{cor}'>{p.get('lote','')}</b><br>"
             f"Empresa: {p.get('empresa','—')}<br>"
             f"CNPJ: {p.get('cnpj','—')}<br>"
             f"Extensão: {p.get('ext_km','—')} km<br>"
             f"Situação: {p.get('situacao','—')}"
         )
 
-    filtered_geo = {"type": "FeatureCollection", "features": features}
+        geom = feat.get("geometry", {})
+        coords_list = geom.get("coordinates", [])
 
-    # style_function lê 'cor' das propriedades — 1 único JS function
-    folium.GeoJson(
-        filtered_geo,
-        name="Lotes PROMAC",
-        style_function=lambda feat: {
-            "color":   feat["properties"].get("cor", "#aaa"),
-            "weight":  4,
-            "opacity": 0.85,
-        },
-        highlight_function=lambda feat: {
-            "color":   "#ffffff",
-            "weight":  6,
-            "opacity": 1.0,
-        },
-        popup=folium.GeoJsonPopup(
-            fields=["_popup"],
-            aliases=[""],
-            labels=False,
-            max_width=320,
-        ),
-    ).add_to(mapa)
+        # MultiLineString → list of line segments → folium multi-PolyLine
+        all_segments = []
+        for line_coords in coords_list:
+            all_segments.append([[c[1], c[0]] for c in line_coords])
+
+        if all_segments:
+            folium.PolyLine(
+                locations=all_segments,
+                color=cor,
+                weight=4,
+                opacity=0.85,
+                popup=folium.Popup(popup_html, max_width=320),
+                tooltip=p.get("lote", ""),
+            ).add_to(fg)
+
+    fg.add_to(mapa)
 
 
 # ======================================================================================
