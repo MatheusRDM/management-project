@@ -1019,11 +1019,20 @@ def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
         )
 
         geom = feat.get("geometry", {})
+        gtype = geom.get("type", "")
         coords_list = geom.get("coordinates", [])
 
-        # MultiLineString → list of line segments → folium multi-PolyLine
+        # Handle both MultiLineString and LineString
+        if gtype == "LineString":
+            coords_list = [coords_list]  # wrap as single-line MultiLineString
+
         all_segments = []
         for line_coords in coords_list:
+            if not line_coords:
+                continue
+            # Safety: skip if not nested (e.g. flat [lon, lat])
+            if not isinstance(line_coords[0], (list, tuple)):
+                continue
             all_segments.append([[c[1], c[0]] for c in line_coords])
 
         if all_segments:
