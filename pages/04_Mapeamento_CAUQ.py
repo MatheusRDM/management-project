@@ -11,6 +11,9 @@ Inclui validação por limites de especificação (DER/PR, DNIT, DEINFRA).
 import streamlit as st
 import sys
 import os
+import json
+import requests as _requests
+import unicodedata
 import pandas as pd
 import folium
 from folium.plugins import MarkerCluster, Fullscreen, MiniMap
@@ -406,7 +409,8 @@ def _combinar_pedreiras_cauq(intel_list: list, df_proj) -> list:
     return _dedup_pedreiras(intel_list + extra)
 
 
-def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=None) -> folium.Map:
+def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=None,
+                geojson_contorno: dict | None = None, nome_contorno: str = "") -> folium.Map:
     import unicodedata as _ud
     def _n(s):
         s2 = _ud.normalize("NFKD", str(s).upper())
@@ -438,6 +442,20 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
     Fullscreen(position="topleft", title="Tela cheia",
                title_cancel="Sair de tela cheia").add_to(m)
     MiniMap(toggle_display=True, tile_layer="CartoDB positron").add_to(m)
+
+    # ── Contorno do município selecionado (Google-style) ──────────────────
+    if geojson_contorno:
+        _adicionar_contorno_municipio(m, geojson_contorno, nome_contorno)
+        # Centraliza no município se não há projetos no filtro
+        if not grupos_loc:
+            try:
+                from shapely.geometry import shape
+                geom = shape(geojson_contorno["features"][0]["geometry"])
+                c = geom.centroid
+                m.location = [c.y, c.x]
+                m.zoom_start = 11
+            except Exception:
+                pass
 
     # ══════════════════════════════════════════════════════════════════════
     # MARCADORES UNIFICADOS POR PEDREIRA
@@ -943,9 +961,99 @@ def _mostrar_painel_comparacao(projetos: list):
 
 
 # ======================================================================================
+# BUSCA DE MUNICÍPIO + CONTORNO (IBGE GeoJSON on-demand)
+# ======================================================================================
+
+def _normalizar_texto(s: str) -> str:
+    s2 = unicodedata.normalize("NFKD", str(s).upper())
+    return "".join(c for c in s2 if not unicodedata.combining(c)).strip()
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _carregar_index_municipios() -> dict:
+    """Carrega índice nome→codIBGE dos 399 municípios do PR."""
+    _idx_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "cache_certificados", "pr_municipios_index.json"
+    )
+    if os.path.exists(_idx_path):
+        with open(_idx_path, encoding="utf-8") as f:
+            return json.load(f)
+    # fallback: busca da API
+    try:
+        r = _requests.get(
+            "https://servicodados.ibge.gov.br/api/v1/localidades/estados/41/municipios",
+            timeout=10
+        )
+        muns = r.json()
+        nomes = sorted(m["nome"] for m in muns)
+        cod_map = {m["nome"]: str(m["id"]) for m in muns}
+        return {"nomes": nomes, "cod_map": cod_map}
+    except Exception:
+        return {"nomes": [], "cod_map": {}}
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _buscar_geojson_municipio(cod: str) -> dict | None:
+    """Busca o GeoJSON de contorno de um município pelo código IBGE."""
+    try:
+        url = f"https://servicodados.ibge.gov.br/api/v3/malhas/municipios/{cod}?formato=application/vnd.geo+json"
+        r = _requests.get(url, timeout=10)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return None
+
+
+def _sugestoes_cidade(texto: str, nomes: list[str], max_res: int = 8) -> list[str]:
+    """Retorna cidades cujo nome começa com o texto digitado (case-insensitive, sem acento)."""
+    if not texto or len(texto) < 2:
+        return []
+    t = _normalizar_texto(texto)
+    resultados = [n for n in nomes if _normalizar_texto(n).startswith(t)]
+    if not resultados:
+        resultados = [n for n in nomes if t in _normalizar_texto(n)]
+    return resultados[:max_res]
+
+
+def _adicionar_contorno_municipio(mapa: folium.Map, geojson: dict, nome: str) -> None:
+    """Adiciona contorno destacado de município ao mapa folium."""
+    folium.GeoJson(
+        geojson,
+        name=f"Contorno — {nome}",
+        style_function=lambda _: {
+            "fillColor":   "#BFCF99",
+            "color":       "#BFCF99",
+            "weight":      3.5,
+            "fillOpacity": 0.12,
+            "dashArray":   "6 4",
+        },
+        highlight_function=lambda _: {
+            "fillColor":   "#BFCF99",
+            "color":       "#ffffff",
+            "weight":      5,
+            "fillOpacity": 0.25,
+        },
+        tooltip=folium.GeoJsonTooltip(
+            fields=[],
+            aliases=[],
+            sticky=False,
+            labels=False,
+            localize=True,
+        ),
+    ).add_to(mapa)
+    # Tooltip simples com o nome
+    folium.Marker(
+        location=[0, 0],  # invisível — apenas para mostrar nome
+        icon=folium.DivIcon(html="", icon_size=(0, 0)),
+    )
+
+
+# ======================================================================================
 # LAYOUT PRINCIPAL
 # ======================================================================================
- 
+
 def main():
     # ── Header ──────────────────────────────────────────────────────────────────────
     col_logo, col_titulo = st.columns([1, 5])
@@ -1039,6 +1147,41 @@ def main():
         # ════════════════════════════════════════════════════════════════════════════
         # FILTROS EM UM ÚNICO EXPANDER (layout padronizado)
         # ════════════════════════════════════════════════════════════════════════════
+
+        # ── BARRA DE PESQUISA DE CIDADE ──────────────────────────────────────────
+        _idx = _carregar_index_municipios()
+        _nomes_mun = _idx.get("nomes", [])
+        _cod_map   = _idx.get("cod_map", {})
+
+        st.markdown("#### 🔍 Buscar cidade")
+        _busca = st.text_input(
+            "Digite o nome do município:",
+            key="cidade_busca",
+            placeholder="Ex: Curitiba, Londrina...",
+            label_visibility="collapsed",
+        )
+        _cidade_sel = None
+        if _busca and len(_busca) >= 2:
+            _sugs = _sugestoes_cidade(_busca, _nomes_mun)
+            if _sugs:
+                _cidade_sel = st.radio(
+                    "Selecione:",
+                    _sugs,
+                    key="cidade_radio",
+                    label_visibility="collapsed",
+                )
+            else:
+                st.caption("Nenhuma cidade encontrada.")
+
+        # Armazena cidade selecionada no session_state para uso no mapa
+        if _cidade_sel:
+            st.session_state["cidade_contorno"] = _cidade_sel
+            st.session_state["cidade_contorno_cod"] = _cod_map.get(_cidade_sel, "")
+        elif not _busca:
+            st.session_state.pop("cidade_contorno", None)
+            st.session_state.pop("cidade_contorno_cod", None)
+
+        st.divider()
 
         with st.expander("▸ Filtros", expanded=True):
 
@@ -1206,11 +1349,20 @@ def main():
         else:
             pedreiras_layer = st.session_state.get("_ped_cache")
 
-        mapa = _criar_mapa(grupos_loc, pedreiras=pedreiras_layer, df_projetos=df)
+        # Contorno de município selecionado na busca
+        _geojson_contorno = None
+        _nome_contorno = st.session_state.get("cidade_contorno", "")
+        _cod_contorno  = st.session_state.get("cidade_contorno_cod", "")
+        if _cod_contorno:
+            _geojson_contorno = _buscar_geojson_municipio(_cod_contorno)
+
+        mapa = _criar_mapa(
+            grupos_loc, pedreiras=pedreiras_layer, df_projetos=df,
+            geojson_contorno=_geojson_contorno, nome_contorno=_nome_contorno,
+        )
         map_data = st_folium(
             mapa, width="100%", height=560,
             returned_objects=["last_object_clicked"], key="cauq_map",
-            # CSS handles responsive height via media queries (420px tablet, 340px mobile)
         )
  
         clk = (map_data or {}).get("last_object_clicked")
