@@ -1488,16 +1488,23 @@ def main():
         )
 
         # Lotes PROMAC
-        if st.session_state.get("show_lotes_promac"):
+        _show_promac = st.session_state.get("show_lotes_promac", False)
+        _lote_filtro = st.session_state.get("f_lote_promac", "Todos") if _show_promac else "Todos"
+        if _show_promac:
             _promac_geo = _carregar_promac_geojson()
             _promac_inf = _carregar_promac_info()
             if _promac_geo:
-                _lote_filtro = st.session_state.get("f_lote_promac", "Todos")
                 _adicionar_lotes_promac(mapa, _promac_geo, _promac_inf, _lote_filtro)
+
+        # key dinâmica força re-render ao mudar toggle/filtro PROMAC
+        import hashlib as _hlm
+        _map_key = "cauq_map_" + _hlm.md5(
+            f"{_filter_key}_{_show_promac}_{_lote_filtro}_{_nome_contorno}".encode()
+        ).hexdigest()[:8]
 
         map_data = st_folium(
             mapa, width="100%", height=560,
-            returned_objects=["last_object_clicked"], key="cauq_map",
+            returned_objects=["last_object_clicked"], key=_map_key,
         )
  
         clk = (map_data or {}).get("last_object_clicked")
