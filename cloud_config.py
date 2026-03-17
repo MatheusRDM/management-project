@@ -37,9 +37,10 @@ IMAGENS_DIR = os.path.join(_PROJECT_ROOT, "Imagens")
 # Logo horizontal principal
 LOGO_HORIZONTAL = os.path.join(IMAGENS_DIR, "AE - Logo Hor Principal_2.png")
 
-# Selo (usa logo horizontal como fallback se selo não existir localmente)
+# Selo (usa logo_icon.png — Selo C Ass_1 — como fallback no cloud)
 _SELO_LOCAL = os.path.join(IMAGENS_DIR, "Selo_1.png")
-LOGO_SELO = _SELO_LOCAL if os.path.exists(_SELO_LOCAL) else LOGO_HORIZONTAL
+_SELO_ICON  = os.path.join(IMAGENS_DIR, "logo_icon.png")
+LOGO_SELO = _SELO_LOCAL if os.path.exists(_SELO_LOCAL) else _SELO_ICON
 
 # Padronagem
 LOGO_PADRONAGEM = os.path.join(IMAGENS_DIR, "Padronagem_2.png")
@@ -76,7 +77,7 @@ def get_logo_path(tipo: str = "horizontal") -> str | None:
     _LOCAL_FALLBACK = {
         "horizontal": LOGO_HORIZONTAL,
         "selo":       LOGO_SELO,
-        "selo_c_ass": LOGO_SELO,
+        "selo_c_ass": _SELO_ICON,   # sempre usa Selo C Ass no cloud
         "padronagem": LOGO_PADRONAGEM,
     }
 
