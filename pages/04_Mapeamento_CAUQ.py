@@ -1005,8 +1005,6 @@ def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
     if not features:
         return
 
-    fg = folium.FeatureGroup(name="Lotes PROMAC")
-
     for feat in features:
         p = feat["properties"]
         cor = p.get("cor", "#aaa")
@@ -1024,13 +1022,12 @@ def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
 
         # Handle both MultiLineString and LineString
         if gtype == "LineString":
-            coords_list = [coords_list]  # wrap as single-line MultiLineString
+            coords_list = [coords_list]
 
         all_segments = []
         for line_coords in coords_list:
             if not line_coords:
                 continue
-            # Safety: skip if not nested (e.g. flat [lon, lat])
             if not isinstance(line_coords[0], (list, tuple)):
                 continue
             all_segments.append([[c[1], c[0]] for c in line_coords])
@@ -1043,7 +1040,7 @@ def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
                 opacity=0.85,
                 popup=folium.Popup(popup_html, max_width=320),
                 tooltip=p.get("lote", ""),
-            ).add_to(fg)
+            ).add_to(mapa)  # direto no mapa, sem FeatureGroup
 
     fg.add_to(mapa)
 
@@ -1495,15 +1492,9 @@ def main():
             if _promac_geo:
                 _adicionar_lotes_promac(mapa, _promac_geo, _promac_inf, _lote_filtro)
 
-        # key dinâmica força re-render ao mudar toggle/filtro PROMAC
-        import hashlib as _hlm
-        _map_key = "cauq_map_" + _hlm.md5(
-            f"{_filter_key}_{_show_promac}_{_lote_filtro}_{_nome_contorno}".encode()
-        ).hexdigest()[:8]
-
         map_data = st_folium(
             mapa, width="100%", height=560,
-            returned_objects=["last_object_clicked"], key=_map_key,
+            returned_objects=["last_object_clicked"], key="cauq_map",
         )
  
         clk = (map_data or {}).get("last_object_clicked")
