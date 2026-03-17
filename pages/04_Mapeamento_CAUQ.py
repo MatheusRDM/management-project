@@ -996,11 +996,13 @@ def _carregar_promac_info(_v: int = 2) -> dict:
 
 
 def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
-                            lote_filtro: str = "Todos") -> None:
+                            lote_filtro: str = "Todos",
+                            empresa_filtro: str = "Todas") -> None:
     """Adiciona lotes PROMAC via PolyLine — 1 por lote, sem GeoJson/GeoJsonPopup."""
     features = [
         f for f in geojson.get("features", [])
-        if lote_filtro == "Todos" or f["properties"].get("lote") == lote_filtro
+        if (lote_filtro == "Todos" or f["properties"].get("lote") == lote_filtro)
+        and (empresa_filtro == "Todas" or f["properties"].get("empresa") == empresa_filtro)
     ]
     if not features:
         return
@@ -1327,7 +1329,18 @@ def main():
             )
             if st.session_state.get("show_lotes_promac"):
                 _promac_info = _carregar_promac_info()
-                _lote_opts = ["Todos"] + [f"LOTE {n:02d}" for n in sorted(_promac_info.keys())]
+
+                # Empresas únicas (ordenadas)
+                _empresas = sorted({v.get("empresa", "") for v in _promac_info.values() if v.get("empresa")})
+                st.selectbox("Filtrar Empresa:", ["Todas"] + _empresas, key="f_empresa_promac")
+
+                # Lotes — filtra conforme empresa selecionada
+                _emp_sel = st.session_state.get("f_empresa_promac", "Todas")
+                if _emp_sel == "Todas":
+                    _lotes_disp = sorted(_promac_info.keys())
+                else:
+                    _lotes_disp = sorted(k for k, v in _promac_info.items() if v.get("empresa") == _emp_sel)
+                _lote_opts = ["Todos"] + [f"LOTE {n:02d}" for n in _lotes_disp]
                 st.selectbox("Filtrar Lote:", _lote_opts, key="f_lote_promac")
 
         mostrar_projetos = True
@@ -1484,11 +1497,12 @@ def main():
         # Lotes PROMAC
         _show_promac = st.session_state.get("show_lotes_promac", False)
         _lote_filtro = st.session_state.get("f_lote_promac", "Todos") if _show_promac else "Todos"
+        _emp_filtro = st.session_state.get("f_empresa_promac", "Todas") if _show_promac else "Todas"
         if _show_promac:
             _promac_geo = _carregar_promac_geojson()
             _promac_inf = _carregar_promac_info()
             if _promac_geo:
-                _adicionar_lotes_promac(mapa, _promac_geo, _promac_inf, _lote_filtro)
+                _adicionar_lotes_promac(mapa, _promac_geo, _promac_inf, _lote_filtro, _emp_filtro)
 
         map_data = st_folium(
             mapa, width="100%", height=560,
