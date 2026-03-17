@@ -1042,8 +1042,6 @@ def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
                 tooltip=p.get("lote", ""),
             ).add_to(mapa)  # direto no mapa, sem FeatureGroup
 
-    fg.add_to(mapa)
-
 
 # ======================================================================================
 # BUSCA DE MUNICÍPIO + CONTORNO (IBGE GeoJSON on-demand)
