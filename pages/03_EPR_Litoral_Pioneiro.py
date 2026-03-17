@@ -22,7 +22,7 @@ from page_auth import proteger_pagina
 # ======================================================================================
 st.set_page_config(
     page_title="EPR Litoral Pioneiro | Afirma E-vias",
-    page_icon="Imagens/AE - Logo Hor Principal_2.png",
+    page_icon="🛣️",
     layout="wide",
     initial_sidebar_state="auto"
 )
