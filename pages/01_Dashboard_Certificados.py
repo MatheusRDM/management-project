@@ -22,7 +22,7 @@ from page_auth import proteger_pagina
 # ======================================================================================
 st.set_page_config(
     page_title="Certificados | Afirma E-vias",
-    page_icon="🔬",
+    page_icon="Imagens/logo_icon.png",
     layout="wide",
     initial_sidebar_state="auto"
 )

@@ -32,7 +32,7 @@ from cloud_config import get_logo_path
 # ======================================================================================
 st.set_page_config(
     page_title="Mapeamento CAUQ | Afirma E-vias",
-    page_icon="🗺️",
+    page_icon="Imagens/logo_icon.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )

@@ -14,7 +14,7 @@ from cloud_config import get_logo_path
 # ======================================================================================
 st.set_page_config(
     page_title="Afirma E-vias | Dashboard",
-    page_icon="🔬",
+    page_icon="Imagens/logo_icon.png",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
