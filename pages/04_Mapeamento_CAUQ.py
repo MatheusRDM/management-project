@@ -1148,41 +1148,6 @@ def main():
         # FILTROS EM UM ÚNICO EXPANDER (layout padronizado)
         # ════════════════════════════════════════════════════════════════════════════
 
-        # ── BARRA DE PESQUISA DE CIDADE ──────────────────────────────────────────
-        _idx = _carregar_index_municipios()
-        _nomes_mun = _idx.get("nomes", [])
-        _cod_map   = _idx.get("cod_map", {})
-
-        st.markdown("#### 🔍 Buscar cidade")
-        _busca = st.text_input(
-            "Digite o nome do município:",
-            key="cidade_busca",
-            placeholder="Ex: Curitiba, Londrina...",
-            label_visibility="collapsed",
-        )
-        _cidade_sel = None
-        if _busca and len(_busca) >= 2:
-            _sugs = _sugestoes_cidade(_busca, _nomes_mun)
-            if _sugs:
-                _cidade_sel = st.radio(
-                    "Selecione:",
-                    _sugs,
-                    key="cidade_radio",
-                    label_visibility="collapsed",
-                )
-            else:
-                st.caption("Nenhuma cidade encontrada.")
-
-        # Armazena cidade selecionada no session_state para uso no mapa
-        if _cidade_sel:
-            st.session_state["cidade_contorno"] = _cidade_sel
-            st.session_state["cidade_contorno_cod"] = _cod_map.get(_cidade_sel, "")
-        elif not _busca:
-            st.session_state.pop("cidade_contorno", None)
-            st.session_state.pop("cidade_contorno_cod", None)
-
-        st.divider()
-
         with st.expander("▸ Filtros", expanded=True):
 
             ano_opts = ["Todos"] + [str(a) for a in anos_disp]
@@ -1349,12 +1314,26 @@ def main():
         else:
             pedreiras_layer = st.session_state.get("_ped_cache")
 
-        # Contorno de município selecionado na busca
+        # ── BUSCA DE CIDADE — acima do mapa ──────────────────────────────────────
+        _idx       = _carregar_index_municipios()
+        _nomes_mun = _idx.get("nomes", [])
+        _cod_map   = _idx.get("cod_map", {})
+
+        _cidade_sel = st.selectbox(
+            "🔍 Buscar cidade (contorna no mapa)",
+            options=[""] + _nomes_mun,
+            index=0,
+            key="cidade_selectbox",
+            format_func=lambda x: "Digite para buscar..." if x == "" else x,
+            help="Digite o nome para filtrar. Ao selecionar, a região é contornada no mapa.",
+        )
+
         _geojson_contorno = None
-        _nome_contorno = st.session_state.get("cidade_contorno", "")
-        _cod_contorno  = st.session_state.get("cidade_contorno_cod", "")
+        _nome_contorno = _cidade_sel or ""
+        _cod_contorno  = _cod_map.get(_cidade_sel, "") if _cidade_sel else ""
         if _cod_contorno:
-            _geojson_contorno = _buscar_geojson_municipio(_cod_contorno)
+            with st.spinner(f"Carregando contorno de {_cidade_sel}..."):
+                _geojson_contorno = _buscar_geojson_municipio(_cod_contorno)
 
         mapa = _criar_mapa(
             grupos_loc, pedreiras=pedreiras_layer, df_projetos=df,
