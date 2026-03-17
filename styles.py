@@ -1280,15 +1280,48 @@ def aplicar_estilos():
     st.markdown(_cached_css(), unsafe_allow_html=True)
     st.markdown(_cached_js(), unsafe_allow_html=True)
     st.markdown(_cached_dev_label(), unsafe_allow_html=True)
-    # PWA: ícone para atalho na tela inicial do celular
+    # PWA: injeta ícone e manifest no <head> via JS (st.markdown vai pro body)
     st.markdown("""
-        <link rel="apple-touch-icon" sizes="180x180" href="/app/static/icon-180.png">
-        <link rel="manifest" href="/app/static/manifest.json">
-        <meta name="mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title" content="AE">
-        <meta name="theme-color" content="#00233B">
+        <script>
+        (function() {
+            function _inject() {
+                // apple-touch-icon (iOS)
+                if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+                    var l = document.createElement('link');
+                    l.rel = 'apple-touch-icon'; l.sizes = '180x180';
+                    l.href = '/app/static/icon-180.png';
+                    document.head.appendChild(l);
+                }
+                // manifest (Android PWA)
+                if (!document.querySelector('link[rel="manifest"]')) {
+                    var m = document.createElement('link');
+                    m.rel = 'manifest';
+                    m.href = '/app/static/manifest.json';
+                    document.head.appendChild(m);
+                }
+                // metas
+                var metas = {
+                    'mobile-web-app-capable': 'yes',
+                    'apple-mobile-web-app-capable': 'yes',
+                    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+                    'apple-mobile-web-app-title': 'AE',
+                    'theme-color': '#00233B'
+                };
+                Object.keys(metas).forEach(function(name) {
+                    if (!document.querySelector('meta[name="' + name + '"]')) {
+                        var t = document.createElement('meta');
+                        t.name = name; t.content = metas[name];
+                        document.head.appendChild(t);
+                    }
+                });
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', _inject);
+            } else {
+                _inject();
+            }
+        })();
+        </script>
     """, unsafe_allow_html=True)
 
 # ======================================================================================
