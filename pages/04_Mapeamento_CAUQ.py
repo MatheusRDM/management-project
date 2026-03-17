@@ -997,55 +997,56 @@ def _carregar_promac_info() -> dict:
 
 def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
                             lote_filtro: str = "Todos") -> None:
-    """Adiciona os lotes PROMAC ao mapa como FeatureGroup com popup de info."""
-    fg = folium.FeatureGroup(name="Lotes PROMAC", show=True)
-
+    """Adiciona os lotes PROMAC ao mapa como um único GeoJson (leve)."""
+    # Filtra features se necessário e injeta info do vencedor nas propriedades
+    features = []
     for feat in geojson.get("features", []):
         num = feat["properties"].get("num_lote", 0)
         if lote_filtro != "Todos" and f"LOTE {num:02d}" != lote_filtro:
             continue
-
-        cor = CORES_LOTES[(num - 1) % len(CORES_LOTES)]
+        # Injeta dados do vencedor nas propriedades para tooltip/popup
         lote_info = info.get(num, {})
-        empresa = lote_info.get("empresa", "—")
-        cnpj = lote_info.get("cnpj", "—")
-        extensao = lote_info.get("extensao_km", "—")
-        situacao = lote_info.get("situacao", "—")
-        trecho = feat["properties"].get("Trecho", "")
-        de_para = f'{feat["properties"].get("De", "")} → {feat["properties"].get("Para", "")}'
+        feat = {**feat, "properties": {
+            **feat["properties"],
+            "empresa":  lote_info.get("empresa", "—"),
+            "cnpj":     lote_info.get("cnpj", "—"),
+            "ext_km":   lote_info.get("extensao_km", "—"),
+            "situacao":  lote_info.get("situacao", "—"),
+        }}
+        features.append(feat)
 
-        popup_html = f"""
-        <div style="font-family:sans-serif;font-size:12px;min-width:220px;max-width:300px;">
-            <div style="background:{cor};color:#fff;padding:6px 10px;border-radius:6px 6px 0 0;
-                        font-weight:700;font-size:14px;">LOTE {num:02d}</div>
-            <div style="padding:8px 10px;background:#0a1929;color:#fff;border-radius:0 0 6px 6px;">
-                <b>Empresa:</b> {empresa}<br>
-                <b>CNPJ:</b> {cnpj}<br>
-                <b>Extensão:</b> {extensao} km<br>
-                <b>Situação:</b> {situacao}<br>
-                <b>Trecho:</b> {trecho}<br>
-                <b>De/Para:</b> {de_para}
-            </div>
-        </div>
-        """
+    if not features:
+        return
 
-        folium.GeoJson(
-            feat,
-            style_function=lambda _, c=cor: {
-                "color": c, "weight": 3.5, "opacity": 0.85,
-            },
-            highlight_function=lambda _, c=cor: {
-                "color": "#FFFFFF", "weight": 6, "opacity": 1,
-            },
-            tooltip=folium.GeoJsonTooltip(
-                fields=["lote"],
-                aliases=[""],
-                style="background:#0a1929;color:#fff;font-size:12px;border:1px solid #566E3D;",
-            ),
-            popup=folium.Popup(popup_html, max_width=320),
-        ).add_to(fg)
+    filtered_geo = {"type": "FeatureCollection", "features": features}
 
-    fg.add_to(mapa)
+    # Mapa cor por num_lote
+    _cor_map = {n: CORES_LOTES[(n - 1) % len(CORES_LOTES)] for n in range(1, 41)}
+
+    folium.GeoJson(
+        filtered_geo,
+        name="Lotes PROMAC",
+        style_function=lambda feat: {
+            "color":   _cor_map.get(feat["properties"].get("num_lote", 0), "#aaa"),
+            "weight":  3.5,
+            "opacity": 0.85,
+        },
+        highlight_function=lambda _: {
+            "color": "#FFFFFF", "weight": 6, "opacity": 1,
+        },
+        tooltip=folium.GeoJsonTooltip(
+            fields=["lote", "empresa", "ext_km"],
+            aliases=["Lote:", "Empresa:", "Extensão (km):"],
+            style="background:#0a1929;color:#fff;font-size:12px;border:1px solid #566E3D;padding:6px;",
+        ),
+        popup=folium.GeoJsonPopup(
+            fields=["lote", "empresa", "cnpj", "ext_km", "situacao"],
+            aliases=["Lote", "Empresa", "CNPJ", "Extensão (km)", "Situação"],
+            labels=True,
+            style="background:#0a1929;color:#fff;font-size:12px;",
+            max_width=320,
+        ),
+    ).add_to(mapa)
 
 
 # ======================================================================================
@@ -1493,9 +1494,6 @@ def main():
             if _promac_geo:
                 _lote_filtro = st.session_state.get("f_lote_promac", "Todos")
                 _adicionar_lotes_promac(mapa, _promac_geo, _promac_inf, _lote_filtro)
-
-        # LayerControl para toggle Pedreiras/Lotes
-        folium.LayerControl(collapsed=False).add_to(mapa)
 
         map_data = st_folium(
             mapa, width="100%", height=560,
