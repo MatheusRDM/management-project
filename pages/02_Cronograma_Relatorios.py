@@ -35,7 +35,7 @@ from utils_certificados import (
 # ======================================================================================
 st.set_page_config(
     page_title="Cronograma | Afirma E-vias",
-    page_icon="",
+    page_icon="Imagens/AE - Logo Hor Principal_2.png",
     layout="wide",
     initial_sidebar_state="auto"
 )
