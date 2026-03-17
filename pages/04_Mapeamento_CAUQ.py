@@ -1358,7 +1358,7 @@ def main():
         _cod_map   = _idx.get("cod_map", {})
 
         _cidade_sel = st.selectbox(
-            "🔍 Buscar cidade (contorna no mapa)",
+            "Buscar cidade:",
             options=[""] + _nomes_mun,
             index=0,
             key="cidade_selectbox",
