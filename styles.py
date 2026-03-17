@@ -1280,6 +1280,16 @@ def aplicar_estilos():
     st.markdown(_cached_css(), unsafe_allow_html=True)
     st.markdown(_cached_js(), unsafe_allow_html=True)
     st.markdown(_cached_dev_label(), unsafe_allow_html=True)
+    # PWA: ícone para atalho na tela inicial do celular
+    st.markdown("""
+        <link rel="apple-touch-icon" sizes="180x180" href="/app/static/icon-180.png">
+        <link rel="manifest" href="/app/static/manifest.json">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="AE">
+        <meta name="theme-color" content="#00233B">
+    """, unsafe_allow_html=True)
 
 # ======================================================================================
 # FUNÇÃO PARA RENDERIZAR SIDEBAR PADRÃO

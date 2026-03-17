@@ -1,0 +1,13 @@
+{
+  "name": "Afirma E-Vias",
+  "short_name": "AE",
+  "description": "Sistema de Gestão Afirma E-Vias",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#00233B",
+  "theme_color": "#566E3D",
+  "icons": [
+    { "src": "/app/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/app/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
