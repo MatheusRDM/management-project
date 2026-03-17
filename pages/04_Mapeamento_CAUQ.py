@@ -410,7 +410,8 @@ def _combinar_pedreiras_cauq(intel_list: list, df_proj) -> list:
 
 
 def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=None,
-                geojson_contorno: dict | None = None, nome_contorno: str = "") -> folium.Map:
+                geojson_contorno: dict | None = None, nome_contorno: str = "",
+                center_override: tuple | None = None) -> folium.Map:
     import unicodedata as _ud
     def _n(s):
         s2 = _ud.normalize("NFKD", str(s).upper())
@@ -427,8 +428,13 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
                 all_lons.append(_p["lon"])
     lat_c = sum(all_lats) / len(all_lats)
     lon_c = sum(all_lons) / len(all_lons)
+    zoom_ini = 7
 
-    m = folium.Map(location=[lat_c, lon_c], zoom_start=7, tiles=None)
+    # Se município selecionado, centraliza e dá zoom nele
+    if center_override:
+        lat_c, lon_c, zoom_ini = center_override
+
+    m = folium.Map(location=[lat_c, lon_c], zoom_start=zoom_ini, tiles=None)
 
     folium.TileLayer("CartoDB positron",   name="Mapa Claro",    attr="CartoDB").add_to(m)
     folium.TileLayer("CartoDB dark_matter", name="Mapa Escuro",  attr="CartoDB").add_to(m)
@@ -446,16 +452,6 @@ def _criar_mapa(grupos_loc: dict, pedreiras: list | None = None, df_projetos=Non
     # ── Contorno do município selecionado (Google-style) ──────────────────
     if geojson_contorno:
         _adicionar_contorno_municipio(m, geojson_contorno, nome_contorno)
-        # Centraliza no município se não há projetos no filtro
-        if not grupos_loc:
-            try:
-                from shapely.geometry import shape
-                geom = shape(geojson_contorno["features"][0]["geometry"])
-                c = geom.centroid
-                m.location = [c.y, c.x]
-                m.zoom_start = 11
-            except Exception:
-                pass
 
     # ══════════════════════════════════════════════════════════════════════
     # MARCADORES UNIFICADOS POR PEDREIRA
@@ -969,6 +965,48 @@ def _normalizar_texto(s: str) -> str:
     return "".join(c for c in s2 if not unicodedata.combining(c)).strip()
 
 
+def _geojson_bbox_center(geojson: dict) -> tuple[float, float, float, float] | None:
+    """Calcula centro e zoom ideal a partir do bounding box do GeoJSON."""
+    lats, lons = [], []
+
+    def _extrair(obj):
+        if isinstance(obj, list):
+            if obj and isinstance(obj[0], (int, float)):
+                lons.append(obj[0])
+                lats.append(obj[1])
+            else:
+                for item in obj:
+                    _extrair(item)
+
+    features = geojson.get("features", [geojson])
+    for feat in features:
+        geom = feat.get("geometry", {}) if isinstance(feat, dict) else {}
+        _extrair(geom.get("coordinates", []))
+
+    if not lats:
+        return None
+
+    lat_min, lat_max = min(lats), max(lats)
+    lon_min, lon_max = min(lons), max(lons)
+    centro_lat = (lat_min + lat_max) / 2
+    centro_lon = (lon_min + lon_max) / 2
+
+    # Calcula zoom baseado na extensão do bbox (municípios BR ~ 0.05° a 3°)
+    span = max(lat_max - lat_min, lon_max - lon_min)
+    if span < 0.1:
+        zoom = 13
+    elif span < 0.3:
+        zoom = 11
+    elif span < 0.8:
+        zoom = 10
+    elif span < 1.5:
+        zoom = 9
+    else:
+        zoom = 8
+
+    return centro_lat, centro_lon, zoom
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def _carregar_index_municipios() -> dict:
     """Carrega índice nome→codIBGE dos 399 municípios do PR."""
@@ -1329,15 +1367,19 @@ def main():
         )
 
         _geojson_contorno = None
+        _center_override  = None
         _nome_contorno = _cidade_sel or ""
         _cod_contorno  = _cod_map.get(_cidade_sel, "") if _cidade_sel else ""
         if _cod_contorno:
             with st.spinner(f"Carregando contorno de {_cidade_sel}..."):
                 _geojson_contorno = _buscar_geojson_municipio(_cod_contorno)
+            if _geojson_contorno:
+                _center_override = _geojson_bbox_center(_geojson_contorno)
 
         mapa = _criar_mapa(
             grupos_loc, pedreiras=pedreiras_layer, df_projetos=df,
             geojson_contorno=_geojson_contorno, nome_contorno=_nome_contorno,
+            center_override=_center_override,
         )
         map_data = st_folium(
             mapa, width="100%", height=560,
