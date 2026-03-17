@@ -32,5 +32,5 @@ def proteger_pagina(nome_pagina):
         unsafe_allow_html=True,
     )
     st.sidebar.markdown("")
-    if st.sidebar.button("🚪 Sair", use_container_width=True, key=f"logout_{nome_pagina}"):
+    if st.sidebar.button("SAIR", use_container_width=True, key=f"logout_{nome_pagina}"):
         fazer_logout()
