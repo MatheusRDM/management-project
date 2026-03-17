@@ -21,7 +21,7 @@ from page_auth import proteger_pagina
 # =============================================================================
 st.set_page_config(
     page_title="Performance | Afirma E-vias",
-    page_icon="Imagens/logo_icon.png",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
