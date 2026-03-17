@@ -997,43 +997,46 @@ def _carregar_promac_info() -> dict:
 
 def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
                             lote_filtro: str = "Todos") -> None:
-    """Adiciona os lotes PROMAC — 40 features MultiLineString, dados já embutidos."""
-    features = [
-        f for f in geojson.get("features", [])
-        if lote_filtro == "Todos" or f["properties"].get("lote") == lote_filtro
-    ]
-    if not features:
-        return
+    """Adiciona os lotes PROMAC — 1 GeoJson por lote (40 max), sem GeoJsonTooltip."""
+    fg = folium.FeatureGroup(name="Lotes PROMAC", show=True)
 
-    filtered_geo = {"type": "FeatureCollection", "features": features}
+    for feat in geojson.get("features", []):
+        props = feat.get("properties", {})
+        lote_label = props.get("lote", "")
+        if lote_filtro != "Todos" and lote_label != lote_filtro:
+            continue
 
-    folium.GeoJson(
-        filtered_geo,
-        name="Lotes PROMAC",
-        style_function=lambda feat: {
-            "color":   feat["properties"].get("cor", "#aaa"),
-            "weight":  4,
-            "opacity": 0.9,
-        },
-        highlight_function=lambda _: {
-            "color": "#FFFFFF", "weight": 7, "opacity": 1,
-        },
-        tooltip=folium.GeoJsonTooltip(
-            fields=["lote", "empresa", "ext_km"],
-            aliases=["Lote:", "Empresa:", "Extensão:"],
-            style=(
-                "background:#0a1929;color:#fff;font-size:12px;"
-                "border:2px solid #566E3D;border-radius:6px;padding:6px;"
+        cor      = props.get("cor", "#aaa")
+        empresa  = props.get("empresa", "—")
+        cnpj     = props.get("cnpj", "—")
+        ext_km   = props.get("ext_km", "—")
+        situacao = props.get("situacao", "—")
+
+        popup_html = (
+            f'<div style="background:#0a1929;color:#fff;font-family:sans-serif;'
+            f'font-size:12px;padding:10px;border-radius:8px;min-width:240px;">'
+            f'<div style="background:{cor};color:#fff;font-weight:700;font-size:14px;'
+            f'padding:6px 10px;border-radius:6px 6px 0 0;margin:-10px -10px 8px;">'
+            f'{lote_label}</div>'
+            f'<b>Empresa:</b> {empresa}<br>'
+            f'<b>CNPJ:</b> {cnpj}<br>'
+            f'<b>Extensão:</b> {ext_km} km<br>'
+            f'<b>Situação:</b> {situacao}'
+            f'</div>'
+        )
+
+        folium.GeoJson(
+            feat,
+            style_function=lambda _, c=cor: {"color": c, "weight": 4, "opacity": 0.9},
+            highlight_function=lambda _: {"color": "#fff", "weight": 7, "opacity": 1},
+            tooltip=folium.Tooltip(
+                f"<b>{lote_label}</b><br><small>{empresa}</small>",
+                style="background:#0a1929;color:#fff;border:1px solid #566E3D;border-radius:4px;",
             ),
-        ),
-        popup=folium.GeoJsonPopup(
-            fields=["lote", "empresa", "cnpj", "ext_km", "situacao"],
-            aliases=["Lote", "Empresa", "CNPJ", "Extensão (km)", "Situação"],
-            labels=True,
-            style="background:#0a1929;color:#fff;font-size:12px;",
-            max_width=340,
-        ),
-    ).add_to(mapa)
+            popup=folium.Popup(popup_html, max_width=320),
+        ).add_to(fg)
+
+    fg.add_to(mapa)
 
 
 # ======================================================================================
