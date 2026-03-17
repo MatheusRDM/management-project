@@ -957,6 +957,98 @@ def _mostrar_painel_comparacao(projetos: list):
 
 
 # ======================================================================================
+# LOTES PROMAC — KMZ convertido para GeoJSON + info dos vencedores
+# ======================================================================================
+
+CORES_LOTES = [
+    '#e6194b','#3cb44b','#ffe119','#4363d8','#f58231','#911eb4','#42d4f4','#f032e6',
+    '#bfef45','#fabed4','#469990','#dcbeff','#9A6324','#fffac8','#800000','#aaffc3',
+    '#808000','#ffd8b1','#000075','#a9a9a9','#FF6B6B','#4ECDC4','#FFE66D','#6B5B95',
+    '#FF8C42','#A06CD5','#6EC6FF','#E850A8','#C5E17A','#FFB7C5','#5A9E94','#D4B8FF',
+    '#B8860B','#FFFACD','#8B0000','#98FB98','#6B8E23','#FFDAB9','#000080','#C0C0C0',
+]
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _carregar_promac_geojson() -> dict | None:
+    _path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "cache_certificados", "promac_lotes.geojson",
+    )
+    if os.path.exists(_path):
+        with open(_path, encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _carregar_promac_info() -> dict:
+    """Retorna dict {num_lote: {extensao_km, cnpj, empresa, situacao}}."""
+    _path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "cache_certificados", "promac_lotes.json",
+    )
+    if os.path.exists(_path):
+        with open(_path, encoding="utf-8") as f:
+            data = json.load(f)
+        return {item["lote"]: item for item in data}
+    return {}
+
+
+def _adicionar_lotes_promac(mapa: folium.Map, geojson: dict, info: dict,
+                            lote_filtro: str = "Todos") -> None:
+    """Adiciona os lotes PROMAC ao mapa como FeatureGroup com popup de info."""
+    fg = folium.FeatureGroup(name="Lotes PROMAC", show=True)
+
+    for feat in geojson.get("features", []):
+        num = feat["properties"].get("num_lote", 0)
+        if lote_filtro != "Todos" and f"LOTE {num:02d}" != lote_filtro:
+            continue
+
+        cor = CORES_LOTES[(num - 1) % len(CORES_LOTES)]
+        lote_info = info.get(num, {})
+        empresa = lote_info.get("empresa", "—")
+        cnpj = lote_info.get("cnpj", "—")
+        extensao = lote_info.get("extensao_km", "—")
+        situacao = lote_info.get("situacao", "—")
+        trecho = feat["properties"].get("Trecho", "")
+        de_para = f'{feat["properties"].get("De", "")} → {feat["properties"].get("Para", "")}'
+
+        popup_html = f"""
+        <div style="font-family:sans-serif;font-size:12px;min-width:220px;max-width:300px;">
+            <div style="background:{cor};color:#fff;padding:6px 10px;border-radius:6px 6px 0 0;
+                        font-weight:700;font-size:14px;">LOTE {num:02d}</div>
+            <div style="padding:8px 10px;background:#0a1929;color:#fff;border-radius:0 0 6px 6px;">
+                <b>Empresa:</b> {empresa}<br>
+                <b>CNPJ:</b> {cnpj}<br>
+                <b>Extensão:</b> {extensao} km<br>
+                <b>Situação:</b> {situacao}<br>
+                <b>Trecho:</b> {trecho}<br>
+                <b>De/Para:</b> {de_para}
+            </div>
+        </div>
+        """
+
+        folium.GeoJson(
+            feat,
+            style_function=lambda _, c=cor: {
+                "color": c, "weight": 3.5, "opacity": 0.85,
+            },
+            highlight_function=lambda _, c=cor: {
+                "color": "#FFFFFF", "weight": 6, "opacity": 1,
+            },
+            tooltip=folium.GeoJsonTooltip(
+                fields=["lote"],
+                aliases=[""],
+                style="background:#0a1929;color:#fff;font-size:12px;border:1px solid #566E3D;",
+            ),
+            popup=folium.Popup(popup_html, max_width=320),
+        ).add_to(fg)
+
+    fg.add_to(mapa)
+
+
+# ======================================================================================
 # BUSCA DE MUNICÍPIO + CONTORNO (IBGE GeoJSON on-demand)
 # ======================================================================================
 
@@ -1231,6 +1323,18 @@ def main():
                 help="Exibe no mapa as pedreiras que NÃO possuem projetos vinculados no período filtrado",
             )
 
+            st.divider()
+            st.checkbox(
+                "🛣️ Lotes PROMAC",
+                value=False,
+                key="show_lotes_promac",
+                help="Exibe os 40 lotes de manutenção rodoviária (DER/PR) no mapa",
+            )
+            if st.session_state.get("show_lotes_promac"):
+                _promac_info = _carregar_promac_info()
+                _lote_opts = ["Todos"] + [f"LOTE {n:02d}" for n in sorted(_promac_info.keys())]
+                st.selectbox("Filtrar Lote:", _lote_opts, key="f_lote_promac")
+
         mostrar_projetos = True
         # (modo_vis alias: sempre todos visíveis — toggle pedreiras via checkbox)
 
@@ -1381,6 +1485,18 @@ def main():
             geojson_contorno=_geojson_contorno, nome_contorno=_nome_contorno,
             center_override=_center_override,
         )
+
+        # Lotes PROMAC
+        if st.session_state.get("show_lotes_promac"):
+            _promac_geo = _carregar_promac_geojson()
+            _promac_inf = _carregar_promac_info()
+            if _promac_geo:
+                _lote_filtro = st.session_state.get("f_lote_promac", "Todos")
+                _adicionar_lotes_promac(mapa, _promac_geo, _promac_inf, _lote_filtro)
+
+        # LayerControl para toggle Pedreiras/Lotes
+        folium.LayerControl(collapsed=False).add_to(mapa)
+
         map_data = st_folium(
             mapa, width="100%", height=560,
             returned_objects=["last_object_clicked"], key="cauq_map",

@@ -1,0 +1,282 @@
+[
+  {
+    "lote": 1,
+    "extensao_km": "118.46",
+    "situacao": "Homologado",
+    "cnpj": "01.382.022/0001-26",
+    "empresa": "COMPASA DO BRASIL DISTRIBUIDORA DE DERIVADOS DE PETROLEO LTDA"
+  },
+  {
+    "lote": 2,
+    "extensao_km": "156.53",
+    "situacao": "Homologado",
+    "cnpj": "36.145.160/0001-76",
+    "empresa": "VALE DAS PEDRAS CONSTRUCAO DE RODOVIAS LTDA."
+  },
+  {
+    "lote": 3,
+    "extensao_km": "169.12",
+    "situacao": "Homologado",
+    "cnpj": "00.820.854/0001-14",
+    "empresa": "QUALIDADE MINERAÇÃO LTDA"
+  },
+  {
+    "lote": 4,
+    "extensao_km": "169.12",
+    "situacao": "Fase Certame",
+    "cnpj": "",
+    "empresa": ""
+  },
+  {
+    "lote": 5,
+    "extensao_km": "190.64",
+    "situacao": "Homologado",
+    "cnpj": "78.440.161/0001-93",
+    "empresa": "EVENTO CONSTRUTORA DE OBRAS LTDA"
+  },
+  {
+    "lote": 6,
+    "extensao_km": "178.85",
+    "situacao": "Homologado",
+    "cnpj": "72.183.486/0001-51",
+    "empresa": "ELLENCO CONSTRUCOES LTDA"
+  },
+  {
+    "lote": 7,
+    "extensao_km": "175.27",
+    "situacao": "Homologado",
+    "cnpj": "78.440.161/0001-93",
+    "empresa": "EVENTO CONSTRUTORA DE OBRAS LTDA"
+  },
+  {
+    "lote": 8,
+    "extensao_km": "278.03",
+    "situacao": "Homologado",
+    "cnpj": "01.382.022/0001-26",
+    "empresa": "COMPASA DO BRASIL DISTRIBUIDORA DE DERIVADOS DE PETROLEO LTDA"
+  },
+  {
+    "lote": 9,
+    "extensao_km": "217.17",
+    "situacao": "Homologado",
+    "cnpj": "80.237.555/0001-90",
+    "empresa": "ANTONIO MORO & CIA LTDA"
+  },
+  {
+    "lote": 10,
+    "extensao_km": "343.31",
+    "situacao": "Homologado",
+    "cnpj": "03.030.002/0001-11",
+    "empresa": "PAVIMENTACOES E TERRAPLENAGENS SCHMITT LTDA"
+  },
+  {
+    "lote": 11,
+    "extensao_km": "311.88",
+    "situacao": "Homologado",
+    "cnpj": "03.222.465/0001-85",
+    "empresa": "DALBA ENGENHARIA E EMPREENDIMENTOS LTDA."
+  },
+  {
+    "lote": 12,
+    "extensao_km": "182.14",
+    "situacao": "Homologado",
+    "cnpj": "03.222.465/0001-85",
+    "empresa": "DALBA ENGENHARIA E EMPREENDIMENTOS LTDA."
+  },
+  {
+    "lote": 13,
+    "extensao_km": "203.39",
+    "situacao": "Homologado",
+    "cnpj": "82.670.985/0001-27",
+    "empresa": "ASPHALT PAVIMENTACAO ASFALTICA LTDA"
+  },
+  {
+    "lote": 14,
+    "extensao_km": "237.24",
+    "situacao": "Homologado",
+    "cnpj": "72.183.486/0001-51",
+    "empresa": "ELLENCO CONSTRUCOES LTDA"
+  },
+  {
+    "lote": 15,
+    "extensao_km": "145.27",
+    "situacao": "Homologado",
+    "cnpj": "68.761.238/0001-73",
+    "empresa": "GAISSLER MOREIRA ENGENHARIA CIVIL LTDA."
+  },
+  {
+    "lote": 16,
+    "extensao_km": "249.23",
+    "situacao": "Homologado",
+    "cnpj": "68.761.238/0001-73",
+    "empresa": "GAISSLER MOREIRA ENGENHARIA CIVIL LTDA."
+  },
+  {
+    "lote": 17,
+    "extensao_km": "216.00",
+    "situacao": "Homologado",
+    "cnpj": "72.183.486/0001-51",
+    "empresa": "ELLENCO CONSTRUCOES LTDA"
+  },
+  {
+    "lote": 18,
+    "extensao_km": "250.61",
+    "situacao": "Homologado",
+    "cnpj": "19.758.842/0001-35",
+    "empresa": "LCM CONSTRUCAO E COMERCIO S.A"
+  },
+  {
+    "lote": 19,
+    "extensao_km": "239.19",
+    "situacao": "Homologado",
+    "cnpj": "19.758.842/0001-35",
+    "empresa": "LCM CONSTRUCAO E COMERCIO S.A"
+  },
+  {
+    "lote": 20,
+    "extensao_km": "153.68",
+    "situacao": "Homologado",
+    "cnpj": "72.183.486/0001-51",
+    "empresa": "ELLENCO CONSTRUCOES LTDA"
+  },
+  {
+    "lote": 21,
+    "extensao_km": "161.78",
+    "situacao": "Homologado",
+    "cnpj": "72.183.486/0001-51",
+    "empresa": "ELLENCO CONSTRUCOES LTDA"
+  },
+  {
+    "lote": 22,
+    "extensao_km": "178.03",
+    "situacao": "Homologado",
+    "cnpj": "76.641.448/0001-56",
+    "empresa": "NEOVIA RESTAURAÇÃO RODOVIÁRIA LTDA."
+  },
+  {
+    "lote": 23,
+    "extensao_km": "297.72",
+    "situacao": "Homologado",
+    "cnpj": "82.670.985/0001-27",
+    "empresa": "ASPHALT PAVIMENTACAO ASFALTICA LTDA"
+  },
+  {
+    "lote": 24,
+    "extensao_km": "283.07",
+    "situacao": "Fase Certame",
+    "cnpj": "",
+    "empresa": ""
+  },
+  {
+    "lote": 25,
+    "extensao_km": "248.34",
+    "situacao": "Homologado",
+    "cnpj": "03.255.024/0001-80",
+    "empresa": "DIFFERENCIAL ENGENHARIA LTDA"
+  },
+  {
+    "lote": 26,
+    "extensao_km": "308.06",
+    "situacao": "Fase Certame",
+    "cnpj": "",
+    "empresa": ""
+  },
+  {
+    "lote": 27,
+    "extensao_km": "282.85",
+    "situacao": "Homologado",
+    "cnpj": "00.159.291/0001-65",
+    "empresa": "ITAIPU INDUSTRIA E COMÉRCIO DE BRITAS E ASFALTO LTDA"
+  },
+  {
+    "lote": 28,
+    "extensao_km": "340.63",
+    "situacao": "Homologado",
+    "cnpj": "00.159.291/0001-65",
+    "empresa": "ITAIPU INDUSTRIA E COMÉRCIO DE BRITAS E ASFALTO LTDA"
+  },
+  {
+    "lote": 29,
+    "extensao_km": "336.00",
+    "situacao": "Homologado",
+    "cnpj": "05.939.484/0001-52",
+    "empresa": "ECO SUL BRASIL CONSTRUTORA LTDA"
+  },
+  {
+    "lote": 30,
+    "extensao_km": "250.92",
+    "situacao": "Homologado",
+    "cnpj": "03.030.002/0001-11",
+    "empresa": "PAVIMENTACOES E TERRAPLENAGENS SCHMITT LTDA"
+  },
+  {
+    "lote": 31,
+    "extensao_km": "298.10",
+    "situacao": "Homologado",
+    "cnpj": "09.411.692/0001-35",
+    "empresa": "ENGEMATLOC - TERRAPLENAGEM E LOCACOES LTDA"
+  },
+  {
+    "lote": 32,
+    "extensao_km": "310.12",
+    "situacao": "Homologado",
+    "cnpj": "19.758.779/0001-37",
+    "empresa": "ETHOS ENGENHARIA DE INFRAESTRUTURA SA"
+  },
+  {
+    "lote": 33,
+    "extensao_km": "335.35",
+    "situacao": "Homologado",
+    "cnpj": "02.810.894/0001-00",
+    "empresa": "SAMP CONSTRUTORA DE OBRAS LTDA"
+  },
+  {
+    "lote": 34,
+    "extensao_km": "333.67",
+    "situacao": "Homologado",
+    "cnpj": "92.779.503/0001-25",
+    "empresa": "CASTILHO ENGENHARIA E EMPREENDIMENTOS S/A"
+  },
+  {
+    "lote": 35,
+    "extensao_km": "283.21",
+    "situacao": "Homologado",
+    "cnpj": "03.030.002/0001-11",
+    "empresa": "PAVIMENTACOES E TERRAPLENAGENS SCHMITT LTDA"
+  },
+  {
+    "lote": 36,
+    "extensao_km": "272.14",
+    "situacao": "Homologado",
+    "cnpj": "72.074.024/0001-04",
+    "empresa": "LIOTTO OBRAS E PAVIMENTAÇÕES LTDA"
+  },
+  {
+    "lote": 37,
+    "extensao_km": "",
+    "situacao": "Homologado",
+    "cnpj": "03.222.465/0001-85",
+    "empresa": "DALBA ENGENHARIA E EMPREENDIMENTOS LTDA."
+  },
+  {
+    "lote": 38,
+    "extensao_km": "217.02",
+    "situacao": "Homologado",
+    "cnpj": "03.222.465/0001-85",
+    "empresa": "DALBA ENGENHARIA E EMPREENDIMENTOS LTDA."
+  },
+  {
+    "lote": 39,
+    "extensao_km": "355.23",
+    "situacao": "Homologado",
+    "cnpj": "03.222.465/0001-85",
+    "empresa": "DALBA ENGENHARIA E EMPREENDIMENTOS LTDA."
+  },
+  {
+    "lote": 40,
+    "extensao_km": "204.05",
+    "situacao": "Homologado",
+    "cnpj": "03.006.548/0001-37",
+    "empresa": "COSAMPA CONSTRUÇÕES LTDA"
+  }
+]
