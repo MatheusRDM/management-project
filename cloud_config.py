@@ -140,10 +140,22 @@ def get_usuarios() -> dict:
     Em produção (cloud): usa st.secrets
     Em dev (local): usa fallback hardcoded
     """
+    # Páginas completas para Dev — sempre atualizadas aqui no código
+    _TODAS_PAGINAS_DEV = [
+        "Dashboard de Certificados", "Cronograma de Ensaios", "EPR Litoral Pioneiro",
+        "Mapeamento de Projetos CAUQ", "Performance de Contratos", "Eco Rodovias"
+    ]
+
     try:
         # Tenta carregar de st.secrets (Streamlit Cloud)
         if hasattr(st, 'secrets') and 'usuarios' in st.secrets:
-            return dict(st.secrets['usuarios'])
+            usuarios = dict(st.secrets['usuarios'])
+            # Garante que Dev sempre tem todas as páginas (evita precisar atualizar secrets)
+            if 'Dev' in usuarios:
+                u = dict(usuarios['Dev'])
+                u['paginas'] = _TODAS_PAGINAS_DEV
+                usuarios['Dev'] = u
+            return usuarios
     except Exception:
         pass
 
