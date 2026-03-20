@@ -691,9 +691,8 @@ def _aba_rastreamento():
                     st.warning("Nenhum veículo com 'ECO' no nome encontrado.")
                     return
                 st.session_state["logos_veiculos"]           = veiculos
-                st.session_state["logos_sess_idcli"]         = idcli
                 st.session_state["logos_ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-                st.rerun(scope="fragment")
+                st.session_state.pop("logos_rota", None)
             except Exception as e:
                 st.error(f"❌ {e}")
                 return
@@ -751,32 +750,47 @@ def _aba_rastreamento():
     # ── Rota detalhada ────────────────────────────────────────────────────────
     st.divider()
     st.markdown("**Rota detalhada — selecione um veículo**")
-    opcoes = {v.get("descricaovel", f"V{i}"): v for i, v in enumerate(veiculos)}
+    # Monta label com última data conhecida para guiar o usuário
+    def _label(v, i):
+        dt = str(v.get("pos_dt_posicao", ""))[:10]
+        return f"{v.get('descricaovel', f'V{i}')}  [{dt}]"
+    opcoes = {_label(v, i): v for i, v in enumerate(veiculos)}
+
     r1, r2, r3, r4 = st.columns([3, 2, 2, 1])
     with r1:
-        sel = st.selectbox("Veículo:", list(opcoes.keys()), key="logos_sel_v")
+        sel = st.selectbox("Veículo [última data]:", list(opcoes.keys()), key="logos_sel_v")
     with r2:
-        d_ini = st.date_input("De:", value=date.today().replace(day=1), key="logos_r_ini")
+        # Sugere data baseada na última posição do veículo selecionado
+        v_sel_data = opcoes[sel]
+        ultima_dt  = str(v_sel_data.get("pos_dt_posicao", ""))[:10]
+        try:
+            from datetime import date as _date
+            sugest = _date.fromisoformat(ultima_dt) if ultima_dt else date.today()
+        except Exception:
+            sugest = date.today()
+        d_ini = st.date_input("De:", value=sugest, key="logos_r_ini")
     with r3:
-        d_fim = st.date_input("Até:", value=date.today(), key="logos_r_fim")
+        d_fim = st.date_input("Até:", value=sugest, key="logos_r_fim")
     with r4:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         ver_rota = st.button("🗺️ Ver Rota", key="logos_btn_rota", use_container_width=True)
 
     if ver_rota:
         vid = opcoes[sel].get("pos_idvei")
-        with st.spinner(f"Buscando rota de {sel}..."):
+        with st.spinner(f"Buscando rota..."):
             try:
-                sess2, idcli2 = _logos_login()
+                sess2, _ = _logos_login()
                 hist = _logos_get_rota(
                     sess2, vid,
                     d_ini.strftime("%Y-%m-%d 00:00"),
                     d_fim.strftime("%Y-%m-%d 23:59"),
                 )
+                if not hist:
+                    st.warning(f"Nenhuma posição encontrada para {d_ini} – {d_fim}. Tente outras datas.")
+                    return
                 st.session_state["logos_rota"]     = hist
                 st.session_state["logos_rota_sel"] = sel
                 st.session_state["logos_rota_idx"] = list(opcoes.keys()).index(sel)
-                st.rerun(scope="fragment")
             except Exception as e:
                 st.error(f"❌ {e}")
                 return
