@@ -624,6 +624,11 @@ _CORES_VEICULOS = [
     "#A29BFE","#FD79A8","#00CEC9","#FDCB6E","#6C5CE7",
 ]
 
+def _log(msg):
+    """Atualiza log de debug no session_state (thread-safe para leitura)."""
+    st.session_state["_logos_log"] = msg
+
+
 def _logos_criar_sessao():
     try:
         usuario = st.secrets["logos_usuario"]
@@ -633,200 +638,316 @@ def _logos_criar_sessao():
         senha   = "Rfp@39TH"
 
     sess = requests.Session()
-    sess.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-    r = sess.get(f"{_LOGOS_BASE}/home", timeout=20)
-    m = _re.search(r'__RequestVerificationToken[^>]+value="([^"]+)"', r.text)
-    token = m.group(1) if m else ""
-    sess.post(f"{_LOGOS_BASE}/Identity/Account/Login", data={
+    sess.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9",
+    })
+
+    _log("1/4 Buscando token de login...")
+    r = sess.get(f"{_LOGOS_BASE}/home", timeout=15, allow_redirects=True)
+
+    # Tenta encontrar o token anti-forgery em múltiplos formatos
+    token = ""
+    for pat in [
+        r'name="__RequestVerificationToken"[^>]+value="([^"]+)"',
+        r'value="([^"]+)"[^>]+name="__RequestVerificationToken"',
+        r'__RequestVerificationToken[^>]+value="([^"]+)"',
+    ]:
+        m = _re.search(pat, r.text)
+        if m:
+            token = m.group(1)
+            break
+
+    _log(f"2/4 Fazendo login (token={'OK' if token else 'ausente'})...")
+    login_r = sess.post(f"{_LOGOS_BASE}/Identity/Account/Login", data={
         "Input.UserName": usuario,
         "Input.Password": senha,
         "__RequestVerificationToken": token,
-    }, timeout=20, allow_redirects=True)
+        "RememberMe": "false",
+    }, timeout=15, allow_redirects=True)
+
+    # Salva diagnóstico
+    st.session_state["_logos_login_status"] = login_r.status_code
+    st.session_state["_logos_login_url"]    = login_r.url
+    st.session_state["_logos_cookies"]      = [c.name for c in sess.cookies]
     return sess
 
 
 def _logos_get_idcliente(sess):
+    # Tenta cookie IDCLI primeiro
     for c in sess.cookies:
-        if c.name == "IDCLI":
+        if c.name.upper() in ("IDCLI", "IDCLIENTE", "ID_CLIENTE"):
             return c.value
-    r = sess.get(f"{_LOGOS_BASE}/home", timeout=15)
-    m = _re.search(r"IDCLI\s*[=:]\s*['\"]?(\d+)", r.text)
-    return m.group(1) if m else None
+
+    _log("3/4 Buscando idcliente na página home...")
+    r = sess.get(f"{_LOGOS_BASE}/home", timeout=15, allow_redirects=True)
+    st.session_state["_logos_home_url"] = r.url
+    st.session_state["_logos_home_len"] = len(r.text)
+
+    for pat in [
+        r"['\"]?idcliente['\"]?\s*[:=]\s*['\"]?(\d+)",
+        r"IDCLI\s*[=:]\s*['\"]?(\d+)",
+        r"idCliente\s*=\s*(\d+)",
+        r'"idcliente"\s*:\s*(\d+)',
+        r"'idcliente'\s*:\s*(\d+)",
+        r"var\s+idcli\s*=\s*(\d+)",
+    ]:
+        m = _re.search(pat, r.text, _re.IGNORECASE)
+        if m:
+            return m.group(1)
+
+    # Tenta endpoint de perfil
+    try:
+        rp = sess.get(f"{_LOGOS_BASE}/api/perfil", timeout=10)
+        d = rp.json()
+        for k in ("idcliente", "idCliente", "id_cliente", "clienteId"):
+            if k in d:
+                return str(d[k])
+    except Exception:
+        pass
+
+    return None
 
 
 def _logos_veiculos_eco(sess, idcliente):
+    _log("4/4 Buscando veículos ECO...")
     try:
-        r = sess.post(f"{_LOGOS_BASE}/api/ultimaposicao", json={
+        payload = {
             "idcliente": int(idcliente),
             "texto": "", "placa": "", "serial": "",
             "descricao": "", "grupoveiculo": "", "idsVeiculos": [],
-        }, timeout=30)
-        items = r.json() if isinstance(r.json(), list) else r.json().get("data", [])
-        return [v for v in items if "ECO" in str(v.get("descricao", "")).upper()]
-    except Exception:
-        return []
-
-
-def _logos_historico(sess, idveiculo, datainicio, datafinal):
-    try:
-        r = sess.post(f"{_LOGOS_BASE}/api/historicoposicao", json={
-            "idveiculo": idveiculo,
-            "datainicio": datainicio,
-            "datafinal":  datafinal,
-        }, timeout=90)
+        }
+        r = sess.post(f"{_LOGOS_BASE}/api/ultimaposicao",
+                      json=payload, timeout=20)
+        st.session_state["_logos_api_status"] = r.status_code
+        st.session_state["_logos_api_preview"] = r.text[:300]
         d = r.json()
-        return d if isinstance(d, list) else d.get("data", d.get("posicoes", []))
-    except Exception:
+        items = d if isinstance(d, list) else d.get("data", d.get("veiculos", d.get("result", [])))
+        return [v for v in items if "ECO" in str(v.get("descricao", "")).upper()]
+    except Exception as ex:
+        st.session_state["_logos_api_error"] = str(ex)
         return []
 
 
-def _thread_buscar_logos(data_ini_str, data_fim_str):
-    try:
+def _logos_historico(idveiculo, datainicio, datafinal):
+    """Cria nova sessão e busca histórico de 1 veículo."""
+    sess = _logos_criar_sessao()
+    r = sess.post(f"{_LOGOS_BASE}/api/historicoposicao", json={
+        "idveiculo": idveiculo,
+        "datainicio": datainicio,
+        "datafinal":  datafinal,
+    }, timeout=60)
+    d = r.json()
+    return d if isinstance(d, list) else d.get("data", d.get("posicoes", []))
 
+
+def _thread_buscar_veiculos():
+    """Fase 1 — rápido: apenas última posição de todos ECO."""
+    try:
         sess  = _logos_criar_sessao()
         idcli = _logos_get_idcliente(sess)
+
         if not idcli:
-            st.session_state["_logos_error"]   = "Falha no login. Verifique as credenciais."
+            diag = (
+                f"idcliente não encontrado. "
+                f"Login status={st.session_state.get('_logos_login_status')} "
+                f"→ {st.session_state.get('_logos_login_url')} | "
+                f"Cookies: {st.session_state.get('_logos_cookies')} | "
+                f"Home URL pós-login: {st.session_state.get('_logos_home_url')} "
+                f"({st.session_state.get('_logos_home_len',0)} chars)"
+            )
+            st.session_state["_logos_error"]   = diag
             st.session_state["_logos_loading"] = False
             return
 
         veiculos = _logos_veiculos_eco(sess, idcli)
         if not veiculos:
-            st.session_state["_logos_error"]   = "Nenhum veículo ECO encontrado."
+            diag = (
+                f"Nenhum veículo ECO encontrado. "
+                f"API status={st.session_state.get('_logos_api_status')} | "
+                f"Preview: {st.session_state.get('_logos_api_preview','—')} | "
+                f"Erro API: {st.session_state.get('_logos_api_error','—')}"
+            )
+            st.session_state["_logos_error"]   = diag
             st.session_state["_logos_loading"] = False
             return
 
-        resultado = []
-        for v in veiculos:
-            vid  = v.get("idveiculo") or v.get("id")
-            hist = _logos_historico(sess, vid, data_ini_str, data_fim_str) if vid else []
-            resultado.append({"veiculo": v, "historico": hist})
-
-        st.session_state["logos_dados"]              = resultado
+        st.session_state["logos_veiculos"]           = veiculos
         st.session_state["logos_ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         st.session_state["_logos_loading"]           = False
     except Exception as e:
-        st.session_state["_logos_error"]   = str(e)
+        st.session_state["_logos_error"]   = f"Erro geral: {e}"
         st.session_state["_logos_loading"] = False
 
 
-# ─── Status bar — re-renderiza a cada 2s enquanto carrega ────────────────────
-@st.fragment(run_every=2)
-def _logos_status_bar():
-    loading = st.session_state.get("_logos_loading", False)
-    error   = st.session_state.get("_logos_error")
-    atu     = st.session_state.get("logos_ultima_atualizacao")
-    inicio  = st.session_state.get("_logos_inicio_ts")
+def _thread_buscar_rota(idveiculo, data_ini_str, data_fim_str):
+    """Fase 2 — sob demanda: histórico de 1 veículo selecionado."""
+    try:
+        st.session_state["_logos_rota_loading"] = True
+        st.session_state["_logos_rota_error"]   = None
+        hist = _logos_historico(idveiculo, data_ini_str, data_fim_str)
+        st.session_state["logos_rota"]          = hist
+        st.session_state["logos_rota_vid"]      = idveiculo
+        st.session_state["_logos_rota_loading"] = False
+    except Exception as e:
+        st.session_state["_logos_rota_error"]   = str(e)
+        st.session_state["_logos_rota_loading"] = False
 
+
+# ─── Fragments de status ─────────────────────────────────────────────────────
+@st.fragment(run_every=2)
+def _logos_status_veiculos():
+    loading = st.session_state.get("_logos_loading", False)
+    inicio  = st.session_state.get("_logos_inicio_ts")
+    log     = st.session_state.get("_logos_log", "")
     if loading:
-        elapsed = ""
-        if inicio:
-            secs = int((datetime.now() - inicio).total_seconds())
-            elapsed = f" — {secs}s"
+        secs = int((datetime.now() - inicio).total_seconds()) if inicio else 0
         st.markdown(f"""
-        <div style="background:rgba(86,110,61,0.25);border:1px solid #566E3D;border-radius:8px;
-                    padding:14px 20px;display:flex;align-items:center;gap:12px;margin:8px 0;">
-            <span style="font-size:1.4rem">⏳</span>
-            <span style="color:#BFCF99;font-weight:600;font-size:1rem">
-                Autenticando e buscando veículos ECO no Logos Rastreamento{elapsed}...
-            </span>
+        <div style="background:rgba(86,110,61,0.2);border:1px solid #566E3D;border-radius:8px;
+                    padding:12px 18px;margin:6px 0;">
+            <span style="color:#BFCF99;font-weight:600;">⏳ {log or 'Iniciando...'} ({secs}s)</span>
         </div>""", unsafe_allow_html=True)
-    elif error:
-        st.error(f"❌ {error}")
-    elif atu:
-        n = len(st.session_state.get("logos_dados", []))
-        st.success(f"✅ {n} veículo(s) ECO carregados · Atualizado: {atu}")
-    else:
-        st.caption("Clique em **🔄 Atualizar** para buscar os veículos ECO do Logos Rastreamento.")
+    elif st.session_state.get("_logos_error"):
+        st.error(f"❌ {st.session_state['_logos_error']}")
+    elif st.session_state.get("logos_ultima_atualizacao"):
+        n = len(st.session_state.get("logos_veiculos", []))
+        st.success(f"✅ {n} veículo(s) ECO · {st.session_state['logos_ultima_atualizacao']}")
+
+
+@st.fragment(run_every=2)
+def _logos_status_rota():
+    if st.session_state.get("_logos_rota_loading"):
+        st.info("🔄 Buscando rota do veículo...")
+    elif st.session_state.get("_logos_rota_error"):
+        st.error(f"❌ {st.session_state['_logos_rota_error']}")
 
 
 def _aba_rastreamento():
-    # ── Controles ─────────────────────────────────────────────────────────────
     loading = bool(st.session_state.get("_logos_loading", False))
 
-    c1, c2, c3 = st.columns([2, 2, 1])
+    # ── Fase 1: Atualizar veículos ────────────────────────────────────────────
+    c1, c2 = st.columns([4, 1])
     with c1:
-        d_ini = st.date_input("Data início:", value=date.today().replace(day=1), key="logos_d_ini")
+        st.markdown("**Fase 1 — Veículos ECO (posição atual)**")
     with c2:
-        d_fim = st.date_input("Data fim:",    value=date.today(),                key="logos_d_fim")
-    with c3:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if st.button("🔄 Atualizar", key="logos_btn",
-                     use_container_width=True,
-                     disabled=loading,
-                     help="Busca apenas veículos com ECO no nome"):
-            if not st.session_state.get("_logos_loading"):
-                st.session_state["_logos_loading"]  = True
-                st.session_state["_logos_error"]    = None
+        if st.button("🔄 Atualizar", key="logos_btn", use_container_width=True,
+                     disabled=loading):
+            if not loading:
+                st.session_state["_logos_loading"]   = True
+                st.session_state["_logos_error"]     = None
                 st.session_state["_logos_inicio_ts"] = datetime.now()
-                threading.Thread(
-                    target=_thread_buscar_logos,
-                    args=(d_ini.strftime("%d/%m/%Y 00:00"),
-                          d_fim.strftime("%d/%m/%Y 23:59")),
-                    daemon=True
-                ).start()
+                threading.Thread(target=_thread_buscar_veiculos, daemon=True).start()
             st.rerun()
 
-    _logos_status_bar()
+    _logos_status_veiculos()
 
-    dados = st.session_state.get("logos_dados")
-    if not dados:
+    veiculos = st.session_state.get("logos_veiculos")
+    if not veiculos:
+        st.caption("Clique em **🔄 Atualizar** para buscar os veículos ECO do Logos.")
         return
 
-    # ── Mapa de rotas ─────────────────────────────────────────────────────────
-    st.markdown("#### 🗺️ Rotas dos Veículos ECO")
+    # ── Mapa: última posição de todos os ECO ─────────────────────────────────
     mapa   = folium.Map(location=[-18.5, -47.5], zoom_start=7, tiles="CartoDB dark_matter")
     bounds = []
-
-    for i, item in enumerate(dados):
-        v    = item["veiculo"]
-        hist = item["historico"]
-        cor  = _CORES_VEICULOS[i % len(_CORES_VEICULOS)]
-        desc = v.get("descricao", f"Veículo {i+1}")
+    for i, v in enumerate(veiculos):
+        cor   = _CORES_VEICULOS[i % len(_CORES_VEICULOS)]
+        desc  = v.get("descricao", f"Veículo {i+1}")
         placa = v.get("placa", "")
-
-        coords = []
-        for p in hist:
-            lat = p.get("latitude") or p.get("lat") or p.get("Latitude")
-            lon = p.get("longitude") or p.get("lon") or p.get("lng") or p.get("Longitude")
-            if lat and lon:
-                try:
-                    coords.append([float(lat), float(lon)])
-                except Exception:
-                    pass
-
-        if len(coords) > 1:
-            folium.PolyLine(coords, color=cor, weight=3, opacity=0.85,
-                            tooltip=f"{desc} ({placa})").add_to(mapa)
-            folium.CircleMarker(coords[-1], radius=6, color=cor, fill=True,
-                                fill_color=cor, fill_opacity=1.0,
-                                tooltip=f"📍 Última posição: {desc}").add_to(mapa)
-            bounds.extend(coords)
+        lat   = v.get("latitude") or v.get("lat")
+        lon   = v.get("longitude") or v.get("lon") or v.get("lng")
+        ign   = "🟢" if v.get("ignicao") else "🔴"
+        vel   = v.get("velocidade", 0)
+        if lat and lon:
+            try:
+                lt, ln = float(lat), float(lon)
+                popup_html = f"<b style='color:{cor}'>{desc}</b><br>Placa: {placa}<br>Ignição: {ign}<br>Velocidade: {vel} km/h"
+                folium.CircleMarker(
+                    [lt, ln], radius=8, color=cor, fill=True,
+                    fill_color=cor, fill_opacity=0.9,
+                    tooltip=f"{ign} {desc} — {vel} km/h",
+                    popup=folium.Popup(popup_html, max_width=220)
+                ).add_to(mapa)
+                bounds.append([lt, ln])
+            except Exception:
+                pass
 
     if bounds:
-        lats = [c[0] for c in bounds]
-        lons = [c[1] for c in bounds]
+        lats = [c[0] for c in bounds]; lons = [c[1] for c in bounds]
         mapa.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
 
-    st_folium(mapa, width="100%", height=520, key="logos_mapa", returned_objects=[])
+    st_folium(mapa, width="100%", height=420, key="logos_mapa_pos", returned_objects=[])
 
-    # ── Tabela resumo ─────────────────────────────────────────────────────────
-    st.markdown("#### 📊 Resumo por Veículo")
-    rows = []
-    for item in dados:
-        v    = item["veiculo"]
-        hist = item["historico"]
-        rows.append({
-            "Veículo":           v.get("descricao", "—"),
-            "Placa":             v.get("placa", "—"),
-            "Última posição":    v.get("datahoraposicao", v.get("datahora", "—")),
-            "Velocidade km/h":   v.get("velocidade", "—"),
-            "Hodômetro km":      v.get("hodometro", "—"),
-            "Ignição":           "✅" if v.get("ignicao") else "⭕",
-            "Registros rota":    len(hist),
-        })
-    if rows:
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    # ── Tabela veículos ───────────────────────────────────────────────────────
+    rows = [{
+        "Veículo":        v.get("descricao", "—"),
+        "Placa":          v.get("placa", "—"),
+        "Última posição": v.get("datahoraposicao", v.get("datahora", "—")),
+        "Vel. km/h":      v.get("velocidade", "—"),
+        "Hodômetro":      v.get("hodometro", "—"),
+        "Ignição":        "🟢 Ligado" if v.get("ignicao") else "🔴 Desligado",
+    } for v in veiculos]
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=280)
+
+    # ── Fase 2: Rota de um veículo ────────────────────────────────────────────
+    st.divider()
+    st.markdown("**Fase 2 — Rota detalhada de um veículo**")
+    opcoes = {v.get("descricao", f"V{i}"): v for i, v in enumerate(veiculos)}
+    r1, r2, r3, r4 = st.columns([3, 2, 2, 1])
+    with r1:
+        sel = st.selectbox("Veículo:", list(opcoes.keys()), key="logos_sel_v")
+    with r2:
+        d_ini = st.date_input("De:", value=date.today().replace(day=1), key="logos_r_ini")
+    with r3:
+        d_fim = st.date_input("Até:", value=date.today(), key="logos_r_fim")
+    with r4:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if st.button("🗺️ Ver Rota", key="logos_btn_rota", use_container_width=True,
+                     disabled=bool(st.session_state.get("_logos_rota_loading"))):
+            vid = opcoes[sel].get("idveiculo") or opcoes[sel].get("id")
+            st.session_state["_logos_rota_loading"] = True
+            st.session_state["_logos_rota_error"]   = None
+            threading.Thread(
+                target=_thread_buscar_rota,
+                args=(vid, d_ini.strftime("%d/%m/%Y 00:00"), d_fim.strftime("%d/%m/%Y 23:59")),
+                daemon=True
+            ).start()
+            st.rerun()
+
+    _logos_status_rota()
+
+    hist = st.session_state.get("logos_rota", [])
+    if not hist:
+        return
+
+    # Mapa de rota
+    coords = []
+    for p in hist:
+        lt = p.get("latitude") or p.get("lat") or p.get("Latitude")
+        ln = p.get("longitude") or p.get("lon") or p.get("lng") or p.get("Longitude")
+        if lt and ln:
+            try:
+                coords.append([float(lt), float(ln)])
+            except Exception:
+                pass
+
+    if coords:
+        vid_atual = st.session_state.get("logos_rota_vid")
+        v_sel     = next((v for v in veiculos if (v.get("idveiculo") or v.get("id")) == vid_atual), {})
+        cor_rota  = _CORES_VEICULOS[veiculos.index(v_sel) % len(_CORES_VEICULOS)] if v_sel in veiculos else "#4CC9F0"
+        desc_rota = v_sel.get("descricao", sel)
+
+        mapa_r = folium.Map(tiles="CartoDB dark_matter")
+        folium.PolyLine(coords, color=cor_rota, weight=4, opacity=0.9,
+                        tooltip=desc_rota).add_to(mapa_r)
+        folium.CircleMarker(coords[0],  radius=7, color="#00FF00", fill=True,
+                            fill_color="#00FF00", tooltip="▶ Início").add_to(mapa_r)
+        folium.CircleMarker(coords[-1], radius=7, color="#FF4757", fill=True,
+                            fill_color="#FF4757", tooltip="⏹ Fim").add_to(mapa_r)
+        lats = [c[0] for c in coords]; lons = [c[1] for c in coords]
+        mapa_r.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
+        st_folium(mapa_r, width="100%", height=480, key="logos_mapa_rota", returned_objects=[])
+        st.caption(f"📍 {len(coords)} posições registradas para {desc_rota}")
 
 
 # =============================================================================
