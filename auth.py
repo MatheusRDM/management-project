@@ -13,7 +13,8 @@ PAGINA_ARQUIVO = {
     "Dashboard de Certificados": "pages/01_Dashboard_Certificados.py",
     "Cronograma de Ensaios": "pages/02_Cronograma_Relatorios.py", 
     "EPR Litoral Pioneiro": "pages/03_EPR_Litoral_Pioneiro.py",
-    "Mapeamento de Projetos CAUQ": "pages/04_Mapeamento_CAUQ.py"
+    "Mapeamento de Projetos CAUQ": "pages/04_Mapeamento_CAUQ.py",
+    "Eco Rodovias": "pages/06_Eco_Rodovias.py"
 }
 
 def verificar_login(usuario, senha):

@@ -127,6 +127,15 @@ def main():
             "btn_key": "performance_btn",
             "arquivo": "pages/05_Performance_Contratos.py"
         },
+        {
+            "pagina": "Eco Rodovias",
+            "icon": "🛣️",
+            "titulo": "Eco Rodovias",
+            "descricao": "Contrato 6771 · BR-050 Minas Goiás · BR-365 Cerrado · Checklist APP",
+            "btn_label": "Acessar Eco Rodovias",
+            "btn_key": "eco_btn",
+            "arquivo": "pages/06_Eco_Rodovias.py"
+        },
     ]
 
     # Filtrar apenas as páginas que o usuário tem acesso
