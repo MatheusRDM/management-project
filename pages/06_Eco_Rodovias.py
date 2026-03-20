@@ -1270,34 +1270,42 @@ def _render_analise_periodo(itens):
                        pd.to_datetime(label_periodo.split(" a ")[0])).days + 1) if " a " in label_periodo else 1
 
     # ── Agrega KPIs por motorista ──────────────────────────────────────────────
+    # h_rastreio = total de pontos GPS × intervalo estimado (≈3 min/ponto)
+    # Isso equivale ao tempo TOTAL rastreado (motor ligado ou não).
+    # idle = vel ≤ 3 km/h (parado com ou sem ignição)
     if not df_pt.empty:
         agg = {}
         for mot, grp in df_pt.groupby("motorista"):
             n_total  = len(grp)
-            n_ign    = int(grp["ignicao"].sum()) if "ignicao" in grp else 0
-            n_idle   = int(grp["idle"].sum())    if "idle"    in grp else 0
+            n_mov    = int((grp["velocidade"] > 3).sum()) if "velocidade" in grp else n_total
+            n_idle   = n_total - n_mov  # parado = vel ≤ 3
             n_fds    = int((grp["dia_semana"] >= 5).sum()) if "dia_semana" in grp else 0
-            h_motor  = n_ign  * MINS_POR_PONTO / 60
-            h_idle   = n_idle * MINS_POR_PONTO / 60
-            idle_pct = round(h_idle / max(0.01, h_motor) * 100, 1)
-            fds_pct  = round(n_fds / max(1, n_total) * 100, 1)
-            km       = float(df_p.loc[df_p["motorista"] == mot, "km_periodo"].values[0]) \
-                       if mot in df_p["motorista"].values else 0.0
-            eff      = round(km / max(0.01, h_motor), 1)
-            custo_cb = round(km * CUSTO_KM, 2)
-            custo_id = round(h_idle * CUSTO_IDLE_H, 2)
+            h_rastreio = n_total * MINS_POR_PONTO / 60   # total horas rastreadas
+            h_mov      = n_mov   * MINS_POR_PONTO / 60   # horas em movimento
+            h_idle     = n_idle  * MINS_POR_PONTO / 60   # horas parado
+            idle_pct   = round(h_idle / max(0.1, h_rastreio) * 100, 1)
+            fds_pct    = round(n_fds / max(1, n_total) * 100, 1)
+            km         = float(df_p.loc[df_p["motorista"] == mot, "km_periodo"].values[0]) \
+                         if mot in df_p["motorista"].values else 0.0
+            # Eficiência = km / horas em MOVIMENTO (não total)
+            # Cap em 120 km/h (máx razoável rodovia)
+            eff_raw    = km / max(0.1, h_mov)
+            eff        = round(min(eff_raw, 120.0), 1)
+            custo_cb   = round(km * CUSTO_KM, 2)
+            custo_id   = round(h_idle * CUSTO_IDLE_H, 2)
             agg[mot] = {
-                "motorista": mot,
-                "km_periodo": km,
-                "h_motor":    round(h_motor, 1),
-                "h_idle":     round(h_idle, 1),
-                "idle_pct":   idle_pct,
-                "fds_pct":    fds_pct,
-                "n_fds":      n_fds,
-                "efficiency": eff,
-                "custo_cb":   custo_cb,
-                "custo_idle": custo_id,
-                "custo_total":round(custo_cb + custo_id, 2),
+                "motorista":   mot,
+                "km_periodo":  km,
+                "h_rastreio":  round(h_rastreio, 1),
+                "h_mov":       round(h_mov, 1),
+                "h_idle":      round(h_idle, 1),
+                "idle_pct":    idle_pct,
+                "fds_pct":     fds_pct,
+                "n_fds":       n_fds,
+                "efficiency":  eff,
+                "custo_cb":    custo_cb,
+                "custo_idle":  custo_id,
+                "custo_total": round(custo_cb + custo_id, 2),
             }
         df_mot = pd.DataFrame(list(agg.values()))
     else:
@@ -1461,8 +1469,8 @@ def _render_analise_periodo(itens):
     # SEÇÃO 3 — 📊 SCORE DE EFICIÊNCIA
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 📊 Score de Eficiência — km por hora de motor ligado")
-    st.caption("Quanto maior = melhor uso do tempo com motor ligado. Baixo = muito idle ou viagens curtas.")
+    st.markdown("## 📊 Score de Eficiência — km por hora em movimento")
+    st.caption("km / horas com vel >3 km/h (cap 120 km/h). Baixo = viagens curtas · Alto = rodovia contínua.")
 
     if not df_mot.empty:
         col_e1, col_e2 = st.columns(2)
@@ -1479,14 +1487,14 @@ def _render_analise_periodo(itens):
                 text=[f"{v:.1f} km/h" for v in df_eff["efficiency"]],
                 textposition="outside",
                 textfont=dict(size=10, color=_C["text"]),
-                hovertemplate="<b>%{y}</b>: %{x:.1f} km/h de motor ligado<extra></extra>",
+                hovertemplate="<b>%{y}</b>: %{x:.1f} km/h em movimento<extra></extra>",
             ))
             fig_eff.add_vline(x=media_eff, line_dash="dash", line_color=_C["acc1"],
                               annotation_text=f"Média: {media_eff:.1f}",
                               annotation_font_color=_C["acc1"])
             fig_eff.update_layout(
                 **_BASE,
-                title=dict(text="⚡ Eficiência: km por hora de motor ligado",
+                title=dict(text="⚡ Eficiência: km por hora em movimento",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=max(400, len(df_eff) * 22),
                 xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1543,7 +1551,7 @@ def _render_analise_periodo(itens):
         col_i1, col_i2 = st.columns(2)
 
         with col_i1:
-            df_idle_r = df_mot[df_mot["h_motor"] > 0].sort_values("idle_pct", ascending=True)
+            df_idle_r = df_mot[df_mot["h_rastreio"] > 0].sort_values("idle_pct", ascending=True)
             cores_idle = [
                 _C["eco135"] if v <= LIMIAR_IDLE_OK
                 else (_C["acc1"] if v <= LIMIAR_IDLE_AL else _C["acc2"])
@@ -1927,9 +1935,10 @@ def _render_analise_periodo(itens):
             df_tab_mot["idle_pct"] = df_tab_mot["idle_pct"].apply(lambda x: f"{x:.1f}%")
             df_tab_mot["fds_pct"]  = df_tab_mot["fds_pct"].apply(lambda x: f"{x:.1f}%")
             df_tab_mot = df_tab_mot.rename(columns={
-                "motorista":"Motorista","km_periodo":"Km total","h_motor":"H motor",
-                "h_idle":"H idle","idle_pct":"Idle %","fds_pct":"FDS %",
-                "n_fds":"Reg FDS","efficiency":"km/h motor",
+                "motorista":"Motorista","km_periodo":"Km total",
+                "h_rastreio":"H rastreio","h_mov":"H movimento","h_idle":"H idle",
+                "idle_pct":"Idle %","fds_pct":"FDS %",
+                "n_fds":"Reg FDS","efficiency":"km/h mov",
                 "custo_cb":"Custo CB (R$)","custo_idle":"Custo Idle (R$)","custo_total":"Custo Total (R$)",
             })
             st.dataframe(df_tab_mot, use_container_width=True, hide_index=True, height=500)
