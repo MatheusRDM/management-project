@@ -671,6 +671,45 @@ def _logos_get_rota(sess, idveiculo, d_ini, d_fim):
     return d if isinstance(d, list) else d.get("data", [])
 
 
+def _km_from_hist(hist):
+    """
+    Calcula km percorridos no histórico usando odômetro (max-min de valores > 0).
+    Se odômetro indisponível, usa Haversine sobre as coordenadas GPS.
+    """
+    import math
+
+    # Tenta odômetro: max - min de valores não-zero
+    odos = [int(p.get("pos_odometro") or 0) for p in hist]
+    odos_validos = [o for o in odos if o > 0]
+    if odos_validos:
+        return max(odos_validos) - min(odos_validos)
+
+    # Fallback: soma Haversine entre pontos consecutivos
+    def _hav(lat1, lon1, lat2, lon2):
+        R = 6371.0
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+        return R * 2 * math.asin(math.sqrt(a))
+
+    coords = []
+    for p in hist:
+        try:
+            lt = float(p.get("pos_coordenada_latitude") or 0)
+            ln = float(p.get("pos_coordenada_longitude") or 0)
+            if lt and ln:
+                coords.append((lt, ln))
+        except Exception:
+            pass
+
+    if len(coords) < 2:
+        return 0
+
+    total = sum(_hav(coords[i][0], coords[i][1], coords[i+1][0], coords[i+1][1])
+                for i in range(len(coords) - 1))
+    return round(total)
+
+
 def _parse_eco(v, i):
     """Normaliza um veículo ECO para dict de analytics."""
     desc  = v.get("descricaovel", f"V{i}")
@@ -984,9 +1023,7 @@ def _render_rota_individual(itens):
     desc_rota = st.session_state.get("logos_rota_sel", sel)
 
     # Cards da rota
-    odo_ini = hist[0].get("pos_odometro", 0) or 0
-    odo_fim = hist[-1].get("pos_odometro", 0) or 0
-    km_rota = max(0, int(odo_fim) - int(odo_ini))
+    km_rota = _km_from_hist(hist)
     c1, c2, c3 = st.columns(3)
     c1.metric("Posições GPS", len(coords))
     c2.metric("Km percorridos", f"{km_rota:,} km")
@@ -1063,9 +1100,7 @@ def _render_analise_periodo(itens):
                         hist = []
 
                     if hist:
-                        odo_ini = int(hist[0].get("pos_odometro") or 0)
-                        odo_fim = int(hist[-1].get("pos_odometro") or 0)
-                        km = max(0, odo_fim - odo_ini)
+                        km = _km_from_hist(hist)
                         cidades = list(dict.fromkeys(
                             p.get("pos_end_cidade","") for p in hist
                             if p.get("pos_end_cidade")
@@ -1346,6 +1381,74 @@ def _render_analise_periodo(itens):
                     yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9)),
                 )
                 st.plotly_chart(fig_med, use_container_width=True, config=_NO_INTERACT)
+
+    # ── Row 4: Ranking fim de semana + Horas por motorista ───────────────────
+    if not df_pt.empty and "dia_semana" in df_pt.columns:
+        col7, col8 = st.columns(2)
+
+        with col7:
+            # Quem trabalha mais no FDS: contagem de registros Sáb+Dom por motorista
+            df_fds = df_pt[df_pt["dia_semana"] >= 5]
+            if not df_fds.empty:
+                fds_mot = (df_fds.groupby("motorista").size()
+                                  .reset_index(name="registros_fds")
+                                  .sort_values("registros_fds", ascending=True)
+                                  .tail(15))
+                tot_por_mot = df_pt.groupby("motorista").size().reindex(fds_mot["motorista"]).fillna(1)
+                fds_mot["pct_fds"] = (fds_mot["registros_fds"].values / tot_por_mot.values * 100).round(1)
+                fig_fds = go.Figure(go.Bar(
+                    x=fds_mot["registros_fds"], y=fds_mot["motorista"],
+                    orientation="h",
+                    marker=dict(
+                        color=fds_mot["registros_fds"],
+                        colorscale=[[0,"#3a1020"],[0.5,"#A0304A"],[1,"#FF6B6B"]],
+                        line_width=0,
+                    ),
+                    text=[f"{r} reg · {p:.0f}%" for r, p in zip(fds_mot["registros_fds"], fds_mot["pct_fds"])],
+                    textposition="outside",
+                    textfont=dict(size=10, color=_C["text"]),
+                    hovertemplate="<b>%{y}</b><br>%{x} registros FDS (%{text})<extra></extra>",
+                    customdata=fds_mot["pct_fds"],
+                ))
+                fig_fds.update_layout(
+                    **_BASE,
+                    title=dict(text="🚨 Quem mais trabalha no Fim de Semana", font=dict(size=13, color=_C["text"]), x=0),
+                    height=max(300, len(fds_mot) * 24),
+                    xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
+                    yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9)),
+                )
+                st.plotly_chart(fig_fds, use_container_width=True, config=_NO_INTERACT)
+
+        with col8:
+            # Tempo de ignição ligada por motorista (horas estimadas)
+            if "ignicao" in df_pt.columns and "hora" in df_pt.columns:
+                # Cada registro = intervalo de ~5min (estimativa típica Logos)
+                df_lig = df_pt[df_pt["ignicao"] == True]
+                if not df_lig.empty:
+                    # Frequência de coleta típica: ~2-5 min → estimamos 3 min/ponto
+                    tempo_mot = (df_lig.groupby("motorista").size() * 3 / 60
+                                 ).reset_index(name="horas_ligado").sort_values("horas_ligado", ascending=True).tail(15)
+                    fig_lig = go.Figure(go.Bar(
+                        x=tempo_mot["horas_ligado"], y=tempo_mot["motorista"],
+                        orientation="h",
+                        marker=dict(
+                            color=tempo_mot["horas_ligado"],
+                            colorscale=[[0,"#132840"],[0.5,"#1E6B9E"],[1,"#4CC9F0"]],
+                            line_width=0,
+                        ),
+                        text=[f"{h:.0f}h" for h in tempo_mot["horas_ligado"]],
+                        textposition="outside",
+                        textfont=dict(size=10, color=_C["text"]),
+                        hovertemplate="<b>%{y}</b>: ~%{x:.0f}h com ignição ligada<extra></extra>",
+                    ))
+                    fig_lig.update_layout(
+                        **_BASE,
+                        title=dict(text="⏱️ Tempo estimado com ignição ligada (h)", font=dict(size=13, color=_C["text"]), x=0),
+                        height=max(300, len(tempo_mot) * 24),
+                        xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
+                        yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9)),
+                    )
+                    st.plotly_chart(fig_lig, use_container_width=True, config=_NO_INTERACT)
 
     # ── Tabela rotas ──────────────────────────────────────────────────────────
     st.markdown("#### 🛣️ Principais Rotas")
