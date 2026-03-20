@@ -547,7 +547,8 @@ def _aba_ensaios():
     if f_tipo: df_view = df_view[df_view["tipo"].isin(f_tipo)]
     if f_prof: df_view = df_view[df_view["profissional"].isin(f_prof)]
 
-    df_display = df_view[["data", "obra", "tipo", "profissional"]].sort_values("data_dt" if "data_dt" in df_view else "data", ascending=False)
+    _sort_col = "data_dt" if "data_dt" in df_view.columns else "data"
+    df_display = df_view.sort_values(_sort_col, ascending=False)[["data", "obra", "tipo", "profissional"]]
     df_display.columns = ["Data", "Categoria", "Tipo", "Profissional/Projeto"]
     st.dataframe(df_display, use_container_width=True, hide_index=True, height=300)
     st.caption(f"{len(df_display)} registro(s) exibido(s) de {len(df)} total")
