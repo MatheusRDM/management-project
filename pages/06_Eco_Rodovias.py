@@ -713,13 +713,14 @@ def _pick(d, fields, default=None):
 
 def _km_from_hist(hist):
     """
-    Calcula km percorridos no histórico.
-    1) Tenta odômetro (max-min): detecta campo automaticamente.
-    2) Fallback Haversine sobre coordenadas GPS.
+    Calcula km percorridos no histórico — 3 métodos em cascata:
+    1) Odômetro (max-min): detecta campo automaticamente.
+    2) Velocidade × tempo: Σ(vel_km/h × intervalo_min/60).
+    3) Fallback Haversine sobre coordenadas GPS.
     """
     import math
 
-    # Tenta odômetro com detecção automática de campo
+    # ── Método 1: Odômetro (max - min) ────────────────────────────────────────
     odos = []
     for p in hist:
         v = _pick(p, _HIST_ODO_FIELDS)
@@ -729,10 +730,36 @@ def _km_from_hist(hist):
                 odos.append(iv)
         except Exception:
             pass
-    if odos:
+    if odos and (max(odos) - min(odos)) > 0:
         return max(odos) - min(odos)
 
-    # Fallback: Haversine
+    # ── Método 2: Velocidade × tempo ─────────────────────────────────────────
+    # Ordena por timestamp, calcula intervalo real entre pontos
+    pontos_vt = []
+    for p in hist:
+        try:
+            dt_str = str(_pick(p, _HIST_DT_FIELDS) or "")
+            vel    = float(_pick(p, _HIST_VEL_FIELDS) or 0)
+            if dt_str and vel >= 0:
+                dt = pd.to_datetime(dt_str)
+                pontos_vt.append((dt, vel))
+        except Exception:
+            pass
+
+    if len(pontos_vt) >= 2:
+        pontos_vt.sort(key=lambda x: x[0])
+        km_vel = 0.0
+        for i in range(1, len(pontos_vt)):
+            dt_prev, vel_prev = pontos_vt[i-1]
+            dt_curr, _        = pontos_vt[i]
+            delta_h = (dt_curr - dt_prev).total_seconds() / 3600.0
+            # Limita a 15 min entre pontos (ignora gaps longos = veículo parado)
+            delta_h = min(delta_h, 0.25)
+            km_vel += vel_prev * delta_h
+        if km_vel > 1:
+            return round(km_vel)
+
+    # ── Método 3: Haversine sobre GPS ────────────────────────────────────────
     def _hav(lat1, lon1, lat2, lon2):
         R = 6371.0
         dlat = math.radians(lat2 - lat1)
@@ -1240,6 +1267,16 @@ def _render_analise_periodo(itens):
             f"a última posição conhecida dos veículos é **{_d_max.strftime('%d/%m/%Y')}**."
         )
         return
+
+    # Se tem pontos GPS mas km=0, mostrar aviso útil
+    if total_km == 0 and not df_pt.empty:
+        total_regs = df_p["registros"].sum()
+        st.warning(
+            f"⚠️ {total_regs} registros GPS encontrados, mas km calculado = 0. "
+            f"Isso pode significar que o campo odômetro está zerado na API. "
+            f"Usando velocidade × tempo como método alternativo..."
+        )
+
     # ── Métricas base ──────────────────────────────────────────────────────────
     # ── Debug: campos reais do historicoposicao ────────────────────────────────
     _sample = st.session_state.get("logos_hist_sample")
