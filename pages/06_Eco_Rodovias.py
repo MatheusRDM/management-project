@@ -759,11 +759,25 @@ def _km_from_hist(hist):
     return round(total)
 
 
+def _normalizar_contrato(s: str) -> str:
+    """
+    Canonicaliza nomes de contrato com variações de separador.
+    ECO 050/CERRADO | ECO-050/CERRADO | ECO050/CERRADO → ECO-050/CERRADO
+    ECO 135 | ECO-135 | ECO135 → ECO-135
+    """
+    s = s.strip().upper()
+    # ECO[espaço|-|nada]NNN → ECO-NNN
+    s = _re.sub(r"ECO[\s\-]?(\d+)", r"ECO-\1", s)
+    # remove espaços ao redor da barra
+    s = _re.sub(r"\s*/\s*", "/", s)
+    return s
+
+
 def _parse_eco(v, i):
     """Normaliza um veículo ECO para dict de analytics."""
     desc  = v.get("descricaovel", f"V{i}")
     parts = desc.split(" - ", 1)
-    contrato  = parts[0].strip() if len(parts) > 1 else desc
+    contrato  = _normalizar_contrato(parts[0].strip() if len(parts) > 1 else desc)
     motorista = parts[1].strip() if len(parts) > 1 else desc
     dt = str(v.get("pos_dt_posicao", ""))[:10]
     try:
@@ -1368,9 +1382,10 @@ def _render_analise_periodo(itens):
         # Alerta 2: Km/dia excessivo
         with a2:
             if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
-                df_daily_v = (df_pt.groupby(["motorista","data"])["odometro"]
+                _dfo = df_pt[df_pt["odometro"] > 0]
+                df_daily_v = (_dfo.groupby(["motorista","data"])["odometro"]
                                     .agg(["max","min"]).reset_index())
-                df_daily_v["km_dia"] = (df_daily_v["max"] - df_daily_v["min"]).clip(lower=0)
+                df_daily_v["km_dia"] = (df_daily_v["max"] - df_daily_v["min"]).clip(lower=0, upper=1500)
                 dias_alarme = df_daily_v[df_daily_v["km_dia"] > LIMIAR_KM_AL].sort_values("km_dia", ascending=False)
                 dias_atencao = df_daily_v[(df_daily_v["km_dia"] > LIMIAR_KM_WA) &
                                           (df_daily_v["km_dia"] <= LIMIAR_KM_AL)]
@@ -1617,8 +1632,9 @@ def _render_analise_periodo(itens):
 
     with col_k2:
         if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
-            df_mv = (df_pt.groupby(["motorista","data"])["odometro"].agg(["max","min"]).reset_index())
-            df_mv["km_d"] = (df_mv["max"] - df_mv["min"]).clip(lower=0)
+            _dfo2 = df_pt[df_pt["odometro"] > 0]
+            df_mv = (_dfo2.groupby(["motorista","data"])["odometro"].agg(["max","min"]).reset_index())
+            df_mv["km_d"] = (df_mv["max"] - df_mv["min"]).clip(lower=0, upper=1500)
             df_media = (df_mv.groupby("motorista")["km_d"].mean().reset_index()
                               .sort_values("km_d", ascending=True))
             cores_kmdia = [
@@ -1652,8 +1668,9 @@ def _render_analise_periodo(itens):
 
     # ── Km por dia — linha temporal ────────────────────────────────────────────
     if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
-        df_daily2 = (df_pt.groupby(["data","motorista"])["odometro"].agg(["max","min"]).reset_index())
-        df_daily2["km_d"] = (df_daily2["max"] - df_daily2["min"]).clip(lower=0)
+        _dfo3 = df_pt[df_pt["odometro"] > 0]
+        df_daily2 = (_dfo3.groupby(["data","motorista"])["odometro"].agg(["max","min"]).reset_index())
+        df_daily2["km_d"] = (df_daily2["max"] - df_daily2["min"]).clip(lower=0, upper=1500)
         df_agg2 = df_daily2.groupby("data")["km_d"].sum().reset_index().sort_values("data")
         fig_kmd = go.Figure(go.Scatter(
             x=df_agg2["data"].astype(str), y=df_agg2["km_d"],
@@ -1928,8 +1945,9 @@ def _render_analise_periodo(itens):
 
     with tab_t3:
         if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
-            df_dv = (df_pt.groupby(["motorista","data"])["odometro"].agg(["max","min"]).reset_index())
-            df_dv["km_dia"] = (df_dv["max"] - df_dv["min"]).clip(lower=0)
+            _dfo4 = df_pt[df_pt["odometro"] > 0]
+            df_dv = (_dfo4.groupby(["motorista","data"])["odometro"].agg(["max","min"]).reset_index())
+            df_dv["km_dia"] = (df_dv["max"] - df_dv["min"]).clip(lower=0, upper=1500)
             df_exc = df_dv[df_dv["km_dia"] > LIMIAR_KM_WA].sort_values("km_dia", ascending=False).copy()
             df_exc["status"] = df_exc["km_dia"].apply(
                 lambda x: "🔴 ALARME >500km" if x > LIMIAR_KM_AL else "🟡 ATENÇÃO >300km"
