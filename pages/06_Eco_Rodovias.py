@@ -671,126 +671,207 @@ def _logos_get_rota(sess, idveiculo, d_ini, d_fim):
     return d if isinstance(d, list) else d.get("data", [])
 
 
-@st.fragment
-def _aba_rastreamento():
-    # ── Controles ─────────────────────────────────────────────────────────────
-    atu = st.session_state.get("logos_ultima_atualizacao")
-    c1, c2 = st.columns([5, 1])
-    with c1:
-        if atu:
-            st.caption(f"✅ {len(st.session_state.get('logos_veiculos',[]))} veículos ECO · Atualizado: {atu}")
-    with c2:
-        atualizar = st.button("🔄 Atualizar", key="logos_btn", use_container_width=True)
+def _parse_eco(v, i):
+    """Normaliza um veículo ECO para dict de analytics."""
+    desc  = v.get("descricaovel", f"V{i}")
+    parts = desc.split(" - ", 1)
+    contrato  = parts[0].strip() if len(parts) > 1 else desc
+    motorista = parts[1].strip() if len(parts) > 1 else desc
+    dt = str(v.get("pos_dt_posicao", ""))[:10]
+    try:
+        from datetime import date as _d
+        sugest = _d.fromisoformat(dt) if dt else date.today()
+    except Exception:
+        sugest = date.today()
+    return {
+        "contrato":       contrato,
+        "motorista":      motorista,
+        "desc":           desc,
+        "placa":          v.get("placavel", "—"),
+        "odometro":       int(v.get("pos_odometro") or 0),
+        "velocidade":     v.get("pos_velocidade", 0),
+        "ignicao":        bool(v.get("pos_ignicao")),
+        "uf":             v.get("pos_end_uf", "—"),
+        "cidade":         v.get("pos_end_cidade", "—"),
+        "localizacao":    v.get("localizacao", "—"),
+        "dt_posicao":     str(v.get("pos_dt_posicao", ""))[:16].replace("T", " "),
+        "ultima_data":    sugest,
+        "tempo_dir_h":    round((v.get("pos_tempo_dirigindo") or 0) / 3600, 1),
+        "tempo_par_min":  round((v.get("pos_tempo_parado") or 0) / 60, 1),
+        "horimetro":      v.get("pos_horimetro", 0),
+        "bateria":        v.get("pos_bateria_externa", 0),
+        "lat":            v.get("pos_coordenada_latitude"),
+        "lon":            v.get("pos_coordenada_longitude"),
+        "idvei":          v.get("pos_idvei"),
+        "cor":            _CORES_VEICULOS[i % len(_CORES_VEICULOS)],
+    }
 
-    if atualizar:
-        with st.spinner("Conectando ao Logos e buscando veículos ECO..."):
-            try:
-                sess, idcli = _logos_login()
-                veiculos = _logos_get_eco(sess, idcli)
-                if not veiculos:
-                    st.warning("Nenhum veículo com 'ECO' no nome encontrado.")
-                    return
-                st.session_state["logos_veiculos"]           = veiculos
-                st.session_state["logos_ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-                st.session_state.pop("logos_rota", None)
-            except Exception as e:
-                st.error(f"❌ {e}")
-                return
 
-    veiculos = st.session_state.get("logos_veiculos", [])
-    if not veiculos:
-        st.info("Clique em **🔄 Atualizar** para buscar os veículos ECO do Logos Rastreamento.")
-        return
-
-    # ── Mapa: última posição ──────────────────────────────────────────────────
+def _render_mapa_posicao(itens):
     mapa   = folium.Map(location=[-18.5, -47.5], zoom_start=6, tiles="CartoDB dark_matter")
     bounds = []
-    for i, v in enumerate(veiculos):
-        cor   = _CORES_VEICULOS[i % len(_CORES_VEICULOS)]
-        desc  = v.get("descricaovel", f"Veículo {i+1}")
-        placa = v.get("placavel", "")
-        lat   = v.get("pos_coordenada_latitude")
-        lon   = v.get("pos_coordenada_longitude")
-        ign   = "🟢" if v.get("pos_ignicao") else "🔴"
-        vel   = v.get("pos_velocidade", 0)
-        loc   = v.get("localizacao", "")
-        if lat and lon:
+    for it in itens:
+        if it["lat"] and it["lon"]:
             try:
-                lt, ln = float(lat), float(lon)
-                popup_html = (f"<b style='color:{cor}'>{desc}</b><br>"
-                              f"Placa: {placa}<br>Ignição: {ign}<br>"
-                              f"Velocidade: {vel} km/h<br>{loc}")
+                lt, ln = float(it["lat"]), float(it["lon"])
+                ign = "🟢" if it["ignicao"] else "🔴"
+                popup_html = (
+                    f"<b style='color:{it['cor']}'>{it['desc']}</b><br>"
+                    f"Placa: {it['placa']}<br>Ignição: {ign}<br>"
+                    f"Velocidade: {it['velocidade']} km/h<br>"
+                    f"Hodômetro: {it['odometro']:,} km<br>{it['localizacao']}"
+                )
                 folium.CircleMarker(
-                    [lt, ln], radius=8, color=cor, fill=True,
-                    fill_color=cor, fill_opacity=0.9,
-                    tooltip=f"{ign} {desc} — {vel} km/h",
-                    popup=folium.Popup(popup_html, max_width=260),
+                    [lt, ln], radius=8, color=it["cor"], fill=True,
+                    fill_color=it["cor"], fill_opacity=0.9,
+                    tooltip=f"{ign} {it['motorista']} — {it['velocidade']} km/h",
+                    popup=folium.Popup(popup_html, max_width=280),
                 ).add_to(mapa)
                 bounds.append([lt, ln])
             except Exception:
                 pass
-
     if bounds:
         lats = [c[0] for c in bounds]; lons = [c[1] for c in bounds]
         mapa.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
-    st_folium(mapa, width="100%", height=430, key="logos_mapa_pos", returned_objects=[])
+    st_folium(mapa, width="100%", height=450, key="logos_mapa_pos", returned_objects=[])
 
-    # ── Tabela veículos ───────────────────────────────────────────────────────
-    rows = [{
-        "Veículo":        v.get("descricaovel", "—"),
-        "Placa":          v.get("placavel", "—"),
-        "Última posição": str(v.get("pos_dt_posicao", "—"))[:16].replace("T", " "),
-        "Vel. km/h":      v.get("pos_velocidade", "—"),
-        "Hodômetro km":   v.get("pos_odometro", "—"),
-        "Ignição":        "🟢 Ligado" if v.get("pos_ignicao") else "🔴 Desligado",
-        "Localização":    v.get("localizacao", "—"),
-    } for v in veiculos]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=260)
 
-    # ── Rota detalhada ────────────────────────────────────────────────────────
+def _render_estatisticas(itens):
+    import plotly.express as px
+
+    df = pd.DataFrame(itens)
+
+    # ── Cards ─────────────────────────────────────────────────────────────────
+    ligados   = df["ignicao"].sum()
+    total_km  = df["odometro"].sum()
+    n_estados = df["uf"].nunique()
+    n_cidades = df["cidade"].nunique()
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    for col, val, label in [
+        (c1, len(df),       "Total ECO"),
+        (c2, int(ligados),  "🟢 Ligados"),
+        (c3, int(len(df)-ligados), "🔴 Desligados"),
+        (c4, n_estados,     "Estados"),
+        (c5, n_cidades,     "Cidades"),
+    ]:
+        col.metric(label, val)
+
     st.divider()
-    st.markdown("**Rota detalhada — selecione um veículo**")
-    # Monta label com última data conhecida para guiar o usuário
-    def _label(v, i):
-        dt = str(v.get("pos_dt_posicao", ""))[:10]
-        return f"{v.get('descricaovel', f'V{i}')}  [{dt}]"
-    opcoes = {_label(v, i): v for i, v in enumerate(veiculos)}
 
+    # ── Hodômetro por motorista ────────────────────────────────────────────────
+    st.markdown("#### 🔢 Hodômetro por Motorista")
+    df_odo = df[["motorista","odometro","contrato"]].sort_values("odometro", ascending=True)
+    fig_odo = px.bar(
+        df_odo, x="odometro", y="motorista", orientation="h",
+        color="contrato", text="odometro",
+        color_discrete_sequence=px.colors.qualitative.Bold,
+        labels={"odometro":"Hodômetro (km)","motorista":"","contrato":"Contrato"},
+    )
+    fig_odo.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+    fig_odo.update_layout(
+        height=max(400, len(df)*22), template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", y=1.02), margin=dict(l=10,r=80,t=10,b=10),
+        xaxis=dict(tickformat=","),
+    )
+    st.plotly_chart(fig_odo, use_container_width=True)
+
+    col1, col2 = st.columns(2)
+
+    # ── Distribuição por Contrato ──────────────────────────────────────────────
+    with col1:
+        st.markdown("#### 📋 Por Contrato")
+        cnt_contrato = df.groupby("contrato").agg(
+            veiculos=("motorista","count"),
+            odo_total=("odometro","sum"),
+            ligados=("ignicao","sum"),
+        ).reset_index()
+        fig_cont = px.pie(
+            cnt_contrato, values="veiculos", names="contrato",
+            color_discrete_sequence=px.colors.qualitative.Bold,
+            hole=0.45,
+        )
+        fig_cont.update_layout(template="plotly_dark",
+                               paper_bgcolor="rgba(0,0,0,0)", height=300,
+                               margin=dict(l=10,r=10,t=10,b=10))
+        st.plotly_chart(fig_cont, use_container_width=True)
+
+    # ── Distribuição por Estado ────────────────────────────────────────────────
+    with col2:
+        st.markdown("#### 🗺️ Por Estado")
+        cnt_uf = df.groupby("uf").size().reset_index(name="veiculos").sort_values("veiculos")
+        fig_uf = px.bar(
+            cnt_uf, x="veiculos", y="uf", orientation="h",
+            text="veiculos", color="veiculos",
+            color_continuous_scale="Greens",
+            labels={"veiculos":"Veículos","uf":"Estado"},
+        )
+        fig_uf.update_layout(template="plotly_dark", height=300,
+                             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                             coloraxis_showscale=False, margin=dict(l=10,r=40,t=10,b=10))
+        st.plotly_chart(fig_uf, use_container_width=True)
+
+    # ── Principais Cidades ─────────────────────────────────────────────────────
+    st.markdown("#### 🏙️ Principais Regiões")
+    cnt_cid = df.groupby(["cidade","uf"]).size().reset_index(name="veiculos").sort_values("veiculos", ascending=False).head(15)
+    cnt_cid["cidade_uf"] = cnt_cid["cidade"] + " — " + cnt_cid["uf"]
+    fig_cid = px.bar(
+        cnt_cid.sort_values("veiculos"), x="veiculos", y="cidade_uf", orientation="h",
+        text="veiculos", color="veiculos",
+        color_continuous_scale="Teal",
+        labels={"veiculos":"Veículos","cidade_uf":""},
+    )
+    fig_cid.update_layout(template="plotly_dark", height=400,
+                          paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                          coloraxis_showscale=False, margin=dict(l=10,r=40,t=10,b=10))
+    st.plotly_chart(fig_cid, use_container_width=True)
+
+    # ── Tabela completa ────────────────────────────────────────────────────────
+    st.markdown("#### 📋 Tabela Completa")
+    df_tab = df[["contrato","motorista","placa","odometro","velocidade",
+                 "tempo_dir_h","cidade","uf","dt_posicao","ignicao"]].copy()
+    df_tab["ignicao"] = df_tab["ignicao"].map({True:"🟢 Ligado", False:"🔴 Desligado"})
+    df_tab = df_tab.rename(columns={
+        "contrato":"Contrato","motorista":"Motorista","placa":"Placa",
+        "odometro":"Hodômetro km","velocidade":"Vel. km/h",
+        "tempo_dir_h":"Tempo dirigindo (h)","cidade":"Cidade","uf":"UF",
+        "dt_posicao":"Última posição","ignicao":"Ignição",
+    })
+    st.dataframe(df_tab.sort_values("Hodômetro km", ascending=False),
+                 use_container_width=True, hide_index=True, height=400)
+
+
+def _render_rota_individual(itens):
+    st.markdown("**Selecione o veículo e o período:**")
+    opcoes = {f"{it['motorista']}  [{it['ultima_data']}]": it for it in itens}
     r1, r2, r3, r4 = st.columns([3, 2, 2, 1])
     with r1:
-        sel = st.selectbox("Veículo [última data]:", list(opcoes.keys()), key="logos_sel_v")
+        sel = st.selectbox("Motorista [última data]:", list(opcoes.keys()), key="logos_sel_v")
+    it_sel = opcoes[sel]
     with r2:
-        # Sugere data baseada na última posição do veículo selecionado
-        v_sel_data = opcoes[sel]
-        ultima_dt  = str(v_sel_data.get("pos_dt_posicao", ""))[:10]
-        try:
-            from datetime import date as _date
-            sugest = _date.fromisoformat(ultima_dt) if ultima_dt else date.today()
-        except Exception:
-            sugest = date.today()
-        d_ini = st.date_input("De:", value=sugest, key="logos_r_ini")
+        d_ini = st.date_input("De:", value=it_sel["ultima_data"], key="logos_r_ini")
     with r3:
-        d_fim = st.date_input("Até:", value=sugest, key="logos_r_fim")
+        d_fim = st.date_input("Até:", value=it_sel["ultima_data"], key="logos_r_fim")
     with r4:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         ver_rota = st.button("🗺️ Ver Rota", key="logos_btn_rota", use_container_width=True)
 
     if ver_rota:
-        vid = opcoes[sel].get("pos_idvei")
-        with st.spinner(f"Buscando rota..."):
+        with st.spinner("Buscando rota..."):
             try:
                 sess2, _ = _logos_login()
                 hist = _logos_get_rota(
-                    sess2, vid,
+                    sess2, it_sel["idvei"],
                     d_ini.strftime("%Y-%m-%d 00:00"),
                     d_fim.strftime("%Y-%m-%d 23:59"),
                 )
                 if not hist:
-                    st.warning(f"Nenhuma posição encontrada para {d_ini} – {d_fim}. Tente outras datas.")
+                    st.warning(f"Nenhuma posição para {d_ini} – {d_fim}. Tente outras datas.")
                     return
                 st.session_state["logos_rota"]     = hist
                 st.session_state["logos_rota_sel"] = sel
-                st.session_state["logos_rota_idx"] = list(opcoes.keys()).index(sel)
+                st.session_state["logos_rota_cor"] = it_sel["cor"]
             except Exception as e:
                 st.error(f"❌ {e}")
                 return
@@ -800,31 +881,203 @@ def _aba_rastreamento():
         return
 
     coords = []
+    cidades_rota = []
     for p in hist:
-        lt = p.get("pos_coordenada_latitude") or p.get("latitude")
-        ln = p.get("pos_coordenada_longitude") or p.get("longitude")
+        lt = p.get("pos_coordenada_latitude")
+        ln = p.get("pos_coordenada_longitude")
         if lt and ln:
             try:
                 coords.append([float(lt), float(ln)])
             except Exception:
                 pass
+        cidade = p.get("pos_end_cidade", "")
+        if cidade and (not cidades_rota or cidades_rota[-1] != cidade):
+            cidades_rota.append(cidade)
 
-    if coords:
-        idx_sel   = st.session_state.get("logos_rota_idx", 0)
-        cor_rota  = _CORES_VEICULOS[idx_sel % len(_CORES_VEICULOS)]
-        desc_rota = st.session_state.get("logos_rota_sel", sel)
+    if not coords:
+        st.warning("Sem coordenadas válidas neste período.")
+        return
 
-        mapa_r = folium.Map(tiles="CartoDB dark_matter")
-        folium.PolyLine(coords, color=cor_rota, weight=4, opacity=0.9,
-                        tooltip=desc_rota).add_to(mapa_r)
-        folium.CircleMarker(coords[0],  radius=7, color="#00FF00", fill=True,
-                            fill_color="#00FF00", tooltip="▶ Início").add_to(mapa_r)
-        folium.CircleMarker(coords[-1], radius=7, color="#FF4757", fill=True,
-                            fill_color="#FF4757", tooltip="⏹ Fim").add_to(mapa_r)
-        lats = [c[0] for c in coords]; lons = [c[1] for c in coords]
-        mapa_r.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
-        st_folium(mapa_r, width="100%", height=480, key="logos_mapa_rota", returned_objects=[])
-        st.caption(f"📍 {len(coords)} posições registradas · {desc_rota}")
+    cor_rota  = st.session_state.get("logos_rota_cor", "#4CC9F0")
+    desc_rota = st.session_state.get("logos_rota_sel", sel)
+
+    # Cards da rota
+    odo_ini = hist[0].get("pos_odometro", 0) or 0
+    odo_fim = hist[-1].get("pos_odometro", 0) or 0
+    km_rota = max(0, int(odo_fim) - int(odo_ini))
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Posições GPS", len(coords))
+    c2.metric("Km percorridos", f"{km_rota:,} km")
+    c3.metric("Cidades passadas", len(set(cidades_rota)))
+
+    if cidades_rota:
+        st.caption("Rota: " + " → ".join(dict.fromkeys(cidades_rota)))
+
+    mapa_r = folium.Map(tiles="CartoDB dark_matter")
+    folium.PolyLine(coords, color=cor_rota, weight=4, opacity=0.9,
+                    tooltip=desc_rota).add_to(mapa_r)
+    folium.CircleMarker(coords[0],  radius=8, color="#00FF00", fill=True,
+                        fill_color="#00FF00", tooltip="▶ Início").add_to(mapa_r)
+    folium.CircleMarker(coords[-1], radius=8, color="#FF4757", fill=True,
+                        fill_color="#FF4757", tooltip="⏹ Fim").add_to(mapa_r)
+    lats = [c[0] for c in coords]; lons = [c[1] for c in coords]
+    mapa_r.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
+    st_folium(mapa_r, width="100%", height=500, key="logos_mapa_rota", returned_objects=[])
+
+
+def _render_analise_periodo(itens):
+    st.markdown("Busca o histórico de todos os veículos ECO em um período e gera estatísticas consolidadas.")
+    p1, p2, p3 = st.columns([2, 2, 1])
+    with p1:
+        pd_ini = st.date_input("Data início:", value=date.today().replace(day=1), key="logos_p_ini")
+    with p2:
+        pd_fim = st.date_input("Data fim:", value=date.today(), key="logos_p_fim")
+    with p3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        carregar = st.button("📊 Carregar Período", key="logos_btn_periodo", use_container_width=True)
+
+    if carregar:
+        resultados = []
+        prog = st.progress(0, text="Iniciando...")
+        with st.spinner("Buscando histórico de todos os veículos ECO..."):
+            try:
+                sess3, _ = _logos_login()
+                for idx, it in enumerate(itens):
+                    prog.progress((idx + 1) / len(itens),
+                                  text=f"Buscando {it['motorista']} ({idx+1}/{len(itens)})...")
+                    try:
+                        hist = _logos_get_rota(
+                            sess3, it["idvei"],
+                            pd_ini.strftime("%Y-%m-%d 00:00"),
+                            pd_fim.strftime("%Y-%m-%d 23:59"),
+                        )
+                    except Exception:
+                        hist = []
+
+                    if hist:
+                        odo_ini = int(hist[0].get("pos_odometro") or 0)
+                        odo_fim = int(hist[-1].get("pos_odometro") or 0)
+                        km = max(0, odo_fim - odo_ini)
+                        cidades = list(dict.fromkeys(
+                            p.get("pos_end_cidade","") for p in hist
+                            if p.get("pos_end_cidade")
+                        ))
+                        ufs = list(dict.fromkeys(
+                            p.get("pos_end_uf","") for p in hist
+                            if p.get("pos_end_uf")
+                        ))
+                        ign_on = sum(1 for p in hist if p.get("pos_ignicao"))
+                    else:
+                        km = 0; cidades = []; ufs = []; ign_on = 0
+
+                    resultados.append({
+                        "contrato":   it["contrato"],
+                        "motorista":  it["motorista"],
+                        "placa":      it["placa"],
+                        "km_periodo": km,
+                        "registros":  len(hist),
+                        "cidades":    len(set(cidades)),
+                        "estados":    ", ".join(ufs[:3]),
+                        "rota_resumo": " → ".join(list(dict.fromkeys(cidades))[:5]),
+                    })
+                prog.empty()
+                st.session_state["logos_periodo_result"] = resultados
+                st.session_state["logos_periodo_label"]  = f"{pd_ini} a {pd_fim}"
+            except Exception as e:
+                st.error(f"❌ {e}")
+                return
+
+    res = st.session_state.get("logos_periodo_result", [])
+    if not res:
+        return
+
+    import plotly.express as px
+    label_periodo = st.session_state.get("logos_periodo_label", "")
+    st.markdown(f"#### Resultados: {label_periodo}")
+
+    df_p = pd.DataFrame(res)
+    total_km = df_p["km_periodo"].sum()
+    ativos   = (df_p["registros"] > 0).sum()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total km (período)", f"{total_km:,}")
+    c2.metric("Veículos ativos", ativos)
+    c3.metric("Veículos sem dados", len(df_p) - ativos)
+
+    # Ranking km por motorista
+    fig_km = px.bar(
+        df_p.sort_values("km_periodo"), x="km_periodo", y="motorista",
+        orientation="h", text="km_periodo", color="contrato",
+        color_discrete_sequence=px.colors.qualitative.Bold,
+        labels={"km_periodo":"Km percorridos","motorista":"","contrato":"Contrato"},
+        title="Km percorridos por motorista no período",
+    )
+    fig_km.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+    fig_km.update_layout(
+        height=max(400, len(df_p)*22), template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=10,r=80,t=40,b=10), xaxis=dict(tickformat=","),
+    )
+    st.plotly_chart(fig_km, use_container_width=True)
+
+    # Principais rotas (resumo)
+    st.markdown("#### 🛣️ Principais Rotas")
+    df_rotas = df_p[df_p["rota_resumo"] != ""].sort_values("km_periodo", ascending=False)[
+        ["motorista","placa","km_periodo","rota_resumo","estados","cidades"]
+    ].rename(columns={
+        "motorista":"Motorista","placa":"Placa","km_periodo":"Km",
+        "rota_resumo":"Rota (resumo)","estados":"UFs","cidades":"N° Cidades",
+    })
+    st.dataframe(df_rotas, use_container_width=True, hide_index=True, height=400)
+
+
+@st.fragment
+def _aba_rastreamento():
+    atu = st.session_state.get("logos_ultima_atualizacao")
+    c1, c2 = st.columns([5, 1])
+    with c1:
+        if atu:
+            n = len(st.session_state.get("logos_veiculos", []))
+            st.caption(f"✅ {n} veículos ECO · Atualizado: {atu}")
+    with c2:
+        atualizar = st.button("🔄 Atualizar", key="logos_btn", use_container_width=True)
+
+    if atualizar:
+        with st.spinner("Conectando ao Logos..."):
+            try:
+                sess, idcli = _logos_login()
+                veiculos = _logos_get_eco(sess, idcli)
+                if not veiculos:
+                    st.warning("Nenhum veículo ECO encontrado.")
+                    return
+                st.session_state["logos_veiculos"]           = veiculos
+                st.session_state["logos_ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                st.session_state.pop("logos_rota", None)
+                st.session_state.pop("logos_periodo_result", None)
+            except Exception as e:
+                st.error(f"❌ {e}")
+                return
+
+    veiculos = st.session_state.get("logos_veiculos", [])
+    if not veiculos:
+        st.info("Clique em **🔄 Atualizar** para buscar os veículos ECO do Logos Rastreamento.")
+        return
+
+    itens = [_parse_eco(v, i) for i, v in enumerate(veiculos)]
+
+    tab_pos, tab_stats, tab_rota, tab_periodo = st.tabs([
+        "📍 Posição Atual",
+        "📊 Estatísticas",
+        "🛣️ Rota Individual",
+        "📅 Análise de Período",
+    ])
+    with tab_pos:
+        _render_mapa_posicao(itens)
+    with tab_stats:
+        _render_estatisticas(itens)
+    with tab_rota:
+        _render_rota_individual(itens)
+    with tab_periodo:
+        _render_analise_periodo(itens)
 
 
 # =============================================================================
