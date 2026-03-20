@@ -10,9 +10,14 @@ import streamlit as st
 import sys
 import os
 import json
+import re as _re
+import threading
+import requests
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import folium
+from streamlit_folium import st_folium
 from datetime import datetime, date
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -610,6 +615,200 @@ def _sidebar():
 # MAIN
 # =============================================================================
 
+# =============================================================================
+# LOGOS RASTREAMENTO — API
+# =============================================================================
+_LOGOS_BASE = "https://rastrear.logosrastreamento.com.br"
+_CORES_VEICULOS = [
+    "#FF6B35","#4CC9F0","#F7B731","#7BED9F","#FF4757",
+    "#A29BFE","#FD79A8","#00CEC9","#FDCB6E","#6C5CE7",
+]
+
+def _logos_criar_sessao():
+    try:
+        usuario = st.secrets["logos_usuario"]
+        senha   = st.secrets["logos_senha"]
+    except Exception:
+        usuario = "matheus.resende@afirmaevias.com.br"
+        senha   = "Rfp@39TH"
+
+    sess = requests.Session()
+    sess.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+    r = sess.get(f"{_LOGOS_BASE}/home", timeout=20)
+    m = _re.search(r'__RequestVerificationToken[^>]+value="([^"]+)"', r.text)
+    token = m.group(1) if m else ""
+    sess.post(f"{_LOGOS_BASE}/Identity/Account/Login", data={
+        "Input.UserName": usuario,
+        "Input.Password": senha,
+        "__RequestVerificationToken": token,
+    }, timeout=20, allow_redirects=True)
+    return sess
+
+
+def _logos_get_idcliente(sess):
+    for c in sess.cookies:
+        if c.name == "IDCLI":
+            return c.value
+    r = sess.get(f"{_LOGOS_BASE}/home", timeout=15)
+    m = _re.search(r"IDCLI\s*[=:]\s*['\"]?(\d+)", r.text)
+    return m.group(1) if m else None
+
+
+def _logos_veiculos_eco(sess, idcliente):
+    try:
+        r = sess.post(f"{_LOGOS_BASE}/api/ultimaposicao", json={
+            "idcliente": int(idcliente),
+            "texto": "", "placa": "", "serial": "",
+            "descricao": "", "grupoveiculo": "", "idsVeiculos": [],
+        }, timeout=30)
+        items = r.json() if isinstance(r.json(), list) else r.json().get("data", [])
+        return [v for v in items if "ECO" in str(v.get("descricao", "")).upper()]
+    except Exception:
+        return []
+
+
+def _logos_historico(sess, idveiculo, datainicio, datafinal):
+    try:
+        r = sess.post(f"{_LOGOS_BASE}/api/historicoposicao", json={
+            "idveiculo": idveiculo,
+            "datainicio": datainicio,
+            "datafinal":  datafinal,
+        }, timeout=90)
+        d = r.json()
+        return d if isinstance(d, list) else d.get("data", d.get("posicoes", []))
+    except Exception:
+        return []
+
+
+def _thread_buscar_logos(data_ini_str, data_fim_str):
+    try:
+        st.session_state["_logos_loading"] = True
+        st.session_state["_logos_error"]   = None
+
+        sess  = _logos_criar_sessao()
+        idcli = _logos_get_idcliente(sess)
+        if not idcli:
+            st.session_state["_logos_error"]   = "Falha no login. Verifique as credenciais."
+            st.session_state["_logos_loading"] = False
+            return
+
+        veiculos = _logos_veiculos_eco(sess, idcli)
+        if not veiculos:
+            st.session_state["_logos_error"]   = "Nenhum veículo ECO encontrado."
+            st.session_state["_logos_loading"] = False
+            return
+
+        resultado = []
+        for v in veiculos:
+            vid  = v.get("idveiculo") or v.get("id")
+            hist = _logos_historico(sess, vid, data_ini_str, data_fim_str) if vid else []
+            resultado.append({"veiculo": v, "historico": hist})
+
+        st.session_state["logos_dados"]              = resultado
+        st.session_state["logos_ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        st.session_state["_logos_loading"]           = False
+    except Exception as e:
+        st.session_state["_logos_error"]   = str(e)
+        st.session_state["_logos_loading"] = False
+
+
+# ─── Status bar (re-renderiza a cada 2s independentemente da página) ──────────
+@st.fragment(run_every=2)
+def _logos_status_bar():
+    if st.session_state.get("_logos_loading"):
+        st.info("🔄 Buscando dados dos veículos ECO no Logos... aguarde.")
+    elif st.session_state.get("_logos_error"):
+        st.error(f"❌ {st.session_state['_logos_error']}")
+    elif st.session_state.get("logos_ultima_atualizacao"):
+        n = len(st.session_state.get("logos_dados", []))
+        st.success(f"✅ {n} veículo(s) ECO carregados · {st.session_state['logos_ultima_atualizacao']}")
+    else:
+        st.caption("Clique em **🔄 Atualizar** para buscar os veículos ECO do Logos Rastreamento.")
+
+
+def _aba_rastreamento():
+    # ── Controles ─────────────────────────────────────────────────────────────
+    c1, c2, c3 = st.columns([2, 2, 1])
+    with c1:
+        d_ini = st.date_input("Data início:", value=date.today().replace(day=1), key="logos_d_ini")
+    with c2:
+        d_fim = st.date_input("Data fim:",    value=date.today(),                key="logos_d_fim")
+    with c3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Atualizar", key="logos_btn",
+                     use_container_width=True,
+                     disabled=bool(st.session_state.get("_logos_loading"))):
+            threading.Thread(
+                target=_thread_buscar_logos,
+                args=(d_ini.strftime("%d/%m/%Y 00:00"),
+                      d_fim.strftime("%d/%m/%Y 23:59")),
+                daemon=True
+            ).start()
+            st.rerun()
+
+    _logos_status_bar()
+
+    dados = st.session_state.get("logos_dados")
+    if not dados:
+        return
+
+    # ── Mapa de rotas ─────────────────────────────────────────────────────────
+    st.markdown("#### 🗺️ Rotas dos Veículos ECO")
+    mapa   = folium.Map(location=[-18.5, -47.5], zoom_start=7, tiles="CartoDB dark_matter")
+    bounds = []
+
+    for i, item in enumerate(dados):
+        v    = item["veiculo"]
+        hist = item["historico"]
+        cor  = _CORES_VEICULOS[i % len(_CORES_VEICULOS)]
+        desc = v.get("descricao", f"Veículo {i+1}")
+        placa = v.get("placa", "")
+
+        coords = []
+        for p in hist:
+            lat = p.get("latitude") or p.get("lat") or p.get("Latitude")
+            lon = p.get("longitude") or p.get("lon") or p.get("lng") or p.get("Longitude")
+            if lat and lon:
+                try:
+                    coords.append([float(lat), float(lon)])
+                except Exception:
+                    pass
+
+        if len(coords) > 1:
+            folium.PolyLine(coords, color=cor, weight=3, opacity=0.85,
+                            tooltip=f"{desc} ({placa})").add_to(mapa)
+            folium.CircleMarker(coords[-1], radius=6, color=cor, fill=True,
+                                fill_color=cor, fill_opacity=1.0,
+                                tooltip=f"📍 Última posição: {desc}").add_to(mapa)
+            bounds.extend(coords)
+
+    if bounds:
+        lats = [c[0] for c in bounds]
+        lons = [c[1] for c in bounds]
+        mapa.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
+
+    st_folium(mapa, width="100%", height=520, key="logos_mapa", returned_objects=[])
+
+    # ── Tabela resumo ─────────────────────────────────────────────────────────
+    st.markdown("#### 📊 Resumo por Veículo")
+    rows = []
+    for item in dados:
+        v    = item["veiculo"]
+        hist = item["historico"]
+        rows.append({
+            "Veículo":           v.get("descricao", "—"),
+            "Placa":             v.get("placa", "—"),
+            "Última posição":    v.get("datahoraposicao", v.get("datahora", "—")),
+            "Velocidade km/h":   v.get("velocidade", "—"),
+            "Hodômetro km":      v.get("hodometro", "—"),
+            "Ignição":           "✅" if v.get("ignicao") else "⭕",
+            "Registros rota":    len(hist),
+        })
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+# =============================================================================
 def main():
     _sidebar()
 
@@ -619,9 +818,10 @@ def main():
         <p>BR-050 (Eco Minas Goiás) · BR-365 (Eco Cerrado) · Supervisão de Obras AFIRMA E-VIAS</p>
     </div>""", unsafe_allow_html=True)
 
-    tab_checklist, tab_ensaios = st.tabs([
+    tab_checklist, tab_ensaios, tab_rastr = st.tabs([
         "📋 Checklist APP",
         "🔬 Ensaios AEVIAS",
+        "🛰️ Rastreamento",
     ])
 
     with tab_checklist:
@@ -629,6 +829,9 @@ def main():
 
     with tab_ensaios:
         _aba_ensaios()
+
+    with tab_rastr:
+        _aba_rastreamento()
 
 
 if __name__ == "__main__" or True:
