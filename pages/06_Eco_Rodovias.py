@@ -1025,12 +1025,20 @@ def _render_analise_periodo(itens):
         margin=dict(l=12, r=12, t=36, b=12),
     )
 
-    st.markdown("Busca o histórico de todos os veículos ECO em um período e gera estatísticas consolidadas.")
+    # Deriva datas padrão a partir dos próprios veículos (evita período sem dados)
+    _datas_vei = [it["ultima_data"] for it in itens if it.get("ultima_data")]
+    _d_max = max(_datas_vei) if _datas_vei else date.today()
+    _d_min = _d_max.replace(day=1)  # primeiro dia do mês do último dado
+
+    st.markdown(
+        f"Busca o histórico de todos os veículos ECO em um período e gera estatísticas consolidadas. "
+        f"**Última posição disponível: {_d_max.strftime('%d/%m/%Y')}**"
+    )
     p1, p2, p3 = st.columns([2, 2, 1])
     with p1:
-        pd_ini = st.date_input("Data início:", value=date.today().replace(day=1), key="logos_p_ini")
+        pd_ini = st.date_input("Data início:", value=_d_min, key="logos_p_ini")
     with p2:
-        pd_fim = st.date_input("Data fim:", value=date.today(), key="logos_p_fim")
+        pd_fim = st.date_input("Data fim:", value=_d_max, key="logos_p_fim")
     with p3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         carregar = st.button("📊 Carregar Período", key="logos_btn_periodo", use_container_width=True)
@@ -1117,6 +1125,14 @@ def _render_analise_periodo(itens):
     df_pt  = pd.DataFrame(pontos) if pontos else pd.DataFrame()
 
     total_km = df_p["km_periodo"].sum()
+
+    if total_km == 0 and df_pt.empty:
+        st.warning(
+            "⚠️ Nenhum dado encontrado para este período. "
+            "Verifique se as datas selecionadas têm dados disponíveis — "
+            f"a última posição conhecida dos veículos é **{_d_max.strftime('%d/%m/%Y')}**."
+        )
+        return
     ativos   = (df_p["registros"] > 0).sum()
     inativos = len(df_p) - ativos
     n_dias   = max(1, (pd.to_datetime(label_periodo.split(" a ")[-1]) -
