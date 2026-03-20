@@ -671,32 +671,82 @@ def _logos_get_rota(sess, idveiculo, d_ini, d_fim):
     return d if isinstance(d, list) else d.get("data", [])
 
 
+# Nomes possíveis de campos no historicoposicao (o Logos usa variações)
+_HIST_ODO_FIELDS = [
+    "pos_odometro", "odometro", "hodometro", "pos_hodometro",
+    "km", "quilometragem", "pos_km", "distancia",
+]
+_HIST_LAT_FIELDS = [
+    "pos_coordenada_latitude", "latitude", "lat",
+    "coordenada_latitude", "pos_latitude",
+]
+_HIST_LON_FIELDS = [
+    "pos_coordenada_longitude", "longitude", "lon", "lng",
+    "coordenada_longitude", "pos_longitude",
+]
+_HIST_VEL_FIELDS = [
+    "pos_velocidade", "velocidade", "speed", "vel",
+]
+_HIST_IGN_FIELDS = [
+    "pos_ignicao", "ignicao", "ignition", "motor",
+]
+_HIST_DT_FIELDS  = [
+    "pos_dt_posicao", "dt_posicao", "data_hora", "dataHora",
+    "data", "datetime", "timestamp",
+]
+_HIST_CID_FIELDS = [
+    "pos_end_cidade", "cidade", "municipio", "city",
+]
+_HIST_UF_FIELDS  = [
+    "pos_end_uf", "uf", "estado", "state",
+]
+
+
+def _pick(d, fields, default=None):
+    """Retorna o primeiro campo encontrado em d dentre a lista fields."""
+    for f in fields:
+        v = d.get(f)
+        if v is not None:
+            return v
+    return default
+
+
 def _km_from_hist(hist):
     """
-    Calcula km percorridos no histórico usando odômetro (max-min de valores > 0).
-    Se odômetro indisponível, usa Haversine sobre as coordenadas GPS.
+    Calcula km percorridos no histórico.
+    1) Tenta odômetro (max-min): detecta campo automaticamente.
+    2) Fallback Haversine sobre coordenadas GPS.
     """
     import math
 
-    # Tenta odômetro: max - min de valores não-zero
-    odos = [int(p.get("pos_odometro") or 0) for p in hist]
-    odos_validos = [o for o in odos if o > 0]
-    if odos_validos:
-        return max(odos_validos) - min(odos_validos)
+    # Tenta odômetro com detecção automática de campo
+    odos = []
+    for p in hist:
+        v = _pick(p, _HIST_ODO_FIELDS)
+        try:
+            iv = int(float(v or 0))
+            if iv > 0:
+                odos.append(iv)
+        except Exception:
+            pass
+    if odos:
+        return max(odos) - min(odos)
 
-    # Fallback: soma Haversine entre pontos consecutivos
+    # Fallback: Haversine
     def _hav(lat1, lon1, lat2, lon2):
         R = 6371.0
         dlat = math.radians(lat2 - lat1)
         dlon = math.radians(lon2 - lon1)
-        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+        a = (math.sin(dlat/2)**2
+             + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+             * math.sin(dlon/2)**2)
         return R * 2 * math.asin(math.sqrt(a))
 
     coords = []
     for p in hist:
         try:
-            lt = float(p.get("pos_coordenada_latitude") or 0)
-            ln = float(p.get("pos_coordenada_longitude") or 0)
+            lt = float(_pick(p, _HIST_LAT_FIELDS) or 0)
+            ln = float(_pick(p, _HIST_LON_FIELDS) or 0)
             if lt and ln:
                 coords.append((lt, ln))
         except Exception:
@@ -704,7 +754,6 @@ def _km_from_hist(hist):
 
     if len(coords) < 2:
         return 0
-
     total = sum(_hav(coords[i][0], coords[i][1], coords[i+1][0], coords[i+1][1])
                 for i in range(len(coords) - 1))
     return round(total)
@@ -1083,6 +1132,7 @@ def _render_analise_periodo(itens):
     if carregar:
         resultados = []
         all_pontos = []
+        _raw_sample = None   # primeiro ponto bruto para diagnóstico de campos
         prog = st.progress(0, text="Iniciando...")
         with st.spinner("Buscando histórico de todos os veículos ECO..."):
             try:
@@ -1100,6 +1150,8 @@ def _render_analise_periodo(itens):
                         hist = []
 
                     if hist:
+                        if _raw_sample is None:
+                            _raw_sample = hist[0]  # guarda primeiro ponto para debug
                         km = _km_from_hist(hist)
                         cidades = list(dict.fromkeys(
                             p.get("pos_end_cidade","") for p in hist
@@ -1109,26 +1161,26 @@ def _render_analise_periodo(itens):
                             p.get("pos_end_uf","") for p in hist
                             if p.get("pos_end_uf")
                         ))
-                        # Coleta pontos temporais para análise detalhada
+                        # Coleta pontos temporais (com detecção automática de campos)
                         for p in hist:
-                            dt_str = str(p.get("pos_dt_posicao",""))
+                            dt_str = str(_pick(p, _HIST_DT_FIELDS, ""))
                             try:
-                                dt = pd.to_datetime(dt_str)
-                                vel = float(p.get("pos_velocidade") or 0)
-                                ign = bool(p.get("pos_ignicao"))
+                                dt  = pd.to_datetime(dt_str)
+                                vel = float(_pick(p, _HIST_VEL_FIELDS) or 0)
+                                ign = bool(_pick(p, _HIST_IGN_FIELDS) or False)
+                                odo = int(float(_pick(p, _HIST_ODO_FIELDS) or 0))
                                 all_pontos.append({
                                     "motorista":  it["motorista"],
                                     "contrato":   it["contrato"],
                                     "hora":       dt.hour,
                                     "dia_semana": dt.dayofweek,
                                     "data":       dt.date(),
-                                    "odometro":   int(p.get("pos_odometro") or 0),
+                                    "odometro":   odo,
                                     "ignicao":    ign,
                                     "velocidade": vel,
-                                    # idle = motor ligado mas parado (vel <= 3 km/h)
                                     "idle":       ign and vel <= 3,
-                                    "cidade":     p.get("pos_end_cidade",""),
-                                    "uf":         p.get("pos_end_uf",""),
+                                    "cidade":     str(_pick(p, _HIST_CID_FIELDS) or ""),
+                                    "uf":         str(_pick(p, _HIST_UF_FIELDS) or ""),
                                 })
                             except Exception:
                                 pass
@@ -1149,6 +1201,7 @@ def _render_analise_periodo(itens):
                 st.session_state["logos_periodo_result"] = resultados
                 st.session_state["logos_periodo_pontos"] = all_pontos
                 st.session_state["logos_periodo_label"]  = f"{pd_ini} a {pd_fim}"
+                st.session_state["logos_hist_sample"] = _raw_sample
             except Exception as e:
                 st.error(f"❌ {e}")
                 return
@@ -1174,6 +1227,20 @@ def _render_analise_periodo(itens):
         )
         return
     # ── Métricas base ──────────────────────────────────────────────────────────
+    # ── Debug: campos reais do historicoposicao ────────────────────────────────
+    _sample = st.session_state.get("logos_hist_sample")
+    if _sample:
+        total_km_check = sum(r.get("km_periodo", 0) for r in res)
+        if total_km_check == 0:
+            st.error("⚠️ Km = 0 para todos os veículos. Exibindo campos reais da API para diagnóstico:")
+            with st.expander("🔍 Campos retornados pelo historicoposicao (clique para ver)", expanded=True):
+                st.json({k: v for k, v in _sample.items()})
+                st.caption("Os campos acima são os REAIS retornados. Se 'pos_odometro' não aparecer, "
+                            "o nome correto está nessa lista.")
+        else:
+            with st.expander("🔍 Debug: campos da API (opcional)"):
+                st.json({k: v for k, v in _sample.items()})
+
     MINS_POR_PONTO = 3  # estimativa Logos: ~1 ponto a cada 3 min
     CUSTO_KM       = 0.50   # R$/km — diesel highway pickup (Geotab benchmark)
     CUSTO_IDLE_H   = 5.09   # R$/h idle — 1L diesel/h × R$5,09/L (preço fev/2026)
