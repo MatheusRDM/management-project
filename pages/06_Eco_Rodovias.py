@@ -682,8 +682,6 @@ def _logos_historico(sess, idveiculo, datainicio, datafinal):
 
 def _thread_buscar_logos(data_ini_str, data_fim_str):
     try:
-        st.session_state["_logos_loading"] = True
-        st.session_state["_logos_error"]   = None
 
         sess  = _logos_criar_sessao()
         idcli = _logos_get_idcliente(sess)
@@ -712,22 +710,40 @@ def _thread_buscar_logos(data_ini_str, data_fim_str):
         st.session_state["_logos_loading"] = False
 
 
-# ─── Status bar (re-renderiza a cada 2s independentemente da página) ──────────
+# ─── Status bar — re-renderiza a cada 2s enquanto carrega ────────────────────
 @st.fragment(run_every=2)
 def _logos_status_bar():
-    if st.session_state.get("_logos_loading"):
-        st.info("🔄 Buscando dados dos veículos ECO no Logos... aguarde.")
-    elif st.session_state.get("_logos_error"):
-        st.error(f"❌ {st.session_state['_logos_error']}")
-    elif st.session_state.get("logos_ultima_atualizacao"):
+    loading = st.session_state.get("_logos_loading", False)
+    error   = st.session_state.get("_logos_error")
+    atu     = st.session_state.get("logos_ultima_atualizacao")
+    inicio  = st.session_state.get("_logos_inicio_ts")
+
+    if loading:
+        elapsed = ""
+        if inicio:
+            secs = int((datetime.now() - inicio).total_seconds())
+            elapsed = f" — {secs}s"
+        st.markdown(f"""
+        <div style="background:rgba(86,110,61,0.25);border:1px solid #566E3D;border-radius:8px;
+                    padding:14px 20px;display:flex;align-items:center;gap:12px;margin:8px 0;">
+            <span style="font-size:1.4rem">⏳</span>
+            <span style="color:#BFCF99;font-weight:600;font-size:1rem">
+                Autenticando e buscando veículos ECO no Logos Rastreamento{elapsed}...
+            </span>
+        </div>""", unsafe_allow_html=True)
+    elif error:
+        st.error(f"❌ {error}")
+    elif atu:
         n = len(st.session_state.get("logos_dados", []))
-        st.success(f"✅ {n} veículo(s) ECO carregados · {st.session_state['logos_ultima_atualizacao']}")
+        st.success(f"✅ {n} veículo(s) ECO carregados · Atualizado: {atu}")
     else:
         st.caption("Clique em **🔄 Atualizar** para buscar os veículos ECO do Logos Rastreamento.")
 
 
 def _aba_rastreamento():
     # ── Controles ─────────────────────────────────────────────────────────────
+    loading = bool(st.session_state.get("_logos_loading", False))
+
     c1, c2, c3 = st.columns([2, 2, 1])
     with c1:
         d_ini = st.date_input("Data início:", value=date.today().replace(day=1), key="logos_d_ini")
@@ -737,13 +753,18 @@ def _aba_rastreamento():
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         if st.button("🔄 Atualizar", key="logos_btn",
                      use_container_width=True,
-                     disabled=bool(st.session_state.get("_logos_loading"))):
-            threading.Thread(
-                target=_thread_buscar_logos,
-                args=(d_ini.strftime("%d/%m/%Y 00:00"),
-                      d_fim.strftime("%d/%m/%Y 23:59")),
-                daemon=True
-            ).start()
+                     disabled=loading,
+                     help="Busca apenas veículos com ECO no nome"):
+            if not st.session_state.get("_logos_loading"):
+                st.session_state["_logos_loading"]  = True
+                st.session_state["_logos_error"]    = None
+                st.session_state["_logos_inicio_ts"] = datetime.now()
+                threading.Thread(
+                    target=_thread_buscar_logos,
+                    args=(d_ini.strftime("%d/%m/%Y 00:00"),
+                          d_fim.strftime("%d/%m/%Y 23:59")),
+                    daemon=True
+                ).start()
             st.rerun()
 
     _logos_status_bar()
