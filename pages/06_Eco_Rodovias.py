@@ -647,7 +647,7 @@ def _logos_criar_sessao(sid: str):
         senha   = st.secrets["logos_senha"]
     except Exception:
         usuario = "matheus.resende@afirmaevias.com.br"
-        senha   = "Rfp@39TH"
+        senha   = "19072019Joaquim*"
 
     sess = requests.Session()
     sess.headers.update({
@@ -727,10 +727,12 @@ def _logos_veiculos_eco(sess, idcliente, sid: str):
     _cache_set(sid, api_status=r.status_code, api_preview=r.text[:400])
     d = r.json()
     items = d if isinstance(d, list) else d.get("data", d.get("veiculos", d.get("result", [])))
-    return [v for v in items if "ECO" in str(v.get("descricao", "")).upper()]
+    # campo real do nome é "descricaovel"
+    return [v for v in items if "ECO" in str(v.get("descricaovel", "")).upper()]
 
 
 def _logos_historico(sid: str, idveiculo, datainicio, datafinal):
+    """datainicio/datafinal formato: 'YYYY-MM-DD HH:MM'"""
     sess = _logos_criar_sessao(sid)
     r = sess.post(f"{_LOGOS_BASE}/api/historicoposicao", json={
         "idveiculo": idveiculo,
@@ -864,22 +866,24 @@ def _aba_rastreamento():
     bounds = []
     for i, v in enumerate(veiculos):
         cor   = _CORES_VEICULOS[i % len(_CORES_VEICULOS)]
-        desc  = v.get("descricao", f"Veículo {i+1}")
-        placa = v.get("placa", "")
-        lat   = v.get("latitude") or v.get("lat")
-        lon   = v.get("longitude") or v.get("lon") or v.get("lng")
-        ign   = "🟢" if v.get("ignicao") else "🔴"
-        vel   = v.get("velocidade", 0)
+        desc  = v.get("descricaovel", f"Veículo {i+1}")
+        placa = v.get("placavel", "")
+        lat   = v.get("pos_coordenada_latitude")
+        lon   = v.get("pos_coordenada_longitude")
+        ign   = "🟢" if v.get("pos_ignicao") else "🔴"
+        vel   = v.get("pos_velocidade", 0)
+        loc   = v.get("localizacao", "")
         if lat and lon:
             try:
                 lt, ln = float(lat), float(lon)
                 popup_html = (f"<b style='color:{cor}'>{desc}</b><br>"
-                              f"Placa: {placa}<br>Ignição: {ign}<br>Velocidade: {vel} km/h")
+                              f"Placa: {placa}<br>Ignição: {ign}<br>"
+                              f"Velocidade: {vel} km/h<br>{loc}")
                 folium.CircleMarker(
                     [lt, ln], radius=8, color=cor, fill=True,
                     fill_color=cor, fill_opacity=0.9,
                     tooltip=f"{ign} {desc} — {vel} km/h",
-                    popup=folium.Popup(popup_html, max_width=220)
+                    popup=folium.Popup(popup_html, max_width=260)
                 ).add_to(mapa)
                 bounds.append([lt, ln])
             except Exception:
@@ -892,12 +896,13 @@ def _aba_rastreamento():
 
     # ── Tabela veículos ───────────────────────────────────────────────────────
     rows = [{
-        "Veículo":        v.get("descricao", "—"),
-        "Placa":          v.get("placa", "—"),
-        "Última posição": v.get("datahoraposicao", v.get("datahora", "—")),
-        "Vel. km/h":      v.get("velocidade", "—"),
-        "Hodômetro":      v.get("hodometro", "—"),
-        "Ignição":        "🟢 Ligado" if v.get("ignicao") else "🔴 Desligado",
+        "Veículo":        v.get("descricaovel", "—"),
+        "Placa":          v.get("placavel", "—"),
+        "Última posição": str(v.get("pos_dt_posicao", "—"))[:16].replace("T", " "),
+        "Vel. km/h":      v.get("pos_velocidade", "—"),
+        "Hodômetro km":   v.get("pos_odometro", "—"),
+        "Ignição":        "🟢 Ligado" if v.get("pos_ignicao") else "🔴 Desligado",
+        "Localização":    v.get("localizacao", "—"),
     } for v in veiculos]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=280)
 
@@ -917,14 +922,14 @@ def _aba_rastreamento():
         rota_loading = _cache_get(sid).get("rota_loading", False)
         if st.button("🗺️ Ver Rota", key="logos_btn_rota", use_container_width=True,
                      disabled=rota_loading):
-            vid = opcoes[sel].get("idveiculo") or opcoes[sel].get("id")
+            vid = opcoes[sel].get("pos_idvei")
             _cache_set(sid, rota_loading=True, rota_error=None, rota=None)
             st.session_state.pop("logos_rota", None)
             threading.Thread(
                 target=_thread_buscar_rota,
                 args=(sid, vid,
-                      d_ini.strftime("%d/%m/%Y 00:00"),
-                      d_fim.strftime("%d/%m/%Y 23:59")),
+                      d_ini.strftime("%Y-%m-%d 00:00"),
+                      d_fim.strftime("%Y-%m-%d 23:59")),
                 daemon=True
             ).start()
             st.rerun()
@@ -937,8 +942,8 @@ def _aba_rastreamento():
 
     coords = []
     for p in hist:
-        lt = p.get("latitude") or p.get("lat") or p.get("Latitude")
-        ln = p.get("longitude") or p.get("lon") or p.get("lng") or p.get("Longitude")
+        lt = p.get("pos_coordenada_latitude") or p.get("latitude")
+        ln = p.get("pos_coordenada_longitude") or p.get("longitude")
         if lt and ln:
             try:
                 coords.append([float(lt), float(ln)])
