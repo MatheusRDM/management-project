@@ -1676,10 +1676,21 @@ def _render_analise_periodo(itens):
             st.plotly_chart(fig_km, use_container_width=True, config=_NO_INTERACT)
 
     with col_k2:
-        if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
-            _dfo2 = df_pt[df_pt["odometro"] > 0]
-            df_mv = (_dfo2.groupby(["motorista","data"])["odometro"].agg(["max","min"]).reset_index())
-            df_mv["km_d"] = (df_mv["max"] - df_mv["min"]).clip(lower=0, upper=1500)
+        if not df_pt.empty and "data" in df_pt.columns:
+            # Tenta odômetro primeiro; fallback: estima km via velocidade
+            _dfo2 = df_pt[df_pt["odometro"] > 0] if "odometro" in df_pt.columns else pd.DataFrame()
+            if not _dfo2.empty:
+                df_mv = (_dfo2.groupby(["motorista","data"])["odometro"]
+                              .agg(["max","min"]).reset_index())
+                df_mv["km_d"] = (df_mv["max"] - df_mv["min"]).clip(lower=0, upper=1500)
+            else:
+                # Fallback: vel × intervalo (≈3 min por ponto)
+                df_mv = df_pt.copy()
+                df_mv["km_est"] = df_mv["velocidade"] * (MINS_POR_PONTO / 60.0)
+                df_mv = (df_mv.groupby(["motorista","data"])["km_est"]
+                              .sum().reset_index())
+                df_mv = df_mv.rename(columns={"km_est":"km_d"})
+                df_mv["km_d"] = df_mv["km_d"].clip(lower=0, upper=1500)
             df_media = (df_mv.groupby("motorista")["km_d"].mean().reset_index()
                               .sort_values("km_d", ascending=True))
             cores_kmdia = [
@@ -1712,10 +1723,18 @@ def _render_analise_periodo(itens):
             st.plotly_chart(fig_med, use_container_width=True, config=_NO_INTERACT)
 
     # ── Km por dia — linha temporal ────────────────────────────────────────────
-    if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
-        _dfo3 = df_pt[df_pt["odometro"] > 0]
-        df_daily2 = (_dfo3.groupby(["data","motorista"])["odometro"].agg(["max","min"]).reset_index())
-        df_daily2["km_d"] = (df_daily2["max"] - df_daily2["min"]).clip(lower=0, upper=1500)
+    if not df_pt.empty and "data" in df_pt.columns:
+        _dfo3 = df_pt[df_pt["odometro"] > 0] if "odometro" in df_pt.columns else pd.DataFrame()
+        if not _dfo3.empty:
+            df_daily2 = (_dfo3.groupby(["data","motorista"])["odometro"]
+                              .agg(["max","min"]).reset_index())
+            df_daily2["km_d"] = (df_daily2["max"] - df_daily2["min"]).clip(lower=0, upper=1500)
+        else:
+            df_daily2 = df_pt.copy()
+            df_daily2["km_d"] = df_daily2["velocidade"] * (MINS_POR_PONTO / 60.0)
+            df_daily2 = (df_daily2.groupby(["data","motorista"])["km_d"]
+                                  .sum().reset_index())
+            df_daily2["km_d"] = df_daily2["km_d"].clip(lower=0, upper=1500)
         df_agg2 = df_daily2.groupby("data")["km_d"].sum().reset_index().sort_values("data")
         fig_kmd = go.Figure(go.Scatter(
             x=df_agg2["data"].astype(str), y=df_agg2["km_d"],
@@ -1990,10 +2009,18 @@ def _render_analise_periodo(itens):
         st.dataframe(df_rotas, use_container_width=True, hide_index=True, height=400)
 
     with tab_t3:
-        if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
-            _dfo4 = df_pt[df_pt["odometro"] > 0]
-            df_dv = (_dfo4.groupby(["motorista","data"])["odometro"].agg(["max","min"]).reset_index())
-            df_dv["km_dia"] = (df_dv["max"] - df_dv["min"]).clip(lower=0, upper=1500)
+        if not df_pt.empty and "data" in df_pt.columns:
+            _dfo4 = df_pt[df_pt["odometro"] > 0] if "odometro" in df_pt.columns else pd.DataFrame()
+            if not _dfo4.empty:
+                df_dv = (_dfo4.groupby(["motorista","data"])["odometro"]
+                              .agg(["max","min"]).reset_index())
+                df_dv["km_dia"] = (df_dv["max"] - df_dv["min"]).clip(lower=0, upper=1500)
+            else:
+                df_dv = df_pt.copy()
+                df_dv["km_dia"] = df_dv["velocidade"] * (MINS_POR_PONTO / 60.0)
+                df_dv = (df_dv.groupby(["motorista","data"])["km_dia"]
+                              .sum().reset_index())
+                df_dv["km_dia"] = df_dv["km_dia"].clip(lower=0, upper=1500)
             df_exc = df_dv[df_dv["km_dia"] > LIMIAR_KM_WA].sort_values("km_dia", ascending=False).copy()
             df_exc["status"] = df_exc["km_dia"].apply(
                 lambda x: "🔴 ALARME >500km" if x > LIMIAR_KM_AL else "🟡 ATENÇÃO >300km"
@@ -2265,20 +2292,24 @@ def _render_analise_periodo(itens):
         # fds peso 2
         df_risk["risk_fds"]  = df_risk["fds_pct"] * 2
         # km excesso
-        if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
-            _dfoR = df_pt[df_pt["odometro"] > 0]
+        if not df_pt.empty and "data" in df_pt.columns:
+            _dfoR = df_pt[df_pt["odometro"] > 0] if "odometro" in df_pt.columns else pd.DataFrame()
             if not _dfoR.empty:
                 _dailyR = (_dfoR.groupby(["motorista","data"])["odometro"]
                                  .agg(["max","min"]).reset_index())
                 _dailyR["km_d"] = (_dailyR["max"] - _dailyR["min"]).clip(lower=0, upper=1500)
-                _avgR = _dailyR.groupby("motorista")["km_d"].mean().reset_index()
-                _avgR.columns = ["motorista","km_dia_avg"]
-                df_risk = df_risk.merge(_avgR, on="motorista", how="left")
-                df_risk["km_dia_avg"] = df_risk["km_dia_avg"].fillna(0)
-                df_risk["risk_km"] = (df_risk["km_dia_avg"] > LIMIAR_KM_WA).astype(float) * 50
             else:
-                df_risk["km_dia_avg"] = 0.0
-                df_risk["risk_km"]    = 0.0
+                # Fallback velocidade×tempo
+                _dailyR = df_pt.copy()
+                _dailyR["km_d"] = _dailyR["velocidade"] * (MINS_POR_PONTO / 60.0)
+                _dailyR = (_dailyR.groupby(["motorista","data"])["km_d"]
+                                   .sum().reset_index())
+                _dailyR["km_d"] = _dailyR["km_d"].clip(lower=0, upper=1500)
+            _avgR = _dailyR.groupby("motorista")["km_d"].mean().reset_index()
+            _avgR.columns = ["motorista","km_dia_avg"]
+            df_risk = df_risk.merge(_avgR, on="motorista", how="left")
+            df_risk["km_dia_avg"] = df_risk["km_dia_avg"].fillna(0)
+            df_risk["risk_km"] = (df_risk["km_dia_avg"] > LIMIAR_KM_WA).astype(float) * 50
         else:
             df_risk["km_dia_avg"] = 0.0
             df_risk["risk_km"]    = 0.0
