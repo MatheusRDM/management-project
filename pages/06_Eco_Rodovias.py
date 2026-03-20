@@ -738,94 +738,176 @@ def _render_mapa_posicao(itens):
 
 def _render_estatisticas(itens):
     import plotly.express as px
+    import plotly.graph_objects as go
+
+    # Paleta da aplicação
+    _C = {
+        "bg":      "rgba(0,0,0,0)",
+        "grid":    "rgba(255,255,255,0.06)",
+        "text":    "#C8D8A8",
+        "eco135":  "#7BBF6A",
+        "cerrado": "#4CC9F0",
+        "acc1":    "#F7B731",
+        "acc2":    "#FF6B6B",
+        "seq":     ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"],
+    }
+    _NO_INTERACT = dict(displayModeBar=False, scrollZoom=False)
+    _BASE = dict(
+        paper_bgcolor=_C["bg"], plot_bgcolor=_C["bg"],
+        font=dict(family="Inter, sans-serif", color=_C["text"], size=12),
+        margin=dict(l=12, r=12, t=36, b=12),
+    )
 
     df = pd.DataFrame(itens)
-
-    # ── Cards ─────────────────────────────────────────────────────────────────
-    ligados   = df["ignicao"].sum()
+    ligados   = int(df["ignicao"].sum())
+    deslig    = len(df) - ligados
     total_km  = df["odometro"].sum()
     n_estados = df["uf"].nunique()
     n_cidades = df["cidade"].nunique()
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    for col, val, label in [
-        (c1, len(df),       "Total ECO"),
-        (c2, int(ligados),  "🟢 Ligados"),
-        (c3, int(len(df)-ligados), "🔴 Desligados"),
-        (c4, n_estados,     "Estados"),
-        (c5, n_cidades,     "Cidades"),
-    ]:
-        col.metric(label, val)
-
-    st.divider()
+    # ── Cards ─────────────────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+      <div style="flex:1;min-width:120px;background:rgba(123,191,106,0.12);border:1px solid #7BBF6A55;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#7BBF6A">{len(df)}</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Veículos ECO</div></div>
+      <div style="flex:1;min-width:120px;background:rgba(76,201,240,0.12);border:1px solid #4CC9F055;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#4CC9F0">{ligados}</div>
+        <div style="color:#C8D8A8;font-size:.8rem">🟢 Ligados</div></div>
+      <div style="flex:1;min-width:120px;background:rgba(255,107,107,0.12);border:1px solid #FF6B6B55;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#FF6B6B">{deslig}</div>
+        <div style="color:#C8D8A8;font-size:.8rem">🔴 Desligados</div></div>
+      <div style="flex:1;min-width:120px;background:rgba(247,183,49,0.12);border:1px solid #F7B73155;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#F7B731">{total_km:,.0f}</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Km total (hodômetro)</div></div>
+      <div style="flex:1;min-width:120px;background:rgba(162,155,254,0.12);border:1px solid #A29BFE55;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#A29BFE">{n_estados} UFs · {n_cidades} cidades</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Distribuição geográfica</div></div>
+    </div>""", unsafe_allow_html=True)
 
     # ── Hodômetro por motorista ────────────────────────────────────────────────
-    st.markdown("#### 🔢 Hodômetro por Motorista")
-    df_odo = df[["motorista","odometro","contrato"]].sort_values("odometro", ascending=True)
-    fig_odo = px.bar(
-        df_odo, x="odometro", y="motorista", orientation="h",
-        color="contrato", text="odometro",
-        color_discrete_sequence=px.colors.qualitative.Bold,
-        labels={"odometro":"Hodômetro (km)","motorista":"","contrato":"Contrato"},
-    )
-    fig_odo.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+    df_odo = df.sort_values("odometro", ascending=True)
+    cores_contrato = {c: _C["seq"][i % len(_C["seq"])]
+                      for i, c in enumerate(df["contrato"].unique())}
+    fig_odo = go.Figure()
+    for contrato, grp in df_odo.groupby("contrato"):
+        fig_odo.add_trace(go.Bar(
+            x=grp["odometro"], y=grp["motorista"], orientation="h",
+            name=contrato,
+            marker_color=cores_contrato[contrato],
+            marker_line_width=0,
+            text=[f"{v:,.0f} km" for v in grp["odometro"]],
+            textposition="outside",
+            textfont=dict(size=10, color=_C["text"]),
+            hovertemplate="<b>%{y}</b><br>Hodômetro: %{x:,.0f} km<extra></extra>",
+        ))
     fig_odo.update_layout(
-        height=max(400, len(df)*22), template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", y=1.02), margin=dict(l=10,r=80,t=10,b=10),
-        xaxis=dict(tickformat=","),
+        **_BASE,
+        title=dict(text="Hodômetro Acumulado por Motorista", font=dict(size=14, color=_C["text"]), x=0),
+        barmode="group",
+        height=max(420, len(df) * 24),
+        xaxis=dict(tickformat=",", gridcolor=_C["grid"], zeroline=False, showline=False),
+        yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=10)),
+        legend=dict(orientation="h", y=1.04, x=0, font=dict(size=11)),
+        bargap=0.25,
     )
-    st.plotly_chart(fig_odo, use_container_width=True)
+    st.plotly_chart(fig_odo, use_container_width=True, config=_NO_INTERACT)
 
     col1, col2 = st.columns(2)
 
-    # ── Distribuição por Contrato ──────────────────────────────────────────────
+    # ── Ignição: donut ─────────────────────────────────────────────────────────
     with col1:
-        st.markdown("#### 📋 Por Contrato")
-        cnt_contrato = df.groupby("contrato").agg(
-            veiculos=("motorista","count"),
-            odo_total=("odometro","sum"),
-            ligados=("ignicao","sum"),
-        ).reset_index()
-        fig_cont = px.pie(
-            cnt_contrato, values="veiculos", names="contrato",
-            color_discrete_sequence=px.colors.qualitative.Bold,
-            hole=0.45,
-        )
-        fig_cont.update_layout(template="plotly_dark",
-                               paper_bgcolor="rgba(0,0,0,0)", height=300,
-                               margin=dict(l=10,r=10,t=10,b=10))
-        st.plotly_chart(fig_cont, use_container_width=True)
+        fig_ign = go.Figure(go.Pie(
+            labels=["🟢 Ligados", "🔴 Desligados"],
+            values=[ligados, deslig],
+            hole=0.62,
+            marker=dict(colors=["#7BBF6A", "#FF6B6B"],
+                        line=dict(color="#0E1117", width=2)),
+            textinfo="label+percent",
+            textfont=dict(size=11, color=_C["text"]),
+            hovertemplate="<b>%{label}</b>: %{value}<extra></extra>",
+        ))
+        fig_ign.add_annotation(text=f"<b>{len(df)}</b><br>ECO", x=0.5, y=0.5,
+                               font=dict(size=16, color=_C["text"]), showarrow=False)
+        fig_ign.update_layout(**_BASE, height=280,
+                              title=dict(text="Status de Ignição", font=dict(size=13, color=_C["text"]), x=0),
+                              showlegend=False)
+        st.plotly_chart(fig_ign, use_container_width=True, config=_NO_INTERACT)
 
-    # ── Distribuição por Estado ────────────────────────────────────────────────
+    # ── Por Contrato: donut ────────────────────────────────────────────────────
     with col2:
-        st.markdown("#### 🗺️ Por Estado")
-        cnt_uf = df.groupby("uf").size().reset_index(name="veiculos").sort_values("veiculos")
-        fig_uf = px.bar(
-            cnt_uf, x="veiculos", y="uf", orientation="h",
-            text="veiculos", color="veiculos",
-            color_continuous_scale="Greens",
-            labels={"veiculos":"Veículos","uf":"Estado"},
-        )
-        fig_uf.update_layout(template="plotly_dark", height=300,
-                             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                             coloraxis_showscale=False, margin=dict(l=10,r=40,t=10,b=10))
-        st.plotly_chart(fig_uf, use_container_width=True)
+        cnt_c = df.groupby("contrato").size().reset_index(name="n")
+        fig_cont = go.Figure(go.Pie(
+            labels=cnt_c["contrato"], values=cnt_c["n"],
+            hole=0.62,
+            marker=dict(colors=_C["seq"], line=dict(color="#0E1117", width=2)),
+            textinfo="label+value",
+            textfont=dict(size=11, color=_C["text"]),
+            hovertemplate="<b>%{label}</b>: %{value} veículos<extra></extra>",
+        ))
+        fig_cont.add_annotation(text="<b>Contratos</b>", x=0.5, y=0.5,
+                                font=dict(size=13, color=_C["text"]), showarrow=False)
+        fig_cont.update_layout(**_BASE, height=280,
+                               title=dict(text="Distribuição por Contrato", font=dict(size=13, color=_C["text"]), x=0),
+                               showlegend=False)
+        st.plotly_chart(fig_cont, use_container_width=True, config=_NO_INTERACT)
 
-    # ── Principais Cidades ─────────────────────────────────────────────────────
-    st.markdown("#### 🏙️ Principais Regiões")
-    cnt_cid = df.groupby(["cidade","uf"]).size().reset_index(name="veiculos").sort_values("veiculos", ascending=False).head(15)
-    cnt_cid["cidade_uf"] = cnt_cid["cidade"] + " — " + cnt_cid["uf"]
-    fig_cid = px.bar(
-        cnt_cid.sort_values("veiculos"), x="veiculos", y="cidade_uf", orientation="h",
-        text="veiculos", color="veiculos",
-        color_continuous_scale="Teal",
-        labels={"veiculos":"Veículos","cidade_uf":""},
-    )
-    fig_cid.update_layout(template="plotly_dark", height=400,
-                          paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                          coloraxis_showscale=False, margin=dict(l=10,r=40,t=10,b=10))
-    st.plotly_chart(fig_cid, use_container_width=True)
+    # ── Cidades e estados ──────────────────────────────────────────────────────
+    col3, col4 = st.columns(2)
+
+    with col3:
+        cnt_uf = df.groupby("uf").size().reset_index(name="n").sort_values("n")
+        fig_uf = go.Figure(go.Bar(
+            x=cnt_uf["n"], y=cnt_uf["uf"], orientation="h",
+            marker=dict(
+                color=cnt_uf["n"],
+                colorscale=[[0,"#1a3a2a"],[0.5,"#4A8A5A"],[1,"#7BBF6A"]],
+                line_width=0,
+            ),
+            text=cnt_uf["n"], textposition="outside",
+            textfont=dict(size=11, color=_C["text"]),
+            hovertemplate="<b>%{y}</b>: %{x} veículos<extra></extra>",
+        ))
+        fig_uf.update_layout(
+            **_BASE,
+            title=dict(text="Veículos por Estado", font=dict(size=13, color=_C["text"]), x=0),
+            height=280,
+            xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
+            yaxis=dict(gridcolor="rgba(0,0,0,0)"),
+        )
+        st.plotly_chart(fig_uf, use_container_width=True, config=_NO_INTERACT)
+
+    with col4:
+        cnt_cid = (df.groupby(["cidade","uf"]).size()
+                     .reset_index(name="n")
+                     .sort_values("n", ascending=False)
+                     .head(12))
+        cnt_cid["label"] = cnt_cid["cidade"] + " · " + cnt_cid["uf"]
+        fig_cid = go.Figure(go.Bar(
+            x=cnt_cid["n"], y=cnt_cid["label"].iloc[::-1],
+            orientation="h",
+            marker=dict(
+                color=cnt_cid["n"].iloc[::-1],
+                colorscale=[[0,"#132840"],[0.5,"#1E6B9E"],[1,"#4CC9F0"]],
+                line_width=0,
+            ),
+            text=cnt_cid["n"].iloc[::-1], textposition="outside",
+            textfont=dict(size=10, color=_C["text"]),
+            hovertemplate="<b>%{y}</b>: %{x} veículos<extra></extra>",
+        ))
+        fig_cid.update_layout(
+            **_BASE,
+            title=dict(text="Top 12 Cidades", font=dict(size=13, color=_C["text"]), x=0),
+            height=280,
+            xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
+            yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9)),
+        )
+        st.plotly_chart(fig_cid, use_container_width=True, config=_NO_INTERACT)
 
     # ── Tabela completa ────────────────────────────────────────────────────────
     st.markdown("#### 📋 Tabela Completa")
@@ -926,6 +1008,23 @@ def _render_rota_individual(itens):
 
 
 def _render_analise_periodo(itens):
+    _C = {
+        "bg":      "rgba(0,0,0,0)",
+        "grid":    "rgba(255,255,255,0.06)",
+        "text":    "#C8D8A8",
+        "eco135":  "#7BBF6A",
+        "cerrado": "#4CC9F0",
+        "acc1":    "#F7B731",
+        "acc2":    "#FF6B6B",
+        "seq":     ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"],
+    }
+    _NO_INTERACT = dict(displayModeBar=False, scrollZoom=False)
+    _BASE = dict(
+        paper_bgcolor=_C["bg"], plot_bgcolor=_C["bg"],
+        font=dict(family="Inter, sans-serif", color=_C["text"], size=12),
+        margin=dict(l=12, r=12, t=36, b=12),
+    )
+
     st.markdown("Busca o histórico de todos os veículos ECO em um período e gera estatísticas consolidadas.")
     p1, p2, p3 = st.columns([2, 2, 1])
     with p1:
@@ -938,6 +1037,7 @@ def _render_analise_periodo(itens):
 
     if carregar:
         resultados = []
+        all_pontos = []
         prog = st.progress(0, text="Iniciando...")
         with st.spinner("Buscando histórico de todos os veículos ECO..."):
             try:
@@ -966,22 +1066,40 @@ def _render_analise_periodo(itens):
                             p.get("pos_end_uf","") for p in hist
                             if p.get("pos_end_uf")
                         ))
-                        ign_on = sum(1 for p in hist if p.get("pos_ignicao"))
+                        # Coleta pontos temporais para análise detalhada
+                        for p in hist:
+                            dt_str = str(p.get("pos_dt_posicao",""))
+                            try:
+                                dt = pd.to_datetime(dt_str)
+                                all_pontos.append({
+                                    "motorista":  it["motorista"],
+                                    "contrato":   it["contrato"],
+                                    "hora":       dt.hour,
+                                    "dia_semana": dt.dayofweek,  # 0=Seg … 6=Dom
+                                    "data":       dt.date(),
+                                    "odometro":   int(p.get("pos_odometro") or 0),
+                                    "ignicao":    bool(p.get("pos_ignicao")),
+                                    "cidade":     p.get("pos_end_cidade",""),
+                                    "uf":         p.get("pos_end_uf",""),
+                                })
+                            except Exception:
+                                pass
                     else:
-                        km = 0; cidades = []; ufs = []; ign_on = 0
+                        km = 0; cidades = []; ufs = []
 
                     resultados.append({
-                        "contrato":   it["contrato"],
-                        "motorista":  it["motorista"],
-                        "placa":      it["placa"],
-                        "km_periodo": km,
-                        "registros":  len(hist),
-                        "cidades":    len(set(cidades)),
-                        "estados":    ", ".join(ufs[:3]),
+                        "contrato":    it["contrato"],
+                        "motorista":   it["motorista"],
+                        "placa":       it["placa"],
+                        "km_periodo":  km,
+                        "registros":   len(hist),
+                        "cidades":     len(set(cidades)),
+                        "estados":     ", ".join(ufs[:3]),
                         "rota_resumo": " → ".join(list(dict.fromkeys(cidades))[:5]),
                     })
                 prog.empty()
                 st.session_state["logos_periodo_result"] = resultados
+                st.session_state["logos_periodo_pontos"] = all_pontos
                 st.session_state["logos_periodo_label"]  = f"{pd_ini} a {pd_fim}"
             except Exception as e:
                 st.error(f"❌ {e}")
@@ -991,35 +1109,229 @@ def _render_analise_periodo(itens):
     if not res:
         return
 
-    import plotly.express as px
     label_periodo = st.session_state.get("logos_periodo_label", "")
     st.markdown(f"#### Resultados: {label_periodo}")
 
-    df_p = pd.DataFrame(res)
+    df_p  = pd.DataFrame(res)
+    pontos = st.session_state.get("logos_periodo_pontos", [])
+    df_pt  = pd.DataFrame(pontos) if pontos else pd.DataFrame()
+
     total_km = df_p["km_periodo"].sum()
     ativos   = (df_p["registros"] > 0).sum()
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total km (período)", f"{total_km:,}")
-    c2.metric("Veículos ativos", ativos)
-    c3.metric("Veículos sem dados", len(df_p) - ativos)
+    inativos = len(df_p) - ativos
+    n_dias   = max(1, (pd.to_datetime(label_periodo.split(" a ")[-1]) -
+                       pd.to_datetime(label_periodo.split(" a ")[0])).days + 1) if " a " in label_periodo else 1
+    km_dia   = total_km / n_dias
 
-    # Ranking km por motorista
-    fig_km = px.bar(
-        df_p.sort_values("km_periodo"), x="km_periodo", y="motorista",
-        orientation="h", text="km_periodo", color="contrato",
-        color_discrete_sequence=px.colors.qualitative.Bold,
-        labels={"km_periodo":"Km percorridos","motorista":"","contrato":"Contrato"},
-        title="Km percorridos por motorista no período",
-    )
-    fig_km.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
-    fig_km.update_layout(
-        height=max(400, len(df_p)*22), template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=10,r=80,t=40,b=10), xaxis=dict(tickformat=","),
-    )
-    st.plotly_chart(fig_km, use_container_width=True)
+    # ── Cards ─────────────────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+      <div style="flex:1;min-width:120px;background:rgba(123,191,106,0.12);border:1px solid #7BBF6A55;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#7BBF6A">{total_km:,.0f} km</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Total percorrido</div></div>
+      <div style="flex:1;min-width:120px;background:rgba(76,201,240,0.12);border:1px solid #4CC9F055;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#4CC9F0">{km_dia:,.0f} km</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Média km/dia (frota)</div></div>
+      <div style="flex:1;min-width:120px;background:rgba(123,191,106,0.12);border:1px solid #7BBF6A55;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#7BBF6A">{ativos}</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Veículos ativos</div></div>
+      <div style="flex:1;min-width:120px;background:rgba(255,107,107,0.12);border:1px solid #FF6B6B55;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#FF6B6B">{inativos}</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Sem dados</div></div>
+      <div style="flex:1;min-width:120px;background:rgba(247,183,49,0.12);border:1px solid #F7B73155;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#F7B731">{n_dias}</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Dias analisados</div></div>
+    </div>""", unsafe_allow_html=True)
 
-    # Principais rotas (resumo)
+    # ── Row 1: Ranking km + Horários ──────────────────────────────────────────
+    col1, col2 = st.columns([3, 2])
+
+    with col1:
+        cores_c = {c: _C["seq"][i % len(_C["seq"])]
+                   for i, c in enumerate(df_p["contrato"].unique())}
+        df_km = df_p.sort_values("km_periodo", ascending=True)
+        fig_km = go.Figure()
+        for contrato, grp in df_km.groupby("contrato"):
+            fig_km.add_trace(go.Bar(
+                x=grp["km_periodo"], y=grp["motorista"], orientation="h",
+                name=contrato,
+                marker_color=cores_c[contrato],
+                marker_line_width=0,
+                text=[f"{v:,.0f} km" for v in grp["km_periodo"]],
+                textposition="outside",
+                textfont=dict(size=10, color=_C["text"]),
+                hovertemplate="<b>%{y}</b><br>%{x:,.0f} km<extra></extra>",
+            ))
+        fig_km.update_layout(
+            **_BASE,
+            title=dict(text="🏆 Quem mais andou no período", font=dict(size=14, color=_C["text"]), x=0),
+            barmode="group",
+            height=max(380, len(df_p) * 22),
+            xaxis=dict(tickformat=",", gridcolor=_C["grid"], zeroline=False, showline=False),
+            yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
+            legend=dict(orientation="h", y=1.04, x=0, font=dict(size=11)),
+            bargap=0.25,
+        )
+        st.plotly_chart(fig_km, use_container_width=True, config=_NO_INTERACT)
+
+    with col2:
+        if not df_pt.empty and "hora" in df_pt.columns:
+            # Apenas pontos com ignição ligada
+            df_ign = df_pt[df_pt["ignicao"] == True] if "ignicao" in df_pt.columns else df_pt
+            hora_cnt = df_ign.groupby("hora").size().reindex(range(24), fill_value=0).reset_index()
+            hora_cnt.columns = ["hora", "n"]
+            # Destacar horário de pico
+            pico = hora_cnt.loc[hora_cnt["n"].idxmax(), "hora"]
+            cores_hora = [_C["acc1"] if h == pico else _C["eco135"] for h in hora_cnt["hora"]]
+            fig_hora = go.Figure(go.Bar(
+                x=hora_cnt["hora"], y=hora_cnt["n"],
+                marker_color=cores_hora, marker_line_width=0,
+                hovertemplate="<b>%{x}h</b>: %{y} registros<extra></extra>",
+            ))
+            fig_hora.update_layout(
+                **_BASE,
+                title=dict(text=f"🕐 Horários de circulação (pico: {pico}h)", font=dict(size=13, color=_C["text"]), x=0),
+                height=280,
+                xaxis=dict(tickmode="array", tickvals=list(range(0,24,3)),
+                           ticktext=[f"{h}h" for h in range(0,24,3)],
+                           gridcolor=_C["grid"], zeroline=False),
+                yaxis=dict(gridcolor=_C["grid"], zeroline=False),
+                bargap=0.1,
+            )
+            st.plotly_chart(fig_hora, use_container_width=True, config=_NO_INTERACT)
+        else:
+            st.info("Dados temporais indisponíveis.")
+
+    # ── Row 2: Dia da semana + Km por dia ────────────────────────────────────
+    col3, col4 = st.columns(2)
+
+    with col3:
+        if not df_pt.empty and "dia_semana" in df_pt.columns:
+            dias_nome = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+            df_ign2 = df_pt[df_pt["ignicao"] == True] if "ignicao" in df_pt.columns else df_pt
+            dia_cnt = df_ign2.groupby("dia_semana").size().reindex(range(7), fill_value=0).reset_index()
+            dia_cnt.columns = ["dia_semana","n"]
+            # Fim de semana em destaque
+            cores_dia = [_C["acc2"] if d >= 5 else _C["cerrado"] for d in dia_cnt["dia_semana"]]
+            fds_pct = int(dia_cnt[dia_cnt["dia_semana"] >= 5]["n"].sum() /
+                          max(1, dia_cnt["n"].sum()) * 100)
+            fig_dia = go.Figure(go.Bar(
+                x=[dias_nome[d] for d in dia_cnt["dia_semana"]],
+                y=dia_cnt["n"],
+                marker_color=cores_dia, marker_line_width=0,
+                hovertemplate="<b>%{x}</b>: %{y} registros<extra></extra>",
+            ))
+            fig_dia.update_layout(
+                **_BASE,
+                title=dict(text=f"📅 Atividade por dia da semana ({fds_pct}% FDS)", font=dict(size=13, color=_C["text"]), x=0),
+                height=280,
+                xaxis=dict(gridcolor=_C["grid"], zeroline=False),
+                yaxis=dict(gridcolor=_C["grid"], zeroline=False),
+                bargap=0.2,
+            )
+            st.plotly_chart(fig_dia, use_container_width=True, config=_NO_INTERACT)
+        else:
+            st.info("Dados de dia da semana indisponíveis.")
+
+    with col4:
+        if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
+            # Km percorrido por dia: máx - mín do odômetro em cada (data, motorista)
+            df_daily = (df_pt.groupby(["data","motorista"])["odometro"]
+                              .agg(["max","min"]).reset_index())
+            df_daily["km_dia_v"] = (df_daily["max"] - df_daily["min"]).clip(lower=0)
+            df_agg = df_daily.groupby("data")["km_dia_v"].sum().reset_index()
+            df_agg = df_agg.sort_values("data")
+            fig_kmd = go.Figure(go.Scatter(
+                x=df_agg["data"].astype(str), y=df_agg["km_dia_v"],
+                mode="lines+markers",
+                line=dict(color=_C["acc1"], width=2),
+                marker=dict(color=_C["acc1"], size=6),
+                fill="tozeroy",
+                fillcolor="rgba(247,183,49,0.12)",
+                hovertemplate="<b>%{x}</b>: %{y:,.0f} km<extra></extra>",
+            ))
+            fig_kmd.update_layout(
+                **_BASE,
+                title=dict(text="📈 Km percorrido por dia (frota total)", font=dict(size=13, color=_C["text"]), x=0),
+                height=280,
+                xaxis=dict(gridcolor=_C["grid"], zeroline=False, tickangle=-30, tickfont=dict(size=9)),
+                yaxis=dict(gridcolor=_C["grid"], zeroline=False, tickformat=","),
+            )
+            st.plotly_chart(fig_kmd, use_container_width=True, config=_NO_INTERACT)
+        else:
+            st.info("Dados diários indisponíveis.")
+
+    # ── Row 3: Principais cidades + Onde andam ───────────────────────────────
+    if not df_pt.empty and "cidade" in df_pt.columns:
+        col5, col6 = st.columns(2)
+        with col5:
+            cnt_cid = (df_pt[df_pt["cidade"] != ""]
+                       .groupby(["cidade","uf"]).size()
+                       .reset_index(name="n")
+                       .sort_values("n", ascending=False)
+                       .head(12))
+            if not cnt_cid.empty:
+                cnt_cid["label"] = cnt_cid["cidade"] + " · " + cnt_cid["uf"]
+                fig_cid = go.Figure(go.Bar(
+                    x=cnt_cid["n"].iloc[::-1],
+                    y=cnt_cid["label"].iloc[::-1],
+                    orientation="h",
+                    marker=dict(
+                        color=cnt_cid["n"].iloc[::-1],
+                        colorscale=[[0,"#132840"],[0.5,"#1E6B9E"],[1,"#4CC9F0"]],
+                        line_width=0,
+                    ),
+                    text=cnt_cid["n"].iloc[::-1], textposition="outside",
+                    textfont=dict(size=10, color=_C["text"]),
+                    hovertemplate="<b>%{y}</b>: %{x} registros<extra></extra>",
+                ))
+                fig_cid.update_layout(
+                    **_BASE,
+                    title=dict(text="📍 Onde mais andam (Top 12 cidades)", font=dict(size=13, color=_C["text"]), x=0),
+                    height=320,
+                    xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
+                    yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9)),
+                )
+                st.plotly_chart(fig_cid, use_container_width=True, config=_NO_INTERACT)
+
+        with col6:
+            # Km médio por dia por motorista (quem mais anda?)
+            if "data" in df_pt.columns and "odometro" in df_pt.columns:
+                df_mv = (df_pt.groupby(["motorista","data"])["odometro"]
+                               .agg(["max","min"]).reset_index())
+                df_mv["km_dia_v"] = (df_mv["max"] - df_mv["min"]).clip(lower=0)
+                df_media = (df_mv.groupby("motorista")["km_dia_v"]
+                                  .mean().reset_index()
+                                  .sort_values("km_dia_v", ascending=True)
+                                  .tail(15))
+                fig_med = go.Figure(go.Bar(
+                    x=df_media["km_dia_v"], y=df_media["motorista"],
+                    orientation="h",
+                    marker=dict(
+                        color=df_media["km_dia_v"],
+                        colorscale=[[0,"#1a3a2a"],[0.5,"#4A8A5A"],[1,"#7BBF6A"]],
+                        line_width=0,
+                    ),
+                    text=[f"{v:.0f} km/dia" for v in df_media["km_dia_v"]],
+                    textposition="outside",
+                    textfont=dict(size=10, color=_C["text"]),
+                    hovertemplate="<b>%{y}</b>: %{x:.0f} km/dia médio<extra></extra>",
+                ))
+                fig_med.update_layout(
+                    **_BASE,
+                    title=dict(text="🚗 Média de km/dia por motorista", font=dict(size=13, color=_C["text"]), x=0),
+                    height=320,
+                    xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
+                    yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9)),
+                )
+                st.plotly_chart(fig_med, use_container_width=True, config=_NO_INTERACT)
+
+    # ── Tabela rotas ──────────────────────────────────────────────────────────
     st.markdown("#### 🛣️ Principais Rotas")
     df_rotas = df_p[df_p["rota_resumo"] != ""].sort_values("km_periodo", ascending=False)[
         ["motorista","placa","km_periodo","rota_resumo","estados","cidades"]
@@ -1027,7 +1339,7 @@ def _render_analise_periodo(itens):
         "motorista":"Motorista","placa":"Placa","km_periodo":"Km",
         "rota_resumo":"Rota (resumo)","estados":"UFs","cidades":"N° Cidades",
     })
-    st.dataframe(df_rotas, use_container_width=True, hide_index=True, height=400)
+    st.dataframe(df_rotas, use_container_width=True, hide_index=True, height=360)
 
 
 @st.fragment
