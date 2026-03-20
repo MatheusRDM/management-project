@@ -1168,12 +1168,12 @@ def _render_analise_periodo(itens):
                             _raw_sample = hist[0]  # guarda primeiro ponto para debug
                         km = _km_from_hist(hist)
                         cidades = list(dict.fromkeys(
-                            p.get("pos_end_cidade","") for p in hist
-                            if p.get("pos_end_cidade")
+                            str(_pick(p, _HIST_CID_FIELDS) or "") for p in hist
+                            if _pick(p, _HIST_CID_FIELDS)
                         ))
                         ufs = list(dict.fromkeys(
-                            p.get("pos_end_uf","") for p in hist
-                            if p.get("pos_end_uf")
+                            str(_pick(p, _HIST_UF_FIELDS) or "") for p in hist
+                            if _pick(p, _HIST_UF_FIELDS)
                         ))
                         # Coleta pontos temporais (com detecção automática de campos)
                         for p in hist:
@@ -1958,6 +1958,383 @@ def _render_analise_periodo(itens):
             st.dataframe(df_exc, use_container_width=True, hide_index=True, height=400)
         else:
             st.info("Dados diários insuficientes.")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SEÇÃO 10 — 🚀 VELOCIDADE: quem dirige rápido demais
+    # ═══════════════════════════════════════════════════════════════════════════
+    if not df_pt.empty and "velocidade" in df_pt.columns:
+        st.markdown("---")
+        st.markdown("## 🚀 Velocidade — Quem Corre Mais")
+        st.caption("CTB Art. 61: limite 110 km/h pista dupla · 100 km/h pista simples · >120 km/h infração grave/gravíssima")
+
+        df_vel = df_pt[df_pt["velocidade"] > 0]
+        if not df_vel.empty:
+            col_v1, col_v2 = st.columns(2)
+
+            with col_v1:
+                # Velocidade média por motorista
+                vel_media = (df_vel.groupby("motorista")["velocidade"].mean()
+                                    .reset_index().sort_values("velocidade", ascending=True))
+                vel_media["velocidade"] = vel_media["velocidade"].round(1)
+                cores_vel = [
+                    _C["acc2"] if v > 110 else (_C["acc1"] if v > 90 else _C["eco135"])
+                    for v in vel_media["velocidade"]
+                ]
+                fig_vel = go.Figure(go.Bar(
+                    x=vel_media["velocidade"], y=vel_media["motorista"], orientation="h",
+                    marker_color=cores_vel, marker_line_width=0,
+                    text=[f"{v:.0f} km/h" for v in vel_media["velocidade"]],
+                    textposition="outside",
+                    textfont=dict(size=10, color=_C["text"]),
+                    hovertemplate="<b>%{y}</b>: %{x:.1f} km/h média<extra></extra>",
+                ))
+                fig_vel.add_vline(x=110, line_dash="dash", line_color=_C["acc2"],
+                                  annotation_text="110 km/h (pista dupla)",
+                                  annotation_font_color=_C["acc2"])
+                fig_vel.update_layout(
+                    **_BASE,
+                    title=dict(text="Velocidade Média por Motorista",
+                               font=dict(size=13, color=_C["text"]), x=0),
+                    height=max(400, len(vel_media) * 22),
+                    xaxis=dict(gridcolor=_C["grid"], zeroline=False, ticksuffix=" km/h"),
+                    yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
+                )
+                st.plotly_chart(fig_vel, use_container_width=True, config=_NO_INTERACT)
+
+            with col_v2:
+                # Registros acima de 110 km/h por motorista
+                df_exc_vel = df_vel[df_vel["velocidade"] > 110]
+                if not df_exc_vel.empty:
+                    exc_cnt = (df_exc_vel.groupby("motorista")
+                                         .agg(n=("velocidade","size"), vel_max=("velocidade","max"))
+                                         .reset_index().sort_values("n", ascending=True))
+                    exc_cnt["vel_max"] = exc_cnt["vel_max"].round(0).astype(int)
+                    fig_exc = go.Figure(go.Bar(
+                        x=exc_cnt["n"], y=exc_cnt["motorista"], orientation="h",
+                        marker=dict(
+                            color=exc_cnt["vel_max"],
+                            colorscale=[[0,"#F7B731"],[0.5,"#FF6B6B"],[1,"#FF0000"]],
+                            line_width=0,
+                            colorbar=dict(title="Vel máx", thickness=10,
+                                          tickfont=dict(color=_C["text"]),
+                                          title_font=dict(color=_C["text"])),
+                        ),
+                        text=[f"{n}x · máx {m} km/h" for n, m in zip(exc_cnt["n"], exc_cnt["vel_max"])],
+                        textposition="outside",
+                        textfont=dict(size=9, color=_C["text"]),
+                        hovertemplate="<b>%{y}</b>: %{x} reg >110 km/h<extra></extra>",
+                    ))
+                    fig_exc.update_layout(
+                        **_BASE,
+                        title=dict(text=f"🚨 Excesso >110 km/h — {len(df_exc_vel)} registros total",
+                                   font=dict(size=13, color=_C["text"]), x=0),
+                        height=max(320, len(exc_cnt) * 24),
+                        xaxis=dict(gridcolor=_C["grid"], zeroline=False),
+                        yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
+                    )
+                    st.plotly_chart(fig_exc, use_container_width=True, config=_NO_INTERACT)
+                else:
+                    st.success("Nenhum registro acima de 110 km/h no período.")
+
+            # Histograma de velocidade da frota
+            fig_hist_vel = go.Figure(go.Histogram(
+                x=df_vel["velocidade"],
+                nbinsx=50,
+                marker_color=_C["cerrado"],
+                marker_line_width=0,
+                hovertemplate="%{x:.0f} km/h: %{y} registros<extra></extra>",
+            ))
+            fig_hist_vel.add_vline(x=110, line_dash="dash", line_color=_C["acc2"],
+                                   annotation_text="Limite 110", annotation_font_color=_C["acc2"])
+            fig_hist_vel.add_vline(x=80, line_dash="dot", line_color=_C["eco135"],
+                                   annotation_text="Econômico 80", annotation_font_color=_C["eco135"])
+            fig_hist_vel.update_layout(
+                **_BASE,
+                title=dict(text="📊 Distribuição de velocidade (toda frota)",
+                           font=dict(size=13, color=_C["text"]), x=0),
+                height=260,
+                xaxis=dict(title="km/h", gridcolor=_C["grid"], zeroline=False),
+                yaxis=dict(title="Registros", gridcolor=_C["grid"], zeroline=False),
+            )
+            st.plotly_chart(fig_hist_vel, use_container_width=True, config=_NO_INTERACT)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SEÇÃO 11 — 🌙 FORA DO HORÁRIO COMERCIAL (22h–6h)
+    # ═══════════════════════════════════════════════════════════════════════════
+    if not df_pt.empty and "hora" in df_pt.columns:
+        df_noturno = df_pt[(df_pt["hora"] >= 22) | (df_pt["hora"] < 6)]
+        if not df_noturno.empty:
+            st.markdown("---")
+            st.markdown("## 🌙 Atividade Noturna (22h–6h)")
+            st.caption("Registros com ignição fora do horário comercial — possível uso não autorizado")
+
+            col_n1, col_n2 = st.columns(2)
+
+            with col_n1:
+                not_mot = (df_noturno.groupby("motorista").size()
+                                      .reset_index(name="reg_noturno")
+                                      .sort_values("reg_noturno", ascending=True))
+                tot_tot = df_pt.groupby("motorista").size()
+                not_mot["pct_noturno"] = (not_mot["reg_noturno"].values /
+                                          tot_tot.reindex(not_mot["motorista"]).fillna(1).values * 100).round(1)
+                fig_not = go.Figure(go.Bar(
+                    x=not_mot["reg_noturno"], y=not_mot["motorista"], orientation="h",
+                    marker=dict(
+                        color=not_mot["pct_noturno"],
+                        colorscale=[[0,"#1a1a3a"],[0.5,"#4A3A8A"],[1,"#A29BFE"]],
+                        line_width=0,
+                        colorbar=dict(title="%", thickness=10,
+                                      tickfont=dict(color=_C["text"]),
+                                      title_font=dict(color=_C["text"])),
+                    ),
+                    text=[f"{n} reg · {p:.0f}%" for n, p in zip(not_mot["reg_noturno"], not_mot["pct_noturno"])],
+                    textposition="outside",
+                    textfont=dict(size=9, color=_C["text"]),
+                    hovertemplate="<b>%{y}</b>: %{x} reg noturno<extra></extra>",
+                ))
+                fig_not.update_layout(
+                    **_BASE,
+                    title=dict(text=f"🌙 Ranking atividade noturna — {len(df_noturno)} reg total",
+                               font=dict(size=13, color=_C["text"]), x=0),
+                    height=max(320, len(not_mot) * 22),
+                    xaxis=dict(gridcolor=_C["grid"], zeroline=False),
+                    yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
+                )
+                st.plotly_chart(fig_not, use_container_width=True, config=_NO_INTERACT)
+
+            with col_n2:
+                # Distribuição horária do uso noturno
+                hora_not = (df_noturno.groupby("hora").size()
+                                       .reindex(list(range(22,24))+list(range(0,6)), fill_value=0)
+                                       .reset_index())
+                hora_not.columns = ["hora","n"]
+                fig_hnot = go.Figure(go.Bar(
+                    x=[f"{h}h" for h in hora_not["hora"]], y=hora_not["n"],
+                    marker_color="#A29BFE", marker_line_width=0,
+                    hovertemplate="<b>%{x}</b>: %{y} reg<extra></extra>",
+                ))
+                fig_hnot.update_layout(
+                    **_BASE,
+                    title=dict(text="🕐 Distribuição horária noturna",
+                               font=dict(size=13, color=_C["text"]), x=0),
+                    height=260,
+                    xaxis=dict(gridcolor=_C["grid"], zeroline=False),
+                    yaxis=dict(gridcolor=_C["grid"], zeroline=False),
+                    bargap=0.15,
+                )
+                st.plotly_chart(fig_hnot, use_container_width=True, config=_NO_INTERACT)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SEÇÃO 12 — 🗺️ IDLE POR CIDADE: onde ficam parados com motor ligado
+    # ═══════════════════════════════════════════════════════════════════════════
+    if not df_pt.empty and "idle" in df_pt.columns and "cidade" in df_pt.columns:
+        df_idle_cid = df_pt[(df_pt["idle"] == True) & (df_pt["cidade"] != "")]
+        if not df_idle_cid.empty:
+            st.markdown("---")
+            st.markdown("## 🗺️ Onde Ficam Parados com Motor Ligado")
+            st.caption("Pontos GPS com ignição ON + velocidade ≤3 km/h — cada ponto ≈3 min de idle")
+
+            col_ic1, col_ic2 = st.columns(2)
+
+            with col_ic1:
+                idle_cid = (df_idle_cid.groupby(["cidade","uf"]).size()
+                                        .reset_index(name="idle_pontos")
+                                        .sort_values("idle_pontos", ascending=False)
+                                        .head(15))
+                idle_cid["horas_idle"] = (idle_cid["idle_pontos"] * MINS_POR_PONTO / 60).round(1)
+                idle_cid["custo"] = (idle_cid["horas_idle"] * CUSTO_IDLE_H).round(0).astype(int)
+                idle_cid["label"] = idle_cid["cidade"] + " · " + idle_cid["uf"]
+                fig_icid = go.Figure(go.Bar(
+                    x=idle_cid["horas_idle"].iloc[::-1],
+                    y=idle_cid["label"].iloc[::-1],
+                    orientation="h",
+                    marker=dict(
+                        color=idle_cid["horas_idle"].iloc[::-1],
+                        colorscale=[[0,"#1a1a2a"],[0.5,"#8B2020"],[1,"#FF6B6B"]],
+                        line_width=0,
+                    ),
+                    text=[f"{h:.0f}h · R${c}" for h, c in zip(
+                        idle_cid["horas_idle"].iloc[::-1], idle_cid["custo"].iloc[::-1])],
+                    textposition="outside",
+                    textfont=dict(size=9, color=_C["text"]),
+                    hovertemplate="<b>%{y}</b>: %{x:.1f}h idle<extra></extra>",
+                ))
+                fig_icid.update_layout(
+                    **_BASE,
+                    title=dict(text="🏙️ Top 15 cidades com mais idle (horas · custo est.)",
+                               font=dict(size=12, color=_C["text"]), x=0),
+                    height=380,
+                    xaxis=dict(ticksuffix="h", gridcolor=_C["grid"], zeroline=False),
+                    yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9)),
+                )
+                st.plotly_chart(fig_icid, use_container_width=True, config=_NO_INTERACT)
+
+            with col_ic2:
+                # Idle por motorista × cidade (quem fica parado onde)
+                idle_mc = (df_idle_cid.groupby(["motorista","cidade"]).size()
+                                       .reset_index(name="n")
+                                       .sort_values("n", ascending=False)
+                                       .head(20))
+                idle_mc["horas"] = (idle_mc["n"] * MINS_POR_PONTO / 60).round(1)
+                idle_mc["label"] = idle_mc["motorista"].str.split().str[0] + " — " + idle_mc["cidade"]
+                fig_imc = go.Figure(go.Bar(
+                    x=idle_mc["horas"].iloc[::-1],
+                    y=idle_mc["label"].iloc[::-1],
+                    orientation="h",
+                    marker=dict(
+                        color=idle_mc["horas"].iloc[::-1],
+                        colorscale=[[0,"#132840"],[0.5,"#8B4020"],[1,"#FF6B6B"]],
+                        line_width=0,
+                    ),
+                    text=[f"{h:.1f}h" for h in idle_mc["horas"].iloc[::-1]],
+                    textposition="outside",
+                    textfont=dict(size=9, color=_C["text"]),
+                    hovertemplate="<b>%{y}</b>: %{x:.1f}h idle<extra></extra>",
+                ))
+                fig_imc.update_layout(
+                    **_BASE,
+                    title=dict(text="👤🏙️ Motorista × Cidade com mais idle (Top 20)",
+                               font=dict(size=12, color=_C["text"]), x=0),
+                    height=max(380, len(idle_mc) * 22),
+                    xaxis=dict(ticksuffix="h", gridcolor=_C["grid"], zeroline=False),
+                    yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=8)),
+                )
+                st.plotly_chart(fig_imc, use_container_width=True, config=_NO_INTERACT)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SEÇÃO 13 — 🎯 RANKING FINAL: TOP 10 MOTORISTAS PROBLEMÁTICOS
+    # ═══════════════════════════════════════════════════════════════════════════
+    if not df_mot.empty:
+        st.markdown("---")
+        st.markdown("## 🎯 Ranking Final — Motoristas que Precisam de Atenção")
+        st.caption(
+            "Score de risco composto: (idle% × 3) + (fds% × 2) + (1 se km/dia > 300) + (excesso velocidade). "
+            "Quanto maior o score, mais urgente a intervenção."
+        )
+
+        # Compute risk score
+        df_risk = df_mot.copy()
+        # idle peso 3
+        df_risk["risk_idle"] = df_risk["idle_pct"].clip(upper=100) * 3
+        # fds peso 2
+        df_risk["risk_fds"]  = df_risk["fds_pct"] * 2
+        # km excesso
+        if not df_pt.empty and "data" in df_pt.columns and "odometro" in df_pt.columns:
+            _dfoR = df_pt[df_pt["odometro"] > 0]
+            if not _dfoR.empty:
+                _dailyR = (_dfoR.groupby(["motorista","data"])["odometro"]
+                                 .agg(["max","min"]).reset_index())
+                _dailyR["km_d"] = (_dailyR["max"] - _dailyR["min"]).clip(lower=0, upper=1500)
+                _avgR = _dailyR.groupby("motorista")["km_d"].mean().reset_index()
+                _avgR.columns = ["motorista","km_dia_avg"]
+                df_risk = df_risk.merge(_avgR, on="motorista", how="left")
+                df_risk["km_dia_avg"] = df_risk["km_dia_avg"].fillna(0)
+                df_risk["risk_km"] = (df_risk["km_dia_avg"] > LIMIAR_KM_WA).astype(float) * 50
+            else:
+                df_risk["km_dia_avg"] = 0.0
+                df_risk["risk_km"]    = 0.0
+        else:
+            df_risk["km_dia_avg"] = 0.0
+            df_risk["risk_km"]    = 0.0
+
+        # velocidade excesso
+        if not df_pt.empty and "velocidade" in df_pt.columns:
+            _velR = (df_pt[df_pt["velocidade"] > 110]
+                          .groupby("motorista").size()
+                          .reset_index(name="n_excesso_vel"))
+            df_risk = df_risk.merge(_velR, on="motorista", how="left")
+            df_risk["n_excesso_vel"] = df_risk["n_excesso_vel"].fillna(0)
+            df_risk["risk_vel"] = df_risk["n_excesso_vel"].clip(upper=50) * 2
+        else:
+            df_risk["n_excesso_vel"] = 0
+            df_risk["risk_vel"]      = 0.0
+
+        # noturno
+        if not df_pt.empty and "hora" in df_pt.columns:
+            _notR = (df_pt[(df_pt["hora"] >= 22) | (df_pt["hora"] < 6)]
+                          .groupby("motorista").size()
+                          .reset_index(name="n_noturno"))
+            df_risk = df_risk.merge(_notR, on="motorista", how="left")
+            df_risk["n_noturno"] = df_risk["n_noturno"].fillna(0)
+            df_risk["risk_not"] = df_risk["n_noturno"].clip(upper=50)
+        else:
+            df_risk["n_noturno"] = 0
+            df_risk["risk_not"]  = 0.0
+
+        df_risk["risk_score"] = (df_risk["risk_idle"] + df_risk["risk_fds"]
+                                 + df_risk["risk_km"] + df_risk["risk_vel"]
+                                 + df_risk["risk_not"])
+        df_risk = df_risk.sort_values("risk_score", ascending=False)
+
+        # Top 10
+        top10 = df_risk.head(10).copy()
+        fig_risk = go.Figure(go.Bar(
+            x=top10["risk_score"].iloc[::-1],
+            y=top10["motorista"].iloc[::-1],
+            orientation="h",
+            marker=dict(
+                color=top10["risk_score"].iloc[::-1],
+                colorscale=[[0,"#1a3a2a"],[0.3,"#F7B731"],[0.6,"#FF6B6B"],[1,"#FF0000"]],
+                line_width=0,
+            ),
+            hovertemplate="<b>%{y}</b>: score %{x:.0f}<extra></extra>",
+        ))
+        fig_risk.update_layout(
+            **_BASE,
+            title=dict(text="🎯 Top 10 — Score de Risco Composto",
+                       font=dict(size=14, color=_C["text"]), x=0),
+            height=max(350, len(top10) * 30),
+            xaxis=dict(title="Score de risco", gridcolor=_C["grid"], zeroline=False),
+            yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=10)),
+        )
+        st.plotly_chart(fig_risk, use_container_width=True, config=_NO_INTERACT)
+
+        # Detalhes dos top 10
+        st.markdown("##### Detalhamento Top 10")
+        tab_risk = top10[[
+            "motorista","risk_score","km_periodo","idle_pct","h_idle",
+            "fds_pct","n_fds","km_dia_avg","n_excesso_vel","n_noturno",
+            "custo_total"
+        ]].copy()
+        tab_risk = tab_risk.rename(columns={
+            "motorista":"Motorista","risk_score":"Score","km_periodo":"Km total",
+            "idle_pct":"Idle %","h_idle":"H idle","fds_pct":"FDS %",
+            "n_fds":"Reg FDS","km_dia_avg":"Km/dia médio",
+            "n_excesso_vel":"Reg >110km/h","n_noturno":"Reg noturno",
+            "custo_total":"Custo Est. (R$)",
+        })
+        tab_risk["Km/dia médio"] = tab_risk["Km/dia médio"].round(0)
+        tab_risk["Score"] = tab_risk["Score"].round(0)
+        st.dataframe(tab_risk, use_container_width=True, hide_index=True)
+
+        # Cards dos 3 piores
+        st.markdown("##### Os 3 que mais precisam de atenção:")
+        worst3 = top10.head(3)
+        cols_w = st.columns(3)
+        for i, (_, row) in enumerate(worst3.iterrows()):
+            with cols_w[i]:
+                problemas = []
+                if row["idle_pct"] > LIMIAR_IDLE_AL:
+                    problemas.append(f"🔴 Idle {row['idle_pct']:.0f}%")
+                if row["fds_pct"] > 0:
+                    problemas.append(f"📅 FDS {row['fds_pct']:.0f}%")
+                if row.get("km_dia_avg", 0) > LIMIAR_KM_WA:
+                    problemas.append(f"🚗 {row['km_dia_avg']:.0f} km/dia")
+                if row.get("n_excesso_vel", 0) > 0:
+                    problemas.append(f"🚀 {int(row['n_excesso_vel'])}× >110km/h")
+                if row.get("n_noturno", 0) > 0:
+                    problemas.append(f"🌙 {int(row['n_noturno'])} reg noturno")
+                prob_html = "<br>".join(problemas) if problemas else "Sem infrações graves"
+                medal = ["🥇","🥈","🥉"][i]
+                st.markdown(f"""
+                <div style="background:rgba(255,70,70,0.10);border:1px solid #FF6B6B55;
+                            border-radius:10px;padding:14px;min-height:180px">
+                  <div style="font-size:1.1rem;font-weight:700;color:#FF6B6B">
+                    {medal} {row['motorista']}</div>
+                  <div style="font-size:.85rem;color:#F7B731;margin:4px 0">
+                    Score: {row['risk_score']:.0f} · Custo: R$ {row['custo_total']:,.0f}</div>
+                  <div style="font-size:.8rem;color:#C8D8A8;line-height:1.5">{prob_html}</div>
+                </div>""", unsafe_allow_html=True)
 
 
 @st.fragment
