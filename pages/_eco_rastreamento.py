@@ -585,32 +585,45 @@ def _render_analise_periodo(itens):
             n_mov    = int((grp["velocidade"] > 3).sum()) if "velocidade" in grp else n_total
             n_idle   = n_total - n_mov  # parado = vel ≤ 3
             n_fds    = int((grp["dia_semana"] >= 5).sum()) if "dia_semana" in grp else 0
-            h_rastreio = n_total * MINS_POR_PONTO / 60   # total horas rastreadas
-            h_mov      = n_mov   * MINS_POR_PONTO / 60   # horas em movimento
-            h_idle     = n_idle  * MINS_POR_PONTO / 60   # horas parado
+            h_rastreio = n_total * MINS_POR_PONTO / 60
+            h_mov      = n_mov   * MINS_POR_PONTO / 60
+            h_idle     = n_idle  * MINS_POR_PONTO / 60
             idle_pct   = round(h_idle / max(0.1, h_rastreio) * 100, 1)
             fds_pct    = round(n_fds / max(1, n_total) * 100, 1)
             km         = float(df_p.loc[df_p["motorista"] == mot, "km_periodo"].values[0]) \
                          if mot in df_p["motorista"].values else 0.0
-            # Eficiência = km / horas em MOVIMENTO (não total)
-            # Cap em 120 km/h (máx razoável rodovia)
             eff_raw    = km / max(0.1, h_mov)
             eff        = round(min(eff_raw, 120.0), 1)
             custo_cb   = round(km * CUSTO_KM, 2)
             custo_id   = round(h_idle * CUSTO_IDLE_H, 2)
+            # Velocidade máxima
+            vel_max    = float(grp["velocidade"].max()) if "velocidade" in grp else 0.0
+            # Local onde mais ficou parado (cidade com mais pontos idle)
+            grp_idle = grp[(grp["velocidade"] <= 3) & (grp["cidade"] != "")]
+            if not grp_idle.empty:
+                local_cnt = grp_idle.groupby(["cidade","uf"]).size()
+                _idx = local_cnt.idxmax()
+                idle_local      = f"{_idx[0]} / {_idx[1]}"
+                idle_local_min  = int(local_cnt.max() * MINS_POR_PONTO)
+            else:
+                idle_local     = "—"
+                idle_local_min = 0
             agg[mot] = {
-                "motorista":   mot,
-                "km_periodo":  km,
-                "h_rastreio":  round(h_rastreio, 1),
-                "h_mov":       round(h_mov, 1),
-                "h_idle":      round(h_idle, 1),
-                "idle_pct":    idle_pct,
-                "fds_pct":     fds_pct,
-                "n_fds":       n_fds,
-                "efficiency":  eff,
-                "custo_cb":    custo_cb,
-                "custo_idle":  custo_id,
-                "custo_total": round(custo_cb + custo_id, 2),
+                "motorista":       mot,
+                "km_periodo":      km,
+                "h_rastreio":      round(h_rastreio, 1),
+                "h_mov":           round(h_mov, 1),
+                "h_idle":          round(h_idle, 1),
+                "idle_pct":        idle_pct,
+                "fds_pct":         fds_pct,
+                "n_fds":           n_fds,
+                "efficiency":      eff,
+                "custo_cb":        custo_cb,
+                "custo_idle":      custo_id,
+                "custo_total":     round(custo_cb + custo_id, 2),
+                "vel_max":         round(vel_max, 0),
+                "idle_local":      idle_local,
+                "idle_local_min":  idle_local_min,
             }
         df_mot = pd.DataFrame(list(agg.values()))
     else:
@@ -907,6 +920,126 @@ def _render_analise_periodo(itens):
                 yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
             )
             st.plotly_chart(fig_idle_h, use_container_width=True, config=_NO_INTERACT)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SEÇÃO 4.5 — 🔬 COMPORTAMENTO DETALHADO: VEL MAX · IDLE · LOCAL
+    # ═══════════════════════════════════════════════════════════════════════════
+    if not df_mot.empty:
+        st.markdown("---")
+        st.markdown("## 🔬 Comportamento Detalhado — Velocidade · Idle · Onde Ficou Parado")
+        st.caption("Velocidade máxima atingida · horas ligado parado · local de maior permanência")
+
+        # ── Gráfico: velocidade máxima por motorista ──────────────────────────
+        col_vm1, col_vm2 = st.columns(2)
+
+        with col_vm1:
+            df_vel_max = df_mot[["motorista","vel_max"]].sort_values("vel_max", ascending=True)
+            cores_vmax = [
+                _C["acc2"] if v > 110 else (_C["acc1"] if v > 90 else _C["eco135"])
+                for v in df_vel_max["vel_max"]
+            ]
+            fig_vmax = go.Figure(go.Bar(
+                x=df_vel_max["vel_max"], y=df_vel_max["motorista"], orientation="h",
+                marker_color=cores_vmax, marker_line_width=0,
+                text=[f"{v:.0f} km/h" for v in df_vel_max["vel_max"]],
+                textposition="outside",
+                textfont=dict(size=9, color=_C["text"]),
+                hovertemplate="<b>%{y}</b>: máx %{x:.0f} km/h<extra></extra>",
+            ))
+            fig_vmax.add_vline(x=110, line_dash="dash", line_color=_C["acc2"],
+                               annotation_text="110 km/h limite", annotation_font_color=_C["acc2"],
+                               annotation_position="top right")
+            fig_vmax.add_vline(x=90, line_dash="dot", line_color=_C["acc1"],
+                               annotation_text="90 km/h recomendado", annotation_font_color=_C["acc1"],
+                               annotation_position="top right")
+            fig_vmax.update_layout(
+                **_BASE,
+                title=dict(text="🚀 Velocidade Máxima Atingida por Motorista",
+                           font=dict(size=13, color=_C["text"]), x=0),
+                height=max(400, len(df_vel_max) * 24),
+                xaxis=dict(ticksuffix=" km/h", gridcolor=_C["grid"], zeroline=False),
+                yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
+            )
+            st.plotly_chart(fig_vmax, use_container_width=True, config=_NO_INTERACT)
+
+        with col_vm2:
+            # Horas ligado parado (idle) por motorista
+            df_idle_h2 = df_mot[df_mot["h_idle"] > 0].sort_values("h_idle", ascending=True)
+            fig_idle_abs = go.Figure(go.Bar(
+                x=df_idle_h2["h_idle"], y=df_idle_h2["motorista"], orientation="h",
+                marker=dict(
+                    color=df_idle_h2["h_idle"],
+                    colorscale=[[0,"#0D2010"],[0.4,"#7B4000"],[1,"#FF6B6B"]],
+                    line_width=0,
+                    colorbar=dict(title="h idle", thickness=10,
+                                  tickfont=dict(color=_C["text"]),
+                                  title_font=dict(color=_C["text"])),
+                ),
+                text=[f"{h:.1f}h parado · R${c:.0f}" for h, c in
+                      zip(df_idle_h2["h_idle"], df_idle_h2["custo_idle"])],
+                textposition="outside",
+                textfont=dict(size=9, color=_C["text"]),
+                hovertemplate="<b>%{y}</b>: %{x:.1f}h ligado parado<extra></extra>",
+            ))
+            fig_idle_abs.update_layout(
+                **_BASE,
+                title=dict(text="⏸️ Horas Ligado e Parado (idle absoluto)",
+                           font=dict(size=13, color=_C["text"]), x=0),
+                height=max(400, len(df_idle_h2) * 24),
+                xaxis=dict(ticksuffix="h", gridcolor=_C["grid"], zeroline=False),
+                yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
+            )
+            st.plotly_chart(fig_idle_abs, use_container_width=True, config=_NO_INTERACT)
+
+        # ── Tabela: local onde mais ficou parado + vel_max + idle ─────────────
+        st.markdown("##### 📋 Onde Cada Motorista Mais Ficou Parado")
+        df_local = df_mot[["motorista","vel_max","h_idle","idle_pct","idle_local","idle_local_min"]].copy()
+        df_local["h_idle_str"]     = df_local["h_idle"].apply(lambda h: f"{h:.1f}h")
+        df_local["idle_pct_str"]   = df_local["idle_pct"].apply(lambda p: f"{p:.1f}%")
+        df_local["vel_max_str"]    = df_local["vel_max"].apply(lambda v: f"{v:.0f} km/h")
+        df_local["idle_local_str"] = df_local.apply(
+            lambda r: f"{r['idle_local']} ({r['idle_local_min']} min)" if r["idle_local"] != "—" else "—",
+            axis=1
+        )
+        df_display_local = df_local[["motorista","vel_max_str","h_idle_str","idle_pct_str","idle_local_str"]].copy()
+        df_display_local.columns = ["Motorista","Vel. Máxima","H. Ligado Parado","% Idle","Onde Mais Ficou"]
+        df_display_local = df_display_local.sort_values("H. Ligado Parado", ascending=False)
+        st.dataframe(df_display_local, use_container_width=True, hide_index=True)
+
+        # ── Destaque: top 3 maiores velocidades ───────────────────────────────
+        st.markdown("##### 🏎️ Top 5 — Maiores Velocidades Registradas")
+        top_vel = df_mot.sort_values("vel_max", ascending=False).head(5)
+        cols_tv = st.columns(5)
+        for i, (_, row) in enumerate(top_vel.iterrows()):
+            with cols_tv[i]:
+                cor = _C["acc2"] if row["vel_max"] > 110 else (_C["acc1"] if row["vel_max"] > 90 else _C["eco135"])
+                alerta = "🚨" if row["vel_max"] > 110 else ("⚠️" if row["vel_max"] > 90 else "✅")
+                st.markdown(f"""
+                <div style="background:rgba(0,0,0,0.2);border:1px solid {cor}55;
+                            border-radius:10px;padding:12px;text-align:center">
+                  <div style="font-size:1.4rem;font-weight:700;color:{cor}">{alerta}</div>
+                  <div style="font-size:1.2rem;font-weight:700;color:{cor}">{row['vel_max']:.0f} km/h</div>
+                  <div style="font-size:.75rem;color:#C8D8A8;margin-top:4px">
+                    {row['motorista'].split()[0]}</div>
+                </div>""", unsafe_allow_html=True)
+
+        # ── Destaque: top 3 maior idle ────────────────────────────────────────
+        st.markdown("##### ⏸️ Top 5 — Mais Tempo Ligado e Parado")
+        top_idle = df_mot.sort_values("h_idle", ascending=False).head(5)
+        cols_ti = st.columns(5)
+        for i, (_, row) in enumerate(top_idle.iterrows()):
+            with cols_ti[i]:
+                cor = _C["acc2"] if row["idle_pct"] > LIMIAR_IDLE_AL else (
+                      _C["acc1"] if row["idle_pct"] > LIMIAR_IDLE_OK else _C["eco135"])
+                st.markdown(f"""
+                <div style="background:rgba(0,0,0,0.2);border:1px solid {cor}55;
+                            border-radius:10px;padding:12px;text-align:center">
+                  <div style="font-size:1.2rem;font-weight:700;color:{cor}">{row['h_idle']:.1f}h</div>
+                  <div style="font-size:.85rem;color:#F7B731">{row['idle_pct']:.0f}% idle</div>
+                  <div style="font-size:.75rem;color:#C8D8A8;margin-top:4px">
+                    {row['motorista'].split()[0]}</div>
+                  <div style="font-size:.7rem;color:#8FA882">{row['idle_local']}</div>
+                </div>""", unsafe_allow_html=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SEÇÃO 5 — 🏆 RANKING KM + MÉDIA KM/DIA
