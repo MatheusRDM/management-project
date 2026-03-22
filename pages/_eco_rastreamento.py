@@ -36,33 +36,90 @@ from _eco_rast_api import (
 # RENDER: MAPA DE POSIÇÃO
 # =============================================================================
 
-def _render_mapa_posicao(itens):
-    mapa   = folium.Map(location=[-18.5, -47.5], zoom_start=6, tiles="CartoDB dark_matter")
+def _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=560):
+    """Mapa de posição atual com estilo melhorado. Retorna o componente st_folium."""
+    from folium.plugins import MarkerCluster
+    mapa = folium.Map(
+        location=[-18.5, -47.5], zoom_start=6,
+        tiles="CartoDB dark_matter",
+        prefer_canvas=True,
+    )
+
+    # Legenda flutuante
+    legend_html = """
+    <div style="position:fixed;bottom:30px;left:30px;z-index:9999;
+                background:rgba(13,27,42,0.92);border:1px solid rgba(86,110,61,0.5);
+                border-radius:10px;padding:12px 16px;font-family:Inter,sans-serif;
+                font-size:12px;color:#C8D8A8;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,0.5)">
+      <b style="color:#BFCF99;font-size:13px">🛰️ ECO Rodovias</b><br><br>
+      <span style="color:#7BBF6A">●</span> Ignição ON<br>
+      <span style="color:#FF4757">●</span> Ignição OFF<br>
+      <span style="color:#F7B731">●</span> Em movimento
+    </div>"""
+    mapa.get_root().html.add_child(folium.Element(legend_html))
+
     bounds = []
     for it in itens:
-        if it["lat"] and it["lon"]:
+        if it.get("lat") and it.get("lon"):
             try:
                 lt, ln = float(it["lat"]), float(it["lon"])
-                ign = "🟢" if it["ignicao"] else "🔴"
-                popup_html = (
-                    f"<b style='color:{it['cor']}'>{it['desc']}</b><br>"
-                    f"Placa: {it['placa']}<br>Ignição: {ign}<br>"
-                    f"Velocidade: {it['velocidade']} km/h<br>"
-                    f"Hodômetro: {it['odometro']:,} km<br>{it['localizacao']}"
+                em_movimento = it.get("velocidade", 0) > 3
+                if em_movimento:
+                    cor_pin = "#F7B731"
+                elif it["ignicao"]:
+                    cor_pin = "#7BBF6A"
+                else:
+                    cor_pin = "#FF4757"
+
+                # Ícone personalizado com número da velocidade
+                vel_str = f"{int(it.get('velocidade',0))} km/h" if em_movimento else "Parado"
+                icon_html = f"""
+                <div style="background:{cor_pin};border:2px solid rgba(255,255,255,0.3);
+                            border-radius:50%;width:32px;height:32px;
+                            display:flex;align-items:center;justify-content:center;
+                            font-size:9px;font-weight:700;color:#0D1B2A;
+                            box-shadow:0 2px 8px rgba(0,0,0,0.6)">
+                  {"▶" if em_movimento else "■"}
+                </div>"""
+                icon = folium.DivIcon(
+                    html=icon_html,
+                    icon_size=(32, 32),
+                    icon_anchor=(16, 16),
                 )
-                folium.CircleMarker(
-                    [lt, ln], radius=8, color=it["cor"], fill=True,
-                    fill_color=it["cor"], fill_opacity=0.9,
-                    tooltip=f"{ign} {it['motorista']} — {it['velocidade']} km/h",
-                    popup=folium.Popup(popup_html, max_width=280),
+
+                popup_html = f"""
+                <div style="font-family:Inter,sans-serif;font-size:13px;
+                            background:#0D1B2A;color:#E8EFD8;
+                            border-radius:8px;padding:12px;min-width:220px">
+                  <b style="color:{cor_pin};font-size:14px">{it['desc']}</b><br>
+                  <span style="color:#8FA882">Placa:</span> {it['placa']}<br>
+                  <span style="color:#8FA882">Status:</span>
+                  {'🟡 Em movimento — ' + vel_str if em_movimento else ('🟢 Ligado parado' if it['ignicao'] else '🔴 Desligado')}<br>
+                  <span style="color:#8FA882">Odômetro:</span> {it['odometro']:,} km<br>
+                  <span style="color:#8FA882">Local:</span> {it.get('cidade','—')} / {it.get('uf','—')}<br>
+                  <span style="color:#8FA882">Atualizado:</span> {it.get('dt_posicao','—')}
+                </div>"""
+
+                folium.Marker(
+                    [lt, ln],
+                    icon=icon,
+                    tooltip=folium.Tooltip(
+                        f"<b>{it['motorista']}</b><br>{vel_str}",
+                        style="background:#0D1B2A;color:#E8EFD8;border:1px solid #566E3D;"
+                              "font-family:Inter;font-size:12px;border-radius:6px;"
+                    ),
+                    popup=folium.Popup(popup_html, max_width=300),
                 ).add_to(mapa)
                 bounds.append([lt, ln])
             except Exception:
                 pass
+
     if bounds:
-        lats = [c[0] for c in bounds]; lons = [c[1] for c in bounds]
+        lats = [c[0] for c in bounds]
+        lons = [c[1] for c in bounds]
         mapa.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
-    st_folium(mapa, width="100%", height=450, key="logos_mapa_pos", returned_objects=[])
+
+    st_folium(mapa, width="100%", height=height, key=map_key, returned_objects=[])
 
 
 # =============================================================================
@@ -254,7 +311,7 @@ def _render_estatisticas(itens):
         "dt_posicao":"Última posição","ignicao":"Ignição",
     })
     st.dataframe(df_tab.sort_values("Hodômetro km", ascending=False),
-                 use_container_width=True, hide_index=True, height=400)
+                 use_container_width=True, hide_index=True)
 
 
 # =============================================================================
@@ -364,14 +421,13 @@ def _render_analise_periodo(itens):
         margin=dict(l=12, r=12, t=36, b=12),
     )
 
-    # Deriva datas padrão a partir dos próprios veículos (evita período sem dados)
-    _datas_vei = [it["ultima_data"] for it in itens if it.get("ultima_data")]
-    _d_max = max(_datas_vei) if _datas_vei else date.today()
-    _d_min = _d_max.replace(day=1)  # primeiro dia do mês do último dado
+    # Padrão fixo: 01/03/2026 → hoje (conforme solicitado)
+    _d_min = date(2026, 3, 1)
+    _d_max = date.today()
 
     st.markdown(
-        f"Busca o histórico de todos os veículos ECO em um período e gera estatísticas consolidadas. "
-        f"**Última posição disponível: {_d_max.strftime('%d/%m/%Y')}**"
+        "Histórico consolidado de toda a frota ECO. "
+        f"**Período padrão: 01/03/2026 → {_d_max.strftime('%d/%m/%Y')}**"
     )
     p1, p2, p3 = st.columns([2, 2, 1])
     with p1:
@@ -1209,7 +1265,7 @@ def _render_analise_periodo(itens):
                 "n_fds":"Reg FDS","efficiency":"km/h mov",
                 "custo_cb":"Custo CB (R$)","custo_idle":"Custo Idle (R$)","custo_total":"Custo Total (R$)",
             })
-            st.dataframe(df_tab_mot, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(df_tab_mot, use_container_width=True, hide_index=True)
 
     with tab_t2:
         df_rotas = df_p[df_p["rota_resumo"] != ""].sort_values("km_periodo", ascending=False)[
@@ -1218,7 +1274,7 @@ def _render_analise_periodo(itens):
             "motorista":"Motorista","placa":"Placa","km_periodo":"Km",
             "rota_resumo":"Rota (resumo)","estados":"UFs","cidades":"N° Cidades",
         })
-        st.dataframe(df_rotas, use_container_width=True, hide_index=True, height=400)
+        st.dataframe(df_rotas, use_container_width=True, hide_index=True)
 
     with tab_t3:
         if not df_pt.empty and "data" in df_pt.columns:
@@ -1240,7 +1296,7 @@ def _render_analise_periodo(itens):
             df_exc = df_exc[["motorista","data","km_dia","status"]].rename(columns={
                 "motorista":"Motorista","data":"Data","km_dia":"Km no dia","status":"Status",
             })
-            st.dataframe(df_exc, use_container_width=True, hide_index=True, height=400)
+            st.dataframe(df_exc, use_container_width=True, hide_index=True)
         else:
             st.info("Dados diários insuficientes.")
 
@@ -1664,17 +1720,17 @@ def _aba_rastreamento():
 
     itens = [_parse_eco(v, i) for i, v in enumerate(veiculos)]
 
-    tab_pos, tab_stats, tab_rota, tab_periodo = st.tabs([
-        "📍 Posição Atual",
+    tab_mapa_periodo, tab_stats, tab_rota = st.tabs([
+        "🗺️ Mapa & Análise de Período",
         "📊 Estatísticas",
         "🛣️ Rota Individual",
-        "📅 Análise de Período",
     ])
-    with tab_pos:
-        _render_mapa_posicao(itens)
+    with tab_mapa_periodo:
+        st.markdown("### 📍 Posição Atual da Frota")
+        _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=580)
+        st.markdown("---")
+        _render_analise_periodo(itens)
     with tab_stats:
         _render_estatisticas(itens)
     with tab_rota:
         _render_rota_individual(itens)
-    with tab_periodo:
-        _render_analise_periodo(itens)
