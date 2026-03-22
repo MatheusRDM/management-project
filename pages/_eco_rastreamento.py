@@ -1023,17 +1023,152 @@ def _render_analise_periodo(itens):
         st.plotly_chart(fig_kmd, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 6 — 🚨 FIM DE SEMANA — ANÁLISE COMPLETA
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SEÇÃO 6 — 🚨 FIM DE SEMANA — QUEM TRABALHOU + KM POR ODÔMETRO
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 🚨 Fim de Semana — Quem e Quanto")
+    st.markdown("## 🚨 Fim de Semana — Quem Trabalhou e Quantos Km")
+    st.caption(
+        "Km calculados por **odômetro**: max − min por motorista por dia · "
+        "fallback: velocidade × tempo quando odômetro=0"
+    )
 
     if not df_pt.empty and "dia_semana" in df_pt.columns:
-        col_f1, col_f2 = st.columns(2)
+        dias_nome_pt = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+        df_fds = df_pt[df_pt["dia_semana"] >= 5].copy()
 
-        with col_f1:
-            df_fds_r = df_pt[df_pt["dia_semana"] >= 5]
-            dias_nome_pt = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+        # ── Km FDS por odômetro (max−min por motorista×dia) ──────────────────
+        km_fds_por_mot = pd.Series(dtype=float)
+        dias_fds_por_mot = pd.Series(dtype=int)
+
+        if not df_fds.empty:
+            # Método 1: odômetro
+            df_odo_fds = df_fds[df_fds["odometro"] > 0]
+            if not df_odo_fds.empty:
+                daily_fds = (df_odo_fds.groupby(["motorista","data"])["odometro"]
+                                        .agg(odo_max="max", odo_min="min").reset_index())
+                daily_fds["km_dia"] = (daily_fds["odo_max"] - daily_fds["odo_min"]).clip(lower=0, upper=1500)
+                km_fds_por_mot = daily_fds.groupby("motorista")["km_dia"].sum()
+                dias_fds_por_mot = daily_fds[daily_fds["km_dia"] > 0].groupby("motorista")["data"].nunique()
+
+            # Método 2 (fallback): velocidade × tempo para pontos sem odômetro
+            df_vel_fds = df_fds[df_fds["odometro"] == 0].copy()
+            if not df_vel_fds.empty:
+                df_vel_fds["km_pont"] = df_vel_fds["velocidade"] * (MINS_POR_PONTO / 60)
+                km_vel_fb = df_vel_fds.groupby("motorista")["km_pont"].sum()
+                # Soma ao odômetro (onde já tem) ou adiciona (onde só tem fallback)
+                km_fds_por_mot = km_fds_por_mot.add(km_vel_fb, fill_value=0)
+
+            km_fds_por_mot = km_fds_por_mot.round(0)
+            if dias_fds_por_mot.empty:
+                dias_fds_por_mot = df_fds.groupby("motorista")["data"].nunique()
+
+            # Total de registros FDS por motorista (para %FDS)
+            reg_fds = df_fds.groupby("motorista").size()
+            reg_tot = df_pt.groupby("motorista").size()
+
+            # DataFrame consolidado
+            df_fds_summary = (km_fds_por_mot.reset_index()
+                               .rename(columns={0:"km_fds","odometro":"km_fds"}))
+            df_fds_summary.columns = ["motorista","km_fds"]
+            df_fds_summary["dias_fds"] = (dias_fds_por_mot
+                                           .reindex(df_fds_summary["motorista"]).fillna(0).values.astype(int))
+            df_fds_summary["reg_fds"]  = (reg_fds
+                                           .reindex(df_fds_summary["motorista"]).fillna(0).values.astype(int))
+            df_fds_summary["pct_fds"]  = (df_fds_summary["reg_fds"] /
+                                           reg_tot.reindex(df_fds_summary["motorista"]).fillna(1).values * 100).round(1)
+            df_fds_summary = df_fds_summary.sort_values("km_fds", ascending=False)
+
+            # ── KPIs resumo FDS ───────────────────────────────────────────────
+            total_km_fds  = df_fds_summary["km_fds"].sum()
+            n_trab_fds    = (df_fds_summary["km_fds"] > 0).sum()
+            media_km_fds  = df_fds_summary[df_fds_summary["km_fds"]>0]["km_fds"].mean()
+            maior_km_fds  = df_fds_summary.iloc[0]["motorista"] if not df_fds_summary.empty else "—"
+            maior_km_val  = df_fds_summary.iloc[0]["km_fds"] if not df_fds_summary.empty else 0
+
+            st.markdown(f"""
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+              <div style="flex:1;min-width:120px;background:rgba(255,107,107,0.12);border:1px solid #FF6B6B55;
+                          border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:1.6rem;font-weight:700;color:#FF6B6B">{n_trab_fds}</div>
+                <div style="color:#C8D8A8;font-size:.75rem">Motoristas no FDS</div></div>
+              <div style="flex:1;min-width:120px;background:rgba(247,183,49,0.12);border:1px solid #F7B73155;
+                          border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:1.6rem;font-weight:700;color:#F7B731">{total_km_fds:,.0f} km</div>
+                <div style="color:#C8D8A8;font-size:.75rem">Km total no FDS</div></div>
+              <div style="flex:1;min-width:120px;background:rgba(76,201,240,0.12);border:1px solid #4CC9F055;
+                          border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:1.6rem;font-weight:700;color:#4CC9F0">{media_km_fds:,.0f} km</div>
+                <div style="color:#C8D8A8;font-size:.75rem">Média km/motorista FDS</div></div>
+              <div style="flex:1;min-width:140px;background:rgba(162,155,254,0.12);border:1px solid #A29BFE55;
+                          border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:1.1rem;font-weight:700;color:#A29BFE">{maior_km_fds.split()[0] if maior_km_fds != '—' else '—'}</div>
+                <div style="font-size:.9rem;color:#F7B731">{maior_km_val:,.0f} km</div>
+                <div style="color:#C8D8A8;font-size:.75rem">Mais rodou no FDS</div></div>
+            </div>""", unsafe_allow_html=True)
+
+            col_f1, col_f2 = st.columns(2)
+
+            with col_f1:
+                # Km por motorista no FDS — ordenado por km
+                df_km_plot = df_fds_summary[df_fds_summary["km_fds"] > 0].sort_values("km_fds", ascending=True)
+                if not df_km_plot.empty:
+                    fig_km_fds = go.Figure(go.Bar(
+                        x=df_km_plot["km_fds"],
+                        y=df_km_plot["motorista"],
+                        orientation="h",
+                        marker=dict(
+                            color=df_km_plot["km_fds"],
+                            colorscale=[[0,"#3a1020"],[0.4,"#A0304A"],[1,"#FF6B6B"]],
+                            line_width=0,
+                        ),
+                        text=[f"{k:,.0f} km · {d}d" for k, d in
+                              zip(df_km_plot["km_fds"], df_km_plot["dias_fds"])],
+                        textposition="outside",
+                        textfont=dict(size=9, color=_C["text"]),
+                        hovertemplate="<b>%{y}</b>: %{x:,.0f} km no FDS<extra></extra>",
+                    ))
+                    fig_km_fds.update_layout(
+                        **_BASE,
+                        title=dict(text="🚗 Km rodados no Fim de Semana (por odômetro)",
+                                   font=dict(size=13, color=_C["text"]), x=0),
+                        height=max(380, len(df_km_plot) * 26),
+                        xaxis=dict(ticksuffix=" km", gridcolor=_C["grid"], zeroline=False),
+                        yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
+                    )
+                    st.plotly_chart(fig_km_fds, use_container_width=True, config=_NO_INTERACT)
+
+            with col_f2:
+                # Distribuição Sábado vs Domingo
+                df_fds["dia_label"] = df_fds["dia_semana"].map({5:"Sábado",6:"Domingo"})
+                sab_dom = df_fds.groupby(["motorista","dia_label"]).size().unstack(fill_value=0)
+                sab_dom = sab_dom.reindex(columns=["Sábado","Domingo"], fill_value=0)
+                sab_dom = sab_dom.loc[sab_dom.sum(axis=1).sort_values(ascending=True).index]
+
+                fig_sd = go.Figure()
+                fig_sd.add_trace(go.Bar(
+                    x=sab_dom["Sábado"], y=sab_dom.index, orientation="h",
+                    name="Sábado", marker_color="#F7B731", marker_line_width=0,
+                    hovertemplate="<b>%{y}</b> · Sábado: %{x} reg<extra></extra>",
+                ))
+                fig_sd.add_trace(go.Bar(
+                    x=sab_dom["Domingo"], y=sab_dom.index, orientation="h",
+                    name="Domingo", marker_color="#FF6B6B", marker_line_width=0,
+                    hovertemplate="<b>%{y}</b> · Domingo: %{x} reg<extra></extra>",
+                ))
+                fig_sd.update_layout(
+                    **_BASE, barmode="stack",
+                    title=dict(text="📅 Sábado vs Domingo — registros por motorista",
+                               font=dict(size=13, color=_C["text"]), x=0),
+                    height=max(380, len(sab_dom) * 26),
+                    xaxis=dict(gridcolor=_C["grid"], zeroline=False),
+                    yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
+                    legend=dict(orientation="h", y=1.04, x=0,
+                                font=dict(color=_C["text"], size=10)),
+                )
+                st.plotly_chart(fig_sd, use_container_width=True, config=_NO_INTERACT)
+
+            # Atividade por dia da semana (toda a frota)
             dia_cnt = (df_pt.groupby("dia_semana").size()
                             .reindex(range(7), fill_value=0).reset_index())
             dia_cnt.columns = ["dia_semana","n"]
@@ -1051,7 +1186,7 @@ def _render_analise_periodo(itens):
             ))
             fig_dia.update_layout(
                 **_BASE,
-                title=dict(text=f"📅 Atividade por dia — {fds_pct_tot}% dos registros são FDS",
+                title=dict(text=f"📅 Registros por dia — {fds_pct_tot}% são Sáb/Dom",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=280,
                 xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1060,36 +1195,19 @@ def _render_analise_periodo(itens):
             )
             st.plotly_chart(fig_dia, use_container_width=True, config=_NO_INTERACT)
 
-        with col_f2:
-            if not df_fds_r.empty:
-                fds_mot = (df_fds_r.groupby("motorista").size()
-                                    .reset_index(name="reg_fds")
-                                    .sort_values("reg_fds", ascending=True))
-                tot_por = df_pt.groupby("motorista").size().reindex(fds_mot["motorista"]).fillna(1)
-                fds_mot["pct_fds"] = (fds_mot["reg_fds"].values / tot_por.values * 100).round(1)
-                fig_fds = go.Figure(go.Bar(
-                    x=fds_mot["reg_fds"], y=fds_mot["motorista"], orientation="h",
-                    marker=dict(
-                        color=fds_mot["pct_fds"],
-                        colorscale=[[0,"#3a1020"],[0.4,"#A0304A"],[1,"#FF6B6B"]],
-                        line_width=0, colorbar=dict(title="%FDS", thickness=10,
-                                                    tickfont=dict(color=_C["text"]),
-                                                    title_font=dict(color=_C["text"])),
-                    ),
-                    text=[f"{r} reg · {p:.0f}%" for r, p in zip(fds_mot["reg_fds"], fds_mot["pct_fds"])],
-                    textposition="outside",
-                    textfont=dict(size=9, color=_C["text"]),
-                    hovertemplate="<b>%{y}</b>: %{x} reg FDS<extra></extra>",
-                ))
-                fig_fds.update_layout(
-                    **_BASE,
-                    title=dict(text="🚨 Ranking Fim de Semana por Motorista",
-                               font=dict(size=13, color=_C["text"]), x=0),
-                    height=max(380, len(fds_mot) * 22),
-                    xaxis=dict(gridcolor=_C["grid"], zeroline=False),
-                    yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=9)),
-                )
-                st.plotly_chart(fig_fds, use_container_width=True, config=_NO_INTERACT)
+            # Tabela detalhada FDS
+            st.markdown("##### 📋 Tabela completa — Fim de Semana")
+            tab_fds_full = df_fds_summary.copy()
+            tab_fds_full["km_fds"] = tab_fds_full["km_fds"].round(0).astype(int)
+            tab_fds_full["pct_fds"] = tab_fds_full["pct_fds"].astype(str) + "%"
+            tab_fds_full = tab_fds_full.rename(columns={
+                "motorista":"Motorista","km_fds":"Km no FDS",
+                "dias_fds":"Dias com atividade","reg_fds":"Registros GPS",
+                "pct_fds":"% do total de reg.",
+            })
+            st.dataframe(tab_fds_full, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum registro de fim de semana no período selecionado.")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SEÇÃO 7 — 🕐 HORÁRIOS + HEATMAPS
