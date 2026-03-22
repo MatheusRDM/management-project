@@ -561,8 +561,8 @@ def _render_analise_periodo(itens):
                 st.json({k: v for k, v in _sample.items()})
 
     MINS_POR_PONTO = 3  # estimativa Logos: ~1 ponto a cada 3 min
-    CUSTO_KM       = 0.50   # R$/km — diesel highway pickup (Geotab benchmark)
-    CUSTO_IDLE_H   = 5.09   # R$/h idle — 1L diesel/h × R$5,09/L (preço fev/2026)
+    CUSTO_KM       = 0.62   # R$/km — gasolina highway pickup (~11 km/L × R$6,82/L médio BR mar/2026)
+    CUSTO_IDLE_H   = 6.82   # R$/h idle — 1L gasolina/h × R$6,82/L (preço médio BR mar/2026)
     LIMIAR_IDLE_OK = 5      # % idle aceitável (Geotab: alvo ≤5%)
     LIMIAR_IDLE_AL = 10     # % idle alarme (Geotab: >10% = crítico)
     LIMIAR_KM_WA   = 300    # km/dia atenção
@@ -678,7 +678,7 @@ def _render_analise_periodo(itens):
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
     st.markdown("## ⚠️ Alertas Críticos — Pessoas e Quantidades")
-    st.caption("Baseado em: Geotab Fleet KPIs · Lei 13.103/2015 · CTB Art. 61 · preço diesel Fev/2026")
+    st.caption("Baseado em: Geotab Fleet KPIs · Lei 13.103/2015 · CTB Art. 61 · gasolina R$6,82/L (preço médio BR mar/2026)")
 
     if not df_mot.empty:
         a1, a2, a3 = st.columns(3)
@@ -754,7 +754,7 @@ def _render_analise_periodo(itens):
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
     st.markdown("## 💰 Custo Estimado por Motorista")
-    st.caption("Combustível: R$0,50/km · Idle: R$5,09/h (1L diesel/h × preço Fev/2026)")
+    st.caption("Combustível: R$0,62/km · Idle: R$6,82/h (1L gasolina/h × R$6,82/L — preço médio BR mar/2026)")
 
     if not df_mot.empty:
         df_custo = df_mot[df_mot["km_periodo"] > 0].sort_values("custo_total", ascending=True)
