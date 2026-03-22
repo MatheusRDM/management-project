@@ -149,13 +149,17 @@ def _render_estatisticas(itens):
     )
 
     df = pd.DataFrame(itens)
-    ligados   = int(df["ignicao"].sum())
-    deslig    = len(df) - ligados
-    total_km  = df["odometro"].sum()
-    n_estados = df["uf"].nunique()
-    n_cidades = df["cidade"].nunique()
+    ligados      = int(df["ignicao"].sum())
+    deslig       = len(df) - ligados
+    n_estados    = df["uf"].nunique()
+    n_cidades    = df["cidade"].nunique()
+    # pos_odometro = hodômetro VITALÍCIO do veículo (km totais na vida do veículo)
+    # NÃO é km rodado no período — apenas indicativo do estado da frota
+    odo_medio    = int(df["odometro"].median()) if df["odometro"].sum() > 0 else 0
+    h_dir_total  = round(df["tempo_dir_h"].sum(), 1)   # horas dirigindo hoje (snapshot)
 
     # ── Cards ─────────────────────────────────────────────────────────────────
+    st.caption("📍 Snapshot atual — dados da última posição de cada veículo")
     st.markdown(f"""
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
       <div style="flex:1;min-width:120px;background:rgba(123,191,106,0.12);border:1px solid #7BBF6A55;
@@ -165,19 +169,23 @@ def _render_estatisticas(itens):
       <div style="flex:1;min-width:120px;background:rgba(76,201,240,0.12);border:1px solid #4CC9F055;
                   border-radius:10px;padding:16px;text-align:center">
         <div style="font-size:1.8rem;font-weight:700;color:#4CC9F0">{ligados}</div>
-        <div style="color:#C8D8A8;font-size:.8rem">🟢 Ligados</div></div>
+        <div style="color:#C8D8A8;font-size:.8rem">🟢 Ligados agora</div></div>
       <div style="flex:1;min-width:120px;background:rgba(255,107,107,0.12);border:1px solid #FF6B6B55;
                   border-radius:10px;padding:16px;text-align:center">
         <div style="font-size:1.8rem;font-weight:700;color:#FF6B6B">{deslig}</div>
         <div style="color:#C8D8A8;font-size:.8rem">🔴 Desligados</div></div>
       <div style="flex:1;min-width:120px;background:rgba(247,183,49,0.12);border:1px solid #F7B73155;
                   border-radius:10px;padding:16px;text-align:center">
-        <div style="font-size:1.8rem;font-weight:700;color:#F7B731">{total_km:,.0f}</div>
-        <div style="color:#C8D8A8;font-size:.8rem">Km total (hodômetro)</div></div>
+        <div style="font-size:1.8rem;font-weight:700;color:#F7B731">{odo_medio:,} km</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Hodômetro médio da frota</div></div>
       <div style="flex:1;min-width:120px;background:rgba(162,155,254,0.12);border:1px solid #A29BFE55;
                   border-radius:10px;padding:16px;text-align:center">
-        <div style="font-size:1.8rem;font-weight:700;color:#A29BFE">{n_estados} UFs · {n_cidades} cidades</div>
-        <div style="color:#C8D8A8;font-size:.8rem">Distribuição geográfica</div></div>
+        <div style="font-size:1.8rem;font-weight:700;color:#A29BFE">{h_dir_total:.0f}h</div>
+        <div style="color:#C8D8A8;font-size:.8rem">Horas dirigindo hoje (frota)</div></div>
+      <div style="flex:1;min-width:120px;background:rgba(0,206,201,0.12);border:1px solid #00CEC955;
+                  border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:1.8rem;font-weight:700;color:#00CEC9">{n_estados} UFs</div>
+        <div style="color:#C8D8A8;font-size:.8rem">{n_cidades} cidades</div></div>
     </div>""", unsafe_allow_html=True)
 
     # ── Hodômetro por motorista ────────────────────────────────────────────────
@@ -476,18 +484,18 @@ def _render_analise_periodo(itens):
                             try:
                                 dt  = pd.to_datetime(dt_str)
                                 vel = float(_pick(p, _HIST_VEL_FIELDS) or 0)
-                                ign = bool(_pick(p, _HIST_IGN_FIELDS) or False)
                                 odo = int(float(_pick(p, _HIST_ODO_FIELDS) or 0))
                                 all_pontos.append({
                                     "motorista":  it["motorista"],
                                     "contrato":   it["contrato"],
+                                    "dt":         dt.isoformat(),   # timestamp completo
                                     "hora":       dt.hour,
                                     "dia_semana": dt.dayofweek,
                                     "data":       dt.date(),
                                     "odometro":   odo,
-                                    "ignicao":    ign,
                                     "velocidade": vel,
-                                    "idle":       ign and vel <= 3,
+                                    # idle = PARADO (vel ≤ 3 km/h), independente de ignição
+                                    "idle":       vel <= 3,
                                     "cidade":     str(_pick(p, _HIST_CID_FIELDS) or ""),
                                     "uf":         str(_pick(p, _HIST_UF_FIELDS) or ""),
                                 })
@@ -560,13 +568,12 @@ def _render_analise_periodo(itens):
             with st.expander("🔍 Debug: campos da API (opcional)"):
                 st.json({k: v for k, v in _sample.items()})
 
-    MINS_POR_PONTO = 3  # estimativa Logos: ~1 ponto a cada 3 min
-    CUSTO_KM       = 0.62   # R$/km — gasolina highway pickup (~11 km/L × R$6,82/L médio BR mar/2026)
-    CUSTO_IDLE_H   = 6.82   # R$/h idle — 1L gasolina/h × R$6,82/L (preço médio BR mar/2026)
+    CUSTO_KM       = 0.62   # R$/km — gasolina ~11 km/L × R$6,82/L (mar/2026)
+    CUSTO_IDLE_H   = 6.82   # R$/h idle — 1L gasolina/h × R$6,82/L (mar/2026)
     LIMIAR_IDLE_OK = 5      # % idle aceitável (Geotab: alvo ≤5%)
     LIMIAR_IDLE_AL = 10     # % idle alarme (Geotab: >10% = crítico)
     LIMIAR_KM_WA   = 300    # km/dia atenção
-    LIMIAR_KM_AL   = 500    # km/dia alarme (≈ 5h30 dirigindo a 90 km/h — Lei 13.103)
+    LIMIAR_KM_AL   = 500    # km/dia alarme
     dias_nome      = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
 
     ativos   = (df_p["registros"] > 0).sum()
@@ -574,56 +581,112 @@ def _render_analise_periodo(itens):
     n_dias   = max(1, (pd.to_datetime(label_periodo.split(" a ")[-1]) -
                        pd.to_datetime(label_periodo.split(" a ")[0])).days + 1) if " a " in label_periodo else 1
 
-    # ── Agrega KPIs por motorista ──────────────────────────────────────────────
-    # h_rastreio = total de pontos GPS × intervalo estimado (≈3 min/ponto)
-    # Isso equivale ao tempo TOTAL rastreado (motor ligado ou não).
-    # idle = vel ≤ 3 km/h (parado com ou sem ignição)
+    # ── Diagnóstico automático de campos ──────────────────────────────────────
+    vel_detectada = (not df_pt.empty and "velocidade" in df_pt.columns
+                     and float(df_pt["velocidade"].max()) > 0)
+    odo_detectado = (not df_pt.empty and "odometro" in df_pt.columns
+                     and int(df_pt["odometro"].max()) > 0)
+    dt_detectado  = "dt" in df_pt.columns if not df_pt.empty else False
+
+    _diag_msgs = []
+    if not vel_detectada:
+        _diag_msgs.append("⚠️ **Velocidade** não detectada nos dados — eficiência e idle calculados por estimativa")
+    if not odo_detectado:
+        _diag_msgs.append("⚠️ **Odômetro** zerado — km calculados por velocidade × tempo ou GPS")
+    if _diag_msgs:
+        with st.expander("🔍 Diagnóstico de dados da API", expanded=True):
+            for m in _diag_msgs: st.markdown(m)
+            _sample = st.session_state.get("logos_hist_sample")
+            if _sample:
+                st.caption("Campos reais retornados pelo historicoposicao:")
+                st.json({k: v for k, v in list(_sample.items())[:25]})
+
+    # ── Agrega KPIs por motorista usando timestamps reais ─────────────────────
+    # Usa intervalos reais entre GPS points para calcular horas (sem MINS_POR_PONTO)
+    # idle = vel ≤ 3 km/h (parado com motor ligado ou desligado)
     if not df_pt.empty:
         agg = {}
         for mot, grp in df_pt.groupby("motorista"):
-            n_total  = len(grp)
-            n_mov    = int((grp["velocidade"] > 3).sum()) if "velocidade" in grp else n_total
-            n_idle   = n_total - n_mov  # parado = vel ≤ 3
-            n_fds    = int((grp["dia_semana"] >= 5).sum()) if "dia_semana" in grp else 0
-            h_rastreio = n_total * MINS_POR_PONTO / 60
-            h_mov      = n_mov   * MINS_POR_PONTO / 60
-            h_idle     = n_idle  * MINS_POR_PONTO / 60
-            idle_pct   = round(h_idle / max(0.1, h_rastreio) * 100, 1)
-            fds_pct    = round(n_fds / max(1, n_total) * 100, 1)
-            km         = float(df_p.loc[df_p["motorista"] == mot, "km_periodo"].values[0]) \
-                         if mot in df_p["motorista"].values else 0.0
-            eff_raw    = km / max(0.1, h_mov)
-            eff        = round(min(eff_raw, 120.0), 1)
+            n_total = len(grp)
+            n_fds   = int((grp["dia_semana"] >= 5).sum())
+
+            # ── Tempo: usa timestamps reais (cap 30 min entre pontos) ─────────
+            if dt_detectado and n_total >= 2:
+                grp_s = grp.sort_values("dt")
+                times = pd.to_datetime(grp_s["dt"])
+                # intervalo entre pontos consecutivos (horas), gap máx = 0.5h
+                deltas_h = (times.diff().dt.total_seconds()
+                                  .div(3600).fillna(0).clip(lower=0, upper=0.5))
+                h_rastreio = float(deltas_h.sum())
+                # h_mov = soma dos intervalos em que a velocidade do ponto ANTERIOR era > 3
+                if vel_detectada:
+                    vel_vals   = grp_s["velocidade"].values
+                    mask_prev  = vel_vals[:-1] > 3        # vel do ponto i (prev)
+                    h_mov      = float(deltas_h.values[1:][mask_prev].sum())
+                else:
+                    h_mov      = h_rastreio * 0.6          # estimativa 60%
+            else:
+                # Fallback: contagem de pontos × 3 min
+                h_rastreio = n_total * 3 / 60
+                if vel_detectada:
+                    n_mov  = int((grp["velocidade"] > 3).sum())
+                    h_mov  = n_mov * 3 / 60
+                else:
+                    h_mov  = h_rastreio * 0.6
+
+            h_idle   = max(0.0, h_rastreio - h_mov)
+            idle_pct = round(h_idle / max(0.01, h_rastreio) * 100, 1)
+            fds_pct  = round(n_fds / max(1, n_total) * 100, 1)
+
+            # ── Km: usa km_periodo calculado pelo historico ───────────────────
+            km       = float(df_p.loc[df_p["motorista"] == mot, "km_periodo"].values[0]) \
+                       if mot in df_p["motorista"].values else 0.0
+
+            # ── Eficiência: km / h_mov (sanity cap 130 km/h) ─────────────────
+            eff_raw  = km / max(0.1, h_mov)
+            # Se eficiência calculada > 130, dado insuficiente
+            eff      = round(min(eff_raw, 130.0), 1) if eff_raw <= 130 else None
+
+            # ── Custos ────────────────────────────────────────────────────────
             custo_cb   = round(km * CUSTO_KM, 2)
             custo_id   = round(h_idle * CUSTO_IDLE_H, 2)
-            # Velocidade máxima
-            vel_max    = float(grp["velocidade"].max()) if "velocidade" in grp else 0.0
-            # Local onde mais ficou parado (cidade com mais pontos idle)
+
+            # ── Velocidade máxima ─────────────────────────────────────────────
+            vel_max = float(grp["velocidade"].max()) if vel_detectada else 0.0
+
+            # ── Local onde mais ficou parado ──────────────────────────────────
             grp_idle = grp[(grp["velocidade"] <= 3) & (grp["cidade"] != "")]
             if not grp_idle.empty:
                 local_cnt = grp_idle.groupby(["cidade","uf"]).size()
                 _idx = local_cnt.idxmax()
-                idle_local      = f"{_idx[0]} / {_idx[1]}"
-                idle_local_min  = int(local_cnt.max() * MINS_POR_PONTO)
+                # Tempo estimado no local: intervalos de tempo no grupo idle
+                if dt_detectado:
+                    _g2 = grp_s[grp_s["cidade"] == _idx[0]] if "grp_s" in dir() else grp_idle
+                    _times2 = pd.to_datetime(_g2["dt"])
+                    idle_local_min = int(_times2.diff().dt.total_seconds()
+                                         .fillna(0).clip(upper=1800).sum() / 60)
+                else:
+                    idle_local_min = int(local_cnt.max() * 3)
+                idle_local = f"{_idx[0]} / {_idx[1]}"
             else:
-                idle_local     = "—"
-                idle_local_min = 0
+                idle_local, idle_local_min = "—", 0
+
             agg[mot] = {
-                "motorista":       mot,
-                "km_periodo":      km,
-                "h_rastreio":      round(h_rastreio, 1),
-                "h_mov":           round(h_mov, 1),
-                "h_idle":          round(h_idle, 1),
-                "idle_pct":        idle_pct,
-                "fds_pct":         fds_pct,
-                "n_fds":           n_fds,
-                "efficiency":      eff,
-                "custo_cb":        custo_cb,
-                "custo_idle":      custo_id,
-                "custo_total":     round(custo_cb + custo_id, 2),
-                "vel_max":         round(vel_max, 0),
-                "idle_local":      idle_local,
-                "idle_local_min":  idle_local_min,
+                "motorista":      mot,
+                "km_periodo":     km,
+                "h_rastreio":     round(h_rastreio, 1),
+                "h_mov":          round(h_mov, 1),
+                "h_idle":         round(h_idle, 1),
+                "idle_pct":       idle_pct,
+                "fds_pct":        fds_pct,
+                "n_fds":          n_fds,
+                "efficiency":     eff,          # None = dado insuficiente
+                "custo_cb":       custo_cb,
+                "custo_idle":     custo_id,
+                "custo_total":    round(custo_cb + custo_id, 2),
+                "vel_max":        round(vel_max, 0),
+                "idle_local":     idle_local,
+                "idle_local_min": idle_local_min,
             }
         df_mot = pd.DataFrame(list(agg.values()))
     else:
