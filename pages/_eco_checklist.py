@@ -1132,27 +1132,34 @@ def _render_ensaios_aevias():
                 unsafe_allow_html=True,
             )
 
-    # ── Render: indivíduos (ordenados por urgência) ───────────────────────────
-    indivs_sorted = sorted(
-        indivs.items(),
-        key=lambda kv: (_urgencia_prof(kv[1]), kv[0])
-    )
-    for nome, regs in indivs_sorted:
-        _render_person_expander(nome, regs, label_prefix="👤 ")
+    # ── Views: Por Pessoa (expanders) | Por Categoria (grid) ─────────────────
+    tab_pessoa, tab_cat = st.tabs(["👤 Por Pessoa", "📊 Por Categoria"])
 
-    # ── Render: grupos (Eco Cerrado, ECO Minas Goiás etc.) ───────────────────
-    if grupos:
-        st.markdown(
-            '<div style="margin:12px 0 4px;font-size:.75rem;color:#8FA882;font-weight:600">'
-            'Grupos / Contratos (nome individual não disponível — execute o scraper):</div>',
-            unsafe_allow_html=True,
-        )
-        grupos_sorted = sorted(
-            grupos.items(),
+    with tab_pessoa:
+        # Render: indivíduos (ordenados por urgência)
+        indivs_sorted = sorted(
+            indivs.items(),
             key=lambda kv: (_urgencia_prof(kv[1]), kv[0])
         )
-        for nome, regs in grupos_sorted:
-            _render_person_expander(nome, regs, label_prefix="📁 ")
+        for nome, regs in indivs_sorted:
+            _render_person_expander(nome, regs, label_prefix="👤 ")
+
+        # Render: grupos (Eco Cerrado, ECO Minas Goiás etc.) — se ainda existirem
+        if grupos:
+            st.markdown(
+                '<div style="margin:12px 0 4px;font-size:.75rem;color:#8FA882;font-weight:600">'
+                'Grupos / Contratos (nome individual não disponível — execute o scraper):</div>',
+                unsafe_allow_html=True,
+            )
+            grupos_sorted = sorted(
+                grupos.items(),
+                key=lambda kv: (_urgencia_prof(kv[1]), kv[0])
+            )
+            for nome, regs in grupos_sorted:
+                _render_person_expander(nome, regs, label_prefix="📁 ")
+
+    with tab_cat:
+        _render_produtividade(dados_periodo, datas_com_dados)
 
 
 def _aba_checklist():
