@@ -865,7 +865,7 @@ def _render_ensaios_aevias():
     """Seção de ensaios — view per-person limpa com cobrar tracking."""
     from collections import defaultdict
 
-    st.markdown("## 🧪 Ensaios & Relatórios — AEVIAS Controle")
+    st.markdown("## Ensaios & Relatórios — AEVIAS Controle")
 
     # ── Header: info + refresh ────────────────────────────────────────────────
     col_info, col_btn = st.columns([5, 1])
@@ -887,7 +887,7 @@ def _render_ensaios_aevias():
             )
             return
     with col_btn:
-        if st.button("🔄 Refresh", key="btn_refresh_ensaios", use_container_width=True):
+        if st.button("Refresh", key="btn_refresh_ensaios", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
@@ -970,7 +970,7 @@ def _render_ensaios_aevias():
         f'<div class="ea-kpi"><div class="val" style="color:#FF6B6B">{n_rep}</div>'
         f'<div class="lbl">Reprovados</div></div>'
         f'<div class="ea-kpi"><div class="val" style="color:#{"FF6B6B" if n_cobrar else "7BBF6A"}">'
-        f'{"🚨 " if n_cobrar else "✓ "}{n_cobrar}</div>'
+        f'{n_cobrar}</div>'
         f'<div class="lbl">A Cobrar</div></div>'
         f'</div>',
         unsafe_allow_html=True,
@@ -1007,24 +1007,21 @@ def _render_ensaios_aevias():
     def _render_person_expander(nome: str, registros: list, label_prefix: str = ""):
         """Renderiza um expander por pessoa com todos os dados."""
         a_cobrar = any(e["_status"] in ("pend", "rep") for e in registros)
-        has_rep  = any(e["_status"] == "rep" for e in registros)
 
         expander_label = f"{label_prefix}{nome}"
         if a_cobrar:
-            expander_label += "  🚨 A COBRAR"
+            expander_label += "  · A COBRAR"
 
         with st.expander(expander_label, expanded=a_cobrar):
             n_reg   = len(registros)
             n_p_loc = sum(1 for e in registros if e["_status"] == "pend")
             n_r_loc = sum(1 for e in registros if e["_status"] == "rep")
 
-            # Mini KPI row
-            kpi_color = "#FF6B6B" if (n_p_loc + n_r_loc) else "#7BBF6A"
             st.markdown(
                 f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
                 f'<span style="color:#C8D8A8;font-size:.8rem;font-weight:700">'
                 f'{n_reg} submissão(ões)</span>'
-                f'{"<span class=ea-cobrar>🚨 A COBRAR</span>" if a_cobrar else ""}'
+                f'{"<span class=ea-cobrar>A COBRAR</span>" if a_cobrar else ""}'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -1034,11 +1031,11 @@ def _render_ensaios_aevias():
             cnt_tipo = Counter(e.get("tipo", "—") for e in registros)
             chips_html = ""
             for tipo, cnt in cnt_tipo.most_common():
-                cor, icon = _TIPO_COR.get(tipo, ("#8FA882", "📄"))
+                cor, _icon = _TIPO_COR.get(tipo, ("#8FA882", ""))
                 chips_html += (
                     f'<span class="ea-tipo-chip" '
                     f'style="color:{cor};border-color:{cor}55;background:{cor}18">'
-                    f'{icon} {tipo} ({cnt})</span>'
+                    f'{tipo} ({cnt})</span>'
                 )
             if chips_html:
                 st.markdown(chips_html, unsafe_allow_html=True)
@@ -1111,17 +1108,16 @@ def _render_ensaios_aevias():
                     f'style="color:{cor_s};border-color:{cor_s}55">{status}</span>'
                     if status else ""
                 )
-                ico_tipo = _TIPO_COR.get(tipo, ("#8FA882", "📄"))[1]
                 link_html = (
                     f'<a class="ea-report-link" href="{_BASE44_URL}{url}" '
-                    f'target="_blank">🔗 Relatório</a>'
+                    f'target="_blank">Relatório ↗</a>'
                     if url else ""
                 )
                 detail = " · ".join(filter(None, [obra, emp, local]))
                 rows_html += (
                     f'<div class="ea-entry-row">'
                     f'<span style="color:#8FA882;min-width:70px;font-size:.65rem">{dstr}</span>'
-                    f'<span style="color:#C8D8A8">{ico_tipo} {tipo}</span>'
+                    f'<span style="color:#C8D8A8">{tipo}</span>'
                     f'<span style="color:#8FA882;font-size:.65rem;flex:1">{detail}</span>'
                     f'{s_badge}{link_html}'
                     f'</div>'
@@ -1132,23 +1128,35 @@ def _render_ensaios_aevias():
                 unsafe_allow_html=True,
             )
 
+    # ── Pessoas sem registro no período ──────────────────────────────────────
+    # Usa o histórico completo como universo de profissionais conhecidos
+    todos_profs_hist = {
+        e["_prof"] for e in dados
+        if e.get("_prof") and e["_prof"] not in ("—", "")
+        and _norm(e["_prof"]) not in _GRUPOS_NORM
+    }
+    profs_no_periodo = set(por_prof.keys()) | {
+        p for p in por_prof if any(e["_is_grupo"] for e in por_prof[p])
+    }
+    sem_registro = sorted(todos_profs_hist - profs_no_periodo)
+
     # ── Views: Por Pessoa (expanders) | Por Categoria (grid) ─────────────────
-    tab_pessoa, tab_cat = st.tabs(["👤 Por Pessoa", "📊 Por Categoria"])
+    tab_pessoa, tab_cat = st.tabs(["Por Pessoa", "Por Categoria"])
 
     with tab_pessoa:
-        # Render: indivíduos (ordenados por urgência)
+        # Render: indivíduos (ordenados por urgência: reprovado → pendente → ok)
         indivs_sorted = sorted(
             indivs.items(),
             key=lambda kv: (_urgencia_prof(kv[1]), kv[0])
         )
         for nome, regs in indivs_sorted:
-            _render_person_expander(nome, regs, label_prefix="👤 ")
+            _render_person_expander(nome, regs)
 
         # Render: grupos (Eco Cerrado, ECO Minas Goiás etc.) — se ainda existirem
         if grupos:
             st.markdown(
                 '<div style="margin:12px 0 4px;font-size:.75rem;color:#8FA882;font-weight:600">'
-                'Grupos / Contratos (nome individual não disponível — execute o scraper):</div>',
+                'Contratos sem nome individual (execute o scraper para resolver):</div>',
                 unsafe_allow_html=True,
             )
             grupos_sorted = sorted(
@@ -1156,7 +1164,25 @@ def _render_ensaios_aevias():
                 key=lambda kv: (_urgencia_prof(kv[1]), kv[0])
             )
             for nome, regs in grupos_sorted:
-                _render_person_expander(nome, regs, label_prefix="📁 ")
+                _render_person_expander(nome, regs, label_prefix="[contrato] ")
+
+        # Render: sem registro no período
+        if sem_registro:
+            st.markdown(
+                '<div style="margin:18px 0 6px;font-size:.8rem;color:#FF6B6B;'
+                'font-weight:700;letter-spacing:.5px;border-top:1px solid #FF6B6B33;'
+                'padding-top:12px">'
+                f'SEM REGISTRO NO PERÍODO — {len(sem_registro)} pessoa(s)</div>',
+                unsafe_allow_html=True,
+            )
+            pills = "".join(
+                f'<span style="display:inline-block;margin:3px 4px;padding:4px 10px;'
+                f'border-radius:20px;background:rgba(255,107,107,.1);'
+                f'border:1px solid #FF6B6B44;color:#FF6B6B;font-size:.75rem">'
+                f'{p}</span>'
+                for p in sem_registro
+            )
+            st.markdown(f'<div style="line-height:2">{pills}</div>', unsafe_allow_html=True)
 
     with tab_cat:
         _render_produtividade(dados_periodo, datas_com_dados)
