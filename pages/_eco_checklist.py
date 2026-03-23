@@ -505,10 +505,31 @@ def _render_produtividade(dados: list, datas_janela: list[str]):
     today_str = date.today().strftime("%Y-%m-%d")
     DAY_ABBR_P = {0:"SEG",1:"TER",2:"QUA",3:"QUI",4:"SEX",5:"SÁB",6:"DOM"}
 
-    # Normaliza: usa 'lab' se disponível (dados novos), senão 'profissional'
+    # Nomes que são contratos/grupos, não pessoas individuais
+    _GRUPOS = {"eco cerrado", "eco minas goiás", "eco minas goias",
+               "ecl minas goiás", "eco-cerrado", "eco-minas goiás"}
+
+    # Normaliza: usa 'lab' se disponível (dados novos após re-scraping)
+    # Se 'lab' vazio e 'profissional' é contrato → mostra como grupo
+    dados_sem_nome = False
     for e in dados:
-        if not e.get("lab"):
-            e["lab"] = e.get("profissional","—")
+        lab_raw  = (e.get("lab") or "").strip()
+        prof_raw = (e.get("profissional") or "").strip()
+        if lab_raw:
+            e["lab"] = lab_raw
+        elif prof_raw.lower() in _GRUPOS:
+            e["lab"] = f"📁 {prof_raw} (grupo)"
+            dados_sem_nome = True
+        else:
+            e["lab"] = prof_raw or "—"
+
+    if dados_sem_nome:
+        st.warning(
+            "⚠️ Alguns registros mostram o contrato (ex: 'Eco Cerrado') "
+            "em vez do nome individual do laboratorista. "
+            "**Execute `baixar_ensaios.py` novamente** para capturar os nomes reais.",
+            icon="👤"
+        )
         # Normaliza data para YYYY-MM-DD
         try:
             e["_d"] = datetime.strptime(e["data"], "%d/%m/%Y").strftime("%Y-%m-%d")
