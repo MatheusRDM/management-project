@@ -11,7 +11,8 @@ if _ROOT_DIR  not in sys.path: sys.path.insert(0, _ROOT_DIR)
 
 import streamlit as st
 import json
-from datetime import datetime
+import time
+from datetime import datetime, date
 
 from _eco_shared import (
     COR_PRIMARY, COR_ACCENT, COR_BG, COR_CARD, COR_BORDER,
@@ -191,6 +192,198 @@ def _renderizar_calendario(people: list[dict], mes_ref: str):
 # ABA CHECKLIST
 # =============================================================================
 
+# =============================================================================
+# ENSAIOS AEVIAS — fonte: aevias-controle.base44.app (cache local)
+# =============================================================================
+
+_ENSAIOS_PATH  = os.path.join(_CACHE_DIR, "ensaios_aevias.json")
+_BASE44_URL    = "https://aevias-controle.base44.app"
+
+# Cores por obra
+_COR_OBRA = {
+    "SST":              "#F7B731",
+    "Pavimento":        "#7BBF6A",
+    "TOPOGRAFIA":       "#4CC9F0",
+    "OAE / Terraplenos":"#A29BFE",
+    "Ampliações":       "#FD79A8",
+    "Conserva":         "#00CEC9",
+    "ESCRITÓRIO":       "#FDCB6E",
+}
+# Ícones por tipo
+_ICON_TIPO = {
+    "Diário de Obra":        "📋",
+    "Checklist de Usina":    "🏭",
+    "Checklist de Aplicação":"🚧",
+    "Checklist de MRAF":     "🔩",
+    "Ensaio de CAUQ":        "🧪",
+}
+
+
+@st.cache_data(ttl=300, show_spinner=False)  # auto-refresh a cada 5 min
+def _carregar_ensaios() -> tuple[list, float]:
+    """Carrega ensaios_aevias.json. Retorna (lista, timestamp_modificação)."""
+    if not os.path.exists(_ENSAIOS_PATH):
+        return [], 0.0
+    mtime = os.path.getmtime(_ENSAIOS_PATH)
+    with open(_ENSAIOS_PATH, encoding="utf-8") as f:
+        dados = json.load(f)
+    return dados, mtime
+
+
+def _render_ensaios_aevias():
+    """Seção de ensaios do aevias-controle.base44.app integrada ao Checklist."""
+    st.markdown("## 🧪 Ensaios & Relatórios — AEVIAS Controle")
+
+    dados, mtime = _carregar_ensaios()
+
+    col_info, col_btn = st.columns([5, 1])
+    with col_info:
+        if mtime:
+            dt_mod = datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
+            st.caption(
+                f"🔄 Fonte: `ensaios_aevias.json` · Atualizado: **{dt_mod}** · "
+                f"{len(dados)} registros · "
+                f"[Abrir site ↗]({_BASE44_URL}/MeusEnsaios)"
+            )
+        else:
+            st.warning(
+                "⚠️ `cache_certificados/ensaios_aevias.json` não encontrado. "
+                "Execute `baixar_ensaios.py` para gerar o cache."
+            )
+            return
+    with col_btn:
+        if st.button("🔄 Refresh", key="btn_refresh_ensaios", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
+    if not dados:
+        st.info("Nenhum ensaio carregado.")
+        return
+
+    # ── Parse datas ─────────────────────────────────────────────────────────
+    for e in dados:
+        try:
+            e["_date"] = datetime.strptime(e["data"], "%d/%m/%Y").date()
+        except Exception:
+            e["_date"] = None
+
+    datas_disp = sorted(
+        {e["_date"] for e in dados if e["_date"]}, reverse=True
+    )
+    obras_disp  = sorted({e.get("obra","") for e in dados if e.get("obra")})
+    tipos_disp  = sorted({e.get("tipo","") for e in dados if e.get("tipo")})
+
+    # ── Filtros ─────────────────────────────────────────────────────────────
+    fc1, fc2, fc3 = st.columns([2, 2, 2])
+    with fc1:
+        # Selectbox de data (mais recente primeiro)
+        data_sel = st.selectbox(
+            "📅 Data:",
+            options=["Todas"] + [d.strftime("%d/%m/%Y") for d in datas_disp],
+            key="ens_data_sel",
+        )
+    with fc2:
+        obra_sel = st.multiselect(
+            "🏗️ Obra:", options=obras_disp, default=[], key="ens_obra_sel",
+            placeholder="Todas"
+        )
+    with fc3:
+        tipo_sel = st.multiselect(
+            "📄 Tipo:", options=tipos_disp, default=[], key="ens_tipo_sel",
+            placeholder="Todos"
+        )
+
+    # ── Filtragem ───────────────────────────────────────────────────────────
+    filtrados = dados
+    if data_sel != "Todas":
+        d_obj = datetime.strptime(data_sel, "%d/%m/%Y").date()
+        filtrados = [e for e in filtrados if e["_date"] == d_obj]
+    if obra_sel:
+        filtrados = [e for e in filtrados if e.get("obra") in obra_sel]
+    if tipo_sel:
+        filtrados = [e for e in filtrados if e.get("tipo") in tipo_sel]
+
+    if not filtrados:
+        st.info("Nenhum ensaio para os filtros selecionados.")
+        return
+
+    # ── KPIs rápidos ────────────────────────────────────────────────────────
+    from collections import Counter
+    cnt_obras = Counter(e.get("obra","—") for e in filtrados)
+    cnt_tipos = Counter(e.get("tipo","—") for e in filtrados)
+
+    cards_html = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">'
+    for obra, n in cnt_obras.most_common():
+        cor = _COR_OBRA.get(obra, "#8FA882")
+        cards_html += f"""
+        <div style="background:rgba(0,0,0,0.2);border:1px solid {cor}55;
+                    border-left:3px solid {cor};border-radius:8px;
+                    padding:8px 14px;min-width:100px">
+          <div style="font-size:1.3rem;font-weight:700;color:{cor}">{n}</div>
+          <div style="color:#C8D8A8;font-size:.7rem">{obra}</div>
+        </div>"""
+    cards_html += "</div>"
+    st.markdown(cards_html, unsafe_allow_html=True)
+
+    # ── Tabela de ensaios ────────────────────────────────────────────────────
+    # Agrupado por data → obra
+    datas_filtradas = sorted({e["_date"] for e in filtrados if e["_date"]}, reverse=True)
+
+    for d in datas_filtradas:
+        ensaios_dia = [e for e in filtrados if e["_date"] == d]
+        st.markdown(
+            f'<div style="background:rgba(86,110,61,0.15);border-left:3px solid #7BBF6A;'
+            f'border-radius:6px;padding:8px 14px;margin:10px 0;font-weight:600;color:#C8D8A8">'
+            f'📅 {d.strftime("%A, %d/%m/%Y").capitalize()} — {len(ensaios_dia)} registro(s)</div>',
+            unsafe_allow_html=True
+        )
+
+        # Agrupa por obra dentro do dia
+        obras_no_dia = list(dict.fromkeys(e.get("obra","—") for e in ensaios_dia))
+        for obra in obras_no_dia:
+            cor_obra = _COR_OBRA.get(obra, "#8FA882")
+            ens_obra = [e for e in ensaios_dia if e.get("obra") == obra]
+
+            rows_html = ""
+            for e in ens_obra:
+                tipo  = e.get("tipo", "—")
+                prof  = e.get("profissional", "—")
+                url   = e.get("reportUrl", "")
+                icon  = _ICON_TIPO.get(tipo, "📄")
+                link  = (f'<a href="{_BASE44_URL}{url}" target="_blank" '
+                         f'style="color:#4CC9F0;text-decoration:none">🔗 Ver relatório</a>'
+                         if url else "—")
+                rows_html += f"""
+                <tr>
+                  <td style="padding:6px 10px;color:{cor_obra}">{icon} {tipo}</td>
+                  <td style="padding:6px 10px;color:#C8D8A8">{prof}</td>
+                  <td style="padding:6px 10px">{link}</td>
+                </tr>"""
+
+            st.markdown(f"""
+            <div style="margin:6px 0 12px 0">
+              <div style="font-size:.8rem;font-weight:600;color:{cor_obra};
+                          padding:4px 10px;background:rgba(0,0,0,0.15);
+                          border-radius:6px 6px 0 0;display:inline-block">
+                🏗️ {obra} ({len(ens_obra)})
+              </div>
+              <table style="width:100%;border-collapse:collapse;
+                            background:rgba(0,0,0,0.15);border-radius:0 6px 6px 6px">
+                <thead>
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.06)">
+                    <th style="padding:6px 10px;color:#8FA882;font-weight:500;
+                               text-align:left;font-size:.75rem">Tipo</th>
+                    <th style="padding:6px 10px;color:#8FA882;font-weight:500;
+                               text-align:left;font-size:.75rem">Profissional</th>
+                    <th style="padding:6px 10px;color:#8FA882;font-weight:500;
+                               text-align:left;font-size:.75rem">Relatório</th>
+                  </tr>
+                </thead>
+                <tbody>{rows_html}</tbody>
+              </table>
+            </div>""", unsafe_allow_html=True)
+
+
 def _aba_checklist():
     meds = _listar_meds()
     if not meds:
@@ -283,3 +476,7 @@ def _aba_checklist():
                 st.success(f"✅ Todos os checklists enviados neste contrato — {ok_c} registros OK")
 
             _renderizar_calendario(people, med_escolhida)
+
+    # ── Ensaios AEVIAS — dados do aevias-controle.base44.app ─────────────────
+    st.markdown("---")
+    _render_ensaios_aevias()
