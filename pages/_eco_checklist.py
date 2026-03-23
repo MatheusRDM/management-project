@@ -292,9 +292,9 @@ def _renderizar_cards(people: list[dict], datas_janela: list[str]):
             )
 
         # Footer stats
-        stats = f'<span class="ck-stat s-ok">✓ {ok_count} OK</span>'
+        stats = f'<span class="ck-stat s-ok">{ok_count} OK</span>'
         if cob_count:
-            stats += f'<span class="ck-stat s-cob">⚠ {cob_count} pend.</span>'
+            stats += f'<span class="ck-stat s-cob">{cob_count} pend.</span>'
         if ne_count:
             stats += f'<span class="ck-stat s-ne">N/E {ne_count}</span>'
 
@@ -389,13 +389,13 @@ def _renderizar_calendario(people: list[dict], mes_ref: str):
             f"<span style='font-size:.6rem;color:#3a4a5e'> ({p.get('funcao','—')})</span></span>"
             for p in sorted(isentos_cargo_cal, key=lambda x: x.get("colaborador",""))
         )
-        rodape.append(f"🚫 <b style='color:#8FA882'>Sem checklist:</b> {nomes}")
+        rodape.append(f"<b style='color:#8FA882'>Sem checklist:</b> {nomes}")
     if sem_dados_cal:
         nomes = " · ".join(
             f"<span style='color:#4a5568'>{p['colaborador'].split()[0]}</span>"
             for p in sorted(sem_dados_cal, key=lambda x: x.get("colaborador",""))
         )
-        rodape.append(f"⚫ <b style='color:#4a5568'>Sem registro ({len(sem_dados_cal)}):</b> {nomes}")
+        rodape.append(f"<b style='color:#4a5568'>Sem registro ({len(sem_dados_cal)}):</b> {nomes}")
     if rodape:
         st.markdown(
             '<div style="margin:6px 0;padding:7px 12px;background:rgba(30,30,40,.3);'
@@ -469,13 +469,13 @@ _COR_OBRA = {
     "Conserva":         "#00CEC9",
     "ESCRITÓRIO":       "#FDCB6E",
 }
-# Ícones por tipo
+# Siglas por tipo
 _ICON_TIPO = {
-    "Diário de Obra":        "📋",
-    "Checklist de Usina":    "🏭",
-    "Checklist de Aplicação":"🚧",
-    "Checklist de MRAF":     "🔩",
-    "Ensaio de CAUQ":        "🧪",
+    "Diário de Obra":        "DO",
+    "Checklist de Usina":    "CU",
+    "Checklist de Aplicação":"CA",
+    "Checklist de MRAF":     "MR",
+    "Ensaio de CAUQ":        "CAUQ",
 }
 
 
@@ -532,33 +532,28 @@ _CSS_PROD = """
 # Mapeamento obra → categoria de exibição
 _CATEGORIAS_PROD = {
     "Diário de Obra": {
-        "obras":  None,          # todas as obras
+        "obras":  None,
         "tipos":  {"Diário de Obra"},
-        "icon":   "📋",
         "cor":    "#4CC9F0",
     },
     "SST": {
         "obras":  {"SST"},
         "tipos":  None,
-        "icon":   "🦺",
         "cor":    "#F7B731",
     },
     "Pavimento": {
         "obras":  {"Pavimento"},
         "tipos":  None,
-        "icon":   "🏗️",
         "cor":    "#7BBF6A",
     },
     "OAE / Terraplenos": {
         "obras":  {"OAE / Terraplenos"},
         "tipos":  None,
-        "icon":   "🏛️",
         "cor":    "#A29BFE",
     },
     "Topografia": {
         "obras":  {"TOPOGRAFIA"},
         "tipos":  None,
-        "icon":   "📐",
         "cor":    "#4CC9F0",
     },
 }
@@ -577,39 +572,39 @@ def _render_produtividade(dados: list, datas_janela: list[str]):
     _GRUPOS = {"eco cerrado", "eco minas goiás", "eco minas goias",
                "ecl minas goiás", "eco-cerrado", "eco-minas goiás"}
 
-    # Normaliza: usa 'lab' se disponível (dados novos após re-scraping)
-    # Se 'lab' vazio e 'profissional' é contrato → mostra como grupo
+    # Normaliza lab, data e status para cada registro
     dados_sem_nome = False
     for e in dados:
+        # Nome do laboratorista
         lab_raw  = (e.get("lab") or "").strip()
         prof_raw = (e.get("profissional") or "").strip()
         if lab_raw:
             e["lab"] = lab_raw
         elif prof_raw.lower() in _GRUPOS:
-            e["lab"] = f"📁 {prof_raw} (grupo)"
+            e["lab"] = f"{prof_raw} (contrato)"
             dados_sem_nome = True
         else:
             e["lab"] = prof_raw or "—"
 
-    if dados_sem_nome:
-        st.warning(
-            "⚠️ Alguns registros mostram o contrato (ex: 'Eco Cerrado') "
-            "em vez do nome individual do laboratorista. "
-            "**Execute `baixar_ensaios.py` novamente** para capturar os nomes reais.",
-            icon="👤"
-        )
-        # Normaliza data para YYYY-MM-DD
+        # Data normalizada YYYY-MM-DD
         try:
             e["_d"] = datetime.strptime(e["data"], "%d/%m/%Y").strftime("%Y-%m-%d")
         except Exception:
             e["_d"] = ""
-        # Normaliza status
-        s = str(e.get("status","")).lower()
+
+        # Status normalizado
+        s = str(e.get("status", "")).lower()
         if "aprovado" in s:      e["_status"] = "ok"
         elif "pendente" in s:    e["_status"] = "pend"
         elif "reprovado" in s:   e["_status"] = "rep"
         elif "execu" in s:       e["_status"] = "exec"
-        else:                    e["_status"] = "ok"   # sem status = aprovado implícito
+        else:                    e["_status"] = "ok"
+
+    if dados_sem_nome:
+        st.warning(
+            "Alguns registros mostram o contrato em vez do nome individual. "
+            "Execute `baixar_ensaios.py` para capturar os nomes reais."
+        )
 
     # Apenas datas da janela (sem futuro)
     dados_janela = [e for e in dados if e.get("_d") in datas_janela]
@@ -689,9 +684,9 @@ def _render_produtividade(dados: list, datas_janela: list[str]):
             n_ok   = sum(1 for e in todos if e["_status"]=="ok")
             n_pend = sum(1 for e in todos if e["_status"]=="pend")
             n_rep  = sum(1 for e in todos if e["_status"]=="rep")
-            tags = f'<span class="prod-tag t-ok">✓ {n_ok}</span>'
-            if n_pend: tags += f'<span class="prod-tag t-pend">⏳ {n_pend} pend.</span>'
-            if n_rep:  tags += f'<span class="prod-tag t-rep">✗ {n_rep} reprov.</span>'
+            tags = f'<span class="prod-tag t-ok">{n_ok} ok</span>'
+            if n_pend: tags += f'<span class="prod-tag t-pend">{n_pend} pend.</span>'
+            if n_rep:  tags += f'<span class="prod-tag t-rep">{n_rep} reprov.</span>'
 
             cards.append(
                 f'<div class="prod-card {card_cls}" style="border-left-color:{cor}">'
@@ -705,9 +700,7 @@ def _render_produtividade(dados: list, datas_janela: list[str]):
 
     # ── Renderiza cada categoria como sub-tab ─────────────────────────────
     cat_names  = list(_CATEGORIAS_PROD.keys())
-    cat_tabs   = st.tabs([
-        f"{_CATEGORIAS_PROD[c]['icon']} {c}" for c in cat_names
-    ])
+    cat_tabs   = st.tabs(cat_names)
 
     for tab, cat_name in zip(cat_tabs, cat_names):
         with tab:
@@ -795,9 +788,9 @@ def _render_produtividade(dados: list, datas_janela: list[str]):
         n_ok   = sum(1 for e in todos if e["_status"]=="ok")
         n_pend = sum(1 for e in todos if e["_status"]=="pend")
         n_rep  = sum(1 for e in todos if e["_status"]=="rep")
-        tags = f'<span class="prod-tag t-ok">✓ {n_ok}</span>'
-        if n_pend: tags += f'<span class="prod-tag t-pend">⏳ {n_pend} pend.</span>'
-        if n_rep:  tags += f'<span class="prod-tag t-rep">✗ {n_rep} reprov.</span>'
+        tags = f'<span class="prod-tag t-ok">{n_ok} ok</span>'
+        if n_pend: tags += f'<span class="prod-tag t-pend">{n_pend} pend.</span>'
+        if n_rep:  tags += f'<span class="prod-tag t-rep">{n_rep} reprov.</span>'
 
         sub = " · ".join(obras_lab[:3])
 
@@ -814,11 +807,11 @@ def _render_produtividade(dados: list, datas_janela: list[str]):
 
 
 _TIPO_COR = {
-    "Diário de Obra":         ("#4CC9F0", "📋"),
-    "Checklist de Usina":     ("#7BBF6A", "🏭"),
-    "Checklist de Aplicação": ("#F7B731", "🚧"),
-    "Checklist de MRAF":      ("#A29BFE", "🔩"),
-    "Ensaio de CAUQ":         ("#FD79A8", "🧪"),
+    "Diário de Obra":         ("#4CC9F0", "DO"),
+    "Checklist de Usina":     ("#7BBF6A", "CU"),
+    "Checklist de Aplicação": ("#F7B731", "CA"),
+    "Checklist de MRAF":      ("#A29BFE", "MR"),
+    "Ensaio de CAUQ":         ("#FD79A8", "CAUQ"),
 }
 
 _GRUPOS_NORM = {"eco cerrado", "eco minas goias", "eco minas goiás",
@@ -1200,7 +1193,7 @@ def _aba_checklist():
     col_sel, col_info = st.columns([2, 4])
     with col_sel:
         med_escolhida = st.selectbox(
-            "📅 Medição:",
+            "Medição:",
             options=meds_reversed,
             format_func=lambda x: x,
             key="eco_med_sel",
@@ -1244,8 +1237,7 @@ def _aba_checklist():
 
     # Sub-abas por contrato
     sheet_names = list(sheets.keys())
-    tab_labels = [f"🛣️ {s}" for s in sheet_names]
-    tabs = st.tabs(tab_labels)
+    tabs = st.tabs(sheet_names)
 
     for tab, sn in zip(tabs, sheet_names):
         with tab:
@@ -1272,12 +1264,12 @@ def _aba_checklist():
 
             if cob_c > 0:
                 st.error(
-                    f"⚠️ **{cob_c} checklist(s) pendente(s)** — Colaboradores: "
+                    f"**{cob_c} checklist(s) pendente(s)** — Colaboradores: "
                     + ", ".join(colab_cob[:6])
                     + ("..." if len(colab_cob) > 6 else "")
                 )
             else:
-                st.success(f"✅ Todos os checklists enviados neste contrato — {ok_c} registros OK")
+                st.success(f"Todos os checklists enviados neste contrato — {ok_c} registros OK")
 
             _renderizar_calendario(people, med_escolhida)
 
