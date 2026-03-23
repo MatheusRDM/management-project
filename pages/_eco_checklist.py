@@ -107,21 +107,31 @@ def _kpi_card(val, label, cor="#BFCF99"):
     </div>"""
 
 
-# Funções isentas de checklist de campo
-_FUNCOES_ISENTAS = {
+import unicodedata as _ucd
+
+def _norm(s: str) -> str:
+    """Lowercase + remove acentos + strip — para comparação robusta."""
+    s = _ucd.normalize("NFD", s.lower().strip())
+    return "".join(c for c in s if _ucd.category(c) != "Mn")
+
+# Funções isentas de checklist de campo (sem acentos — comparado via _norm)
+_FUNCOES_ISENTAS_NORM = {
     "assistente de engenharia",
-    "encarregado sala técnica",
-    "encarregado de sala técnica",
+    "encarregado sala tecnica",
+    "encarregado de sala tecnica",
     "desenhista",
-    "engenheiro sala técnica",
+    "engenheiro sala tecnica",
+    "engenheiro de sala tecnica",
 }
+# Substrings que indicam isenção (sem acentos)
+_ISENTOS_SUBSTR = ("auxiliar",)
 
 def _isento_checklist(funcao: str) -> bool:
     """True se o cargo não exige checklist de campo."""
-    f = funcao.lower().strip()
-    if f in _FUNCOES_ISENTAS:
+    f = _norm(funcao)
+    if f in _FUNCOES_ISENTAS_NORM:
         return True
-    if "auxiliar" in f:
+    if any(sub in f for sub in _ISENTOS_SUBSTR):
         return True
     return False
 
