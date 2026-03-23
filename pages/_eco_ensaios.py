@@ -120,9 +120,15 @@ def _df_ensaios(dados: list[dict]) -> pd.DataFrame:
     if not dados:
         return pd.DataFrame()
     df = pd.DataFrame(dados)
-    df["obra"]         = df["obra"].str.strip()
-    df["tipo"]         = df["tipo"].str.strip()
-    df["profissional"] = df["profissional"].str.strip()
+    df["obra"] = df["obra"].str.strip()
+    df["tipo"] = df["tipo"].str.strip()
+    # Retrocompatibilidade: novo scraper usa 'lab', antigo usava 'profissional'
+    if "lab" in df.columns:
+        df["profissional"] = df["lab"].fillna("").str.strip()
+    elif "profissional" in df.columns:
+        df["profissional"] = df["profissional"].fillna("").str.strip()
+    else:
+        df["profissional"] = "—"
     df["data_dt"]      = pd.to_datetime(df["data"], format="%d/%m/%Y", errors="coerce")
     df["data_iso"]     = df["data_dt"].dt.strftime("%Y-%m-%d")
     df["semana"]       = df["data_dt"].dt.isocalendar().week.astype(str)
