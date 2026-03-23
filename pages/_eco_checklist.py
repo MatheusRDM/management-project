@@ -107,6 +107,25 @@ def _kpi_card(val, label, cor="#BFCF99"):
     </div>"""
 
 
+# Funções isentas de checklist de campo
+_FUNCOES_ISENTAS = {
+    "assistente de engenharia",
+    "encarregado sala técnica",
+    "encarregado de sala técnica",
+    "desenhista",
+    "engenheiro sala técnica",
+}
+
+def _isento_checklist(funcao: str) -> bool:
+    """True se o cargo não exige checklist de campo."""
+    f = funcao.lower().strip()
+    if f in _FUNCOES_ISENTAS:
+        return True
+    if "auxiliar" in f:
+        return True
+    return False
+
+
 def _status_class(v):
     if v is None or v == "":
         return "status-vazio", "·"
@@ -207,7 +226,10 @@ def _renderizar_cards(people: list[dict], datas_janela: list[str]):
         if vu in ("N/E","NE"):       return 2
         return 3                                # OK = último
 
-    people_sorted = sorted(people, key=_urgency)
+    # Separa: exige checklist × isento
+    obrigados = [p for p in people if not _isento_checklist(p.get("funcao",""))]
+    isentos   = [p for p in people if     _isento_checklist(p.get("funcao",""))]
+    people_sorted = sorted(obrigados, key=_urgency)
 
     cards_html = ['<div class="ck-wrap">', _CSS_CARDS, '<div class="ck-grid">']
 
@@ -271,6 +293,22 @@ def _renderizar_cards(people: list[dict], datas_janela: list[str]):
 
     cards_html.append("</div></div>")
     st.markdown("".join(cards_html), unsafe_allow_html=True)
+
+    # ── Bloco de isentos (sem checklist de campo) ─────────────────────────────
+    if isentos:
+        nomes_isentos = " · ".join(
+            f"{p.get('colaborador','').split()[0]} <span style='color:#3a4a5e;font-size:.65rem'>"
+            f"({p.get('funcao','—')})</span>"
+            for p in sorted(isentos, key=lambda x: x.get("colaborador",""))
+        )
+        st.markdown(
+            f'<div style="margin-top:8px;padding:8px 14px;'
+            f'background:rgba(58,74,94,.25);border-radius:8px;'
+            f'border-left:3px solid #3a4a5e;color:#5a6a7e;font-size:.78rem">'
+            f'<span style="font-weight:600;color:#8FA882">🚫 Sem checklist de campo:</span> '
+            f'{nomes_isentos}</div>',
+            unsafe_allow_html=True
+        )
 
 
 def _renderizar_calendario(people: list[dict], mes_ref: str):
@@ -423,9 +461,45 @@ _CSS_PROD = """
 </style>
 """
 
+# Mapeamento obra → categoria de exibição
+_CATEGORIAS_PROD = {
+    "Diário de Obra": {
+        "obras":  None,          # todas as obras
+        "tipos":  {"Diário de Obra"},
+        "icon":   "📋",
+        "cor":    "#4CC9F0",
+    },
+    "SST": {
+        "obras":  {"SST"},
+        "tipos":  None,
+        "icon":   "🦺",
+        "cor":    "#F7B731",
+    },
+    "Pavimento": {
+        "obras":  {"Pavimento"},
+        "tipos":  None,
+        "icon":   "🏗️",
+        "cor":    "#7BBF6A",
+    },
+    "OAE / Terraplenos": {
+        "obras":  {"OAE / Terraplenos"},
+        "tipos":  None,
+        "icon":   "🏛️",
+        "cor":    "#A29BFE",
+    },
+    "Topografia": {
+        "obras":  {"TOPOGRAFIA"},
+        "tipos":  None,
+        "icon":   "📐",
+        "cor":    "#4CC9F0",
+    },
+}
+
+
 def _render_produtividade(dados: list, datas_janela: list[str]):
     """
     View de Produtividade por Laboratorista — similar ao BASE44.
+    Dividida em 5 categorias: Diário de Obra / SST / Pavimento / OAE / Topografia.
     Usa campo 'lab' (novo) ou 'profissional' (retrocompatível).
     """
     today_str = date.today().strftime("%Y-%m-%d")
@@ -448,19 +522,121 @@ def _render_produtividade(dados: list, datas_janela: list[str]):
         elif "execu" in s:       e["_status"] = "exec"
         else:                    e["_status"] = "ok"   # sem status = aprovado implícito
 
-    # Apenas datas da janela
+    # Apenas datas da janela (sem futuro)
     dados_janela = [e for e in dados if e.get("_d") in datas_janela]
     if not dados_janela:
         st.info("Sem registros no período exibido.")
         return
 
-    # Agrupa: lab → data → lista de ensaios
     from collections import defaultdict
+
+    def _filtrar_categoria(cat_cfg: dict) -> list:
+        """Filtra registros para uma categoria."""
+        r = dados_janela
+        if cat_cfg["obras"]:
+            r = [e for e in r if e.get("obra","") in cat_cfg["obras"]]
+        if cat_cfg["tipos"]:
+            r = [e for e in r if e.get("tipo","") in cat_cfg["tipos"]]
+        return r
+
+    def _render_grid_categoria(registros: list, cor: str):
+        """Renderiza cards de uma categoria."""
+        por_lab: dict = defaultdict(lambda: defaultdict(list))
+        for e in registros:
+            por_lab[e["lab"]][e["_d"]].append(e)
+
+        def _urg(lab):
+            ts = [e for d in datas_janela for e in por_lab[lab].get(d,[])]
+            if any(e["_status"]=="rep"  for e in ts): return 0
+            if any(e["_status"]=="pend" for e in ts): return 1
+            return 2
+
+        labs_sorted = sorted(por_lab.keys(), key=_urg)
+        cards = [f'<div class="prod-grid">']
+
+        for lab in labs_sorted:
+            por_data = por_lab[lab]
+            todos    = [e for d in datas_janela for e in por_data.get(d,[])]
+            has_rep  = any(e["_status"]=="rep"  for e in todos)
+            has_pend = any(e["_status"]=="pend" for e in todos)
+            card_cls = "pc-rep" if has_rep else ("pc-pend" if has_pend else "pc-ok")
+
+            obras_lab = list(dict.fromkeys(e.get("obra","") for e in todos if e.get("obra")))
+            pills = ""
+            for d in datas_janela:
+                try:
+                    dt_obj = datetime.strptime(d, "%Y-%m-%d")
+                except Exception:
+                    continue
+                is_hoje = (d == today_str)
+                ens_dia = por_data.get(d, [])
+                if not ens_dia:
+                    cls = "c-vazio" + (" c-hoje" if is_hoje else "")
+                    txt = "HOJE" if is_hoje else "—"
+                    emp = ""
+                else:
+                    statuses = [e["_status"] for e in ens_dia]
+                    cls = ("c-rep"  if "rep"  in statuses else
+                           "c-pend" if "pend" in statuses else
+                           "c-exec" if "exec" in statuses else "c-ok")
+                    if is_hoje: cls += " c-hoje"
+                    n   = len(ens_dia)
+                    emp = (ens_dia[0].get("empreiteira","") or
+                           ens_dia[0].get("obra",""))[:8]
+                    lbl = {"rep":"REP","pend":"PND","exec":"EXE"}.get(statuses[0],"OK")
+                    txt = f"{lbl}×{n}" if n > 1 else lbl
+
+                dd_label = "HOJE" if is_hoje else f"{DAY_ABBR_P[dt_obj.weekday()]} {dt_obj.day:02d}"
+                dd_style = "font-weight:700;color:#F7B731" if is_hoje else ""
+                pills += (
+                    f'<div class="prod-pill">'
+                    f'<span class="prod-dd" style="{dd_style}">{dd_label}</span>'
+                    f'<div class="prod-cell {cls}">'
+                    f'<span>{txt}</span>'
+                    f'{"" if not ens_dia else f"<span class=prod-emp>{emp}</span>"}'
+                    f'</div></div>'
+                )
+
+            n_ok   = sum(1 for e in todos if e["_status"]=="ok")
+            n_pend = sum(1 for e in todos if e["_status"]=="pend")
+            n_rep  = sum(1 for e in todos if e["_status"]=="rep")
+            tags = f'<span class="prod-tag t-ok">✓ {n_ok}</span>'
+            if n_pend: tags += f'<span class="prod-tag t-pend">⏳ {n_pend} pend.</span>'
+            if n_rep:  tags += f'<span class="prod-tag t-rep">✗ {n_rep} reprov.</span>'
+
+            cards.append(
+                f'<div class="prod-card {card_cls}" style="border-left-color:{cor}">'
+                f'<div class="prod-name">{lab}</div>'
+                f'<div class="prod-sub">{" · ".join(obras_lab[:3])}</div>'
+                f'<div class="prod-days">{pills}</div>'
+                f'<div class="prod-foot">{tags}</div></div>'
+            )
+        cards.append("</div>")
+        st.markdown("".join(cards), unsafe_allow_html=True)
+
+    # ── Renderiza cada categoria como sub-tab ─────────────────────────────
+    cat_names  = list(_CATEGORIAS_PROD.keys())
+    cat_tabs   = st.tabs([
+        f"{_CATEGORIAS_PROD[c]['icon']} {c}" for c in cat_names
+    ])
+
+    for tab, cat_name in zip(cat_tabs, cat_names):
+        with tab:
+            cfg      = _CATEGORIAS_PROD[cat_name]
+            regs     = _filtrar_categoria(cfg)
+            if not regs:
+                st.info(f"Sem registros de **{cat_name}** no período.")
+                continue
+            st.caption(f"{len(regs)} registros · últimos {len(datas_janela)} dias")
+            st.markdown(_CSS_PROD, unsafe_allow_html=True)
+            _render_grid_categoria(regs, cfg["cor"])
+    return   # impede cair no código antigo abaixo
+
+    # ── Código antigo (não alcançado) ─────────────────────────────────────
     por_lab = defaultdict(lambda: defaultdict(list))
     for e in dados_janela:
         por_lab[e["lab"]][e["_d"]].append(e)
 
-    # Ordena: labs com pendentes primeiro
     def _urgency_lab(lab):
         ensaios = [e for d in datas_janela for e in por_lab[lab].get(d,[])]
         if any(e["_status"]=="rep"  for e in ensaios): return 0
