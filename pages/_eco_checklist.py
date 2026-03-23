@@ -813,24 +813,76 @@ def _render_produtividade(dados: list, datas_janela: list[str]):
     st.markdown("".join(cards), unsafe_allow_html=True)
 
 
+_TIPO_COR = {
+    "Diário de Obra":         ("#4CC9F0", "📋"),
+    "Checklist de Usina":     ("#7BBF6A", "🏭"),
+    "Checklist de Aplicação": ("#F7B731", "🚧"),
+    "Checklist de MRAF":      ("#A29BFE", "🔩"),
+    "Ensaio de CAUQ":         ("#FD79A8", "🧪"),
+}
+
+_GRUPOS_NORM = {"eco cerrado", "eco minas goias", "eco minas goiás",
+                "ecl minas goiás", "eco-cerrado", "eco-minas goiás"}
+
+_CSS_ENSAIOS = """
+<style>
+.ea-kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 16px}
+.ea-kpi{background:rgba(13,27,42,.75);border:1px solid rgba(86,110,61,.3);
+  border-radius:10px;padding:10px 16px;min-width:90px;text-align:center}
+.ea-kpi .val{font-size:1.5rem;font-weight:700}
+.ea-kpi .lbl{font-size:.65rem;color:#8FA882;margin-top:2px}
+.ea-tipo-chip{display:inline-block;font-size:.62rem;font-weight:700;
+  padding:2px 8px;border-radius:999px;margin:2px 3px 2px 0;border:1px solid}
+.ea-day-row{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;
+  padding-bottom:4px;scrollbar-width:none;margin:6px 0}
+.ea-day-row::-webkit-scrollbar{display:none}
+.ea-day-pill{display:flex;flex-direction:column;align-items:center;gap:2px;
+  min-width:38px;flex-shrink:0}
+.ea-dd{font-size:.57rem;color:#8FA882;font-weight:500;text-align:center}
+.ea-cell{width:38px;height:26px;border-radius:6px;font-size:.6rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;text-align:center}
+.ea-cell.c-ok{background:rgba(60,180,75,.25);color:#3cb44b;border:1px solid rgba(60,180,75,.4)}
+.ea-cell.c-pend{background:rgba(247,183,49,.2);color:#F7B731;border:1px solid rgba(247,183,49,.4)}
+.ea-cell.c-rep{background:rgba(230,25,75,.2);color:#e6194b;border:1px solid rgba(230,25,75,.4)}
+.ea-cell.c-vazio{background:rgba(255,255,255,.03);color:#3a4a5e;border:1px dashed #2D3748}
+.ea-cell.c-warn{background:rgba(247,183,49,.1);color:#F7B731;border:2px dashed #F7B731}
+.ea-cell.c-hoje{outline:2px solid #F7B731;outline-offset:1px}
+.ea-cobrar{display:inline-block;font-size:.65rem;font-weight:700;
+  color:#FF6B6B;background:rgba(255,107,107,.15);border:1px solid rgba(255,107,107,.4);
+  border-radius:6px;padding:2px 8px;margin-left:8px}
+.ea-report-link{color:#4CC9F0;text-decoration:none;font-size:.7rem}
+.ea-report-link:hover{text-decoration:underline}
+.ea-status-badge{display:inline-block;font-size:.6rem;padding:1px 6px;
+  border-radius:999px;border:1px solid;font-weight:600;margin-right:4px}
+.ea-entry-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.ea-entry-row:last-child{border-bottom:none}
+</style>
+"""
+
+
 def _render_ensaios_aevias():
-    """Seção de ensaios do aevias-controle.base44.app integrada ao Checklist."""
+    """Seção de ensaios — view per-person limpa com cobrar tracking."""
+    from collections import defaultdict
+
     st.markdown("## 🧪 Ensaios & Relatórios — AEVIAS Controle")
+
+    # ── Header: info + refresh ────────────────────────────────────────────────
+    col_info, col_btn = st.columns([5, 1])
 
     dados, mtime = _carregar_ensaios()
 
-    col_info, col_btn = st.columns([5, 1])
     with col_info:
         if mtime:
             dt_mod = datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
             st.caption(
-                f"🔄 Fonte: `ensaios_aevias.json` · Atualizado: **{dt_mod}** · "
+                f"Fonte: `ensaios_aevias.json` · Atualizado: **{dt_mod}** · "
                 f"{len(dados)} registros · "
                 f"[Abrir site ↗]({_BASE44_URL}/MeusEnsaios)"
             )
         else:
             st.warning(
-                "⚠️ `cache_certificados/ensaios_aevias.json` não encontrado. "
+                "`cache_certificados/ensaios_aevias.json` não encontrado. "
                 "Execute `baixar_ensaios.py` para gerar o cache."
             )
             return
@@ -843,144 +895,264 @@ def _render_ensaios_aevias():
         st.info("Nenhum ensaio carregado.")
         return
 
-    # ── Parse datas ─────────────────────────────────────────────────────────
-    today_str = date.today().strftime("%Y-%m-%d")
+    # ── Period selector ───────────────────────────────────────────────────────
+    periodo = st.radio(
+        "Período:",
+        options=["Hoje", "7 dias", "30 dias"],
+        index=1,
+        horizontal=True,
+        key="ens_periodo_sel",
+    )
+
+    today = date.today()
+    today_str = today.strftime("%Y-%m-%d")
+    if periodo == "Hoje":
+        delta_days = 0
+    elif periodo == "7 dias":
+        delta_days = 6
+    else:
+        delta_days = 29
+
+    # ── Parse e enriquece cada ensaio ────────────────────────────────────────
     for e in dados:
         try:
-            e["_date"]  = datetime.strptime(e["data"], "%d/%m/%Y").date()
-            e["_dstr"]  = e["_date"].strftime("%Y-%m-%d")
+            e["_date"] = datetime.strptime(e["data"], "%d/%m/%Y").date()
+            e["_dstr"] = e["_date"].strftime("%Y-%m-%d")
         except Exception:
             e["_date"] = None
             e["_dstr"] = ""
 
-    # Janela 14 dias (sem futuro)
-    datas_dstr = sorted(
-        {e["_dstr"] for e in dados if e["_dstr"] and e["_dstr"] <= today_str},
-        reverse=False
-    )
-    datas_janela_prod = datas_dstr[-14:]  # últimos 14 dias com dados
-
-    datas_disp = sorted(
-        {e["_date"] for e in dados if e["_date"]}, reverse=True
-    )
-    obras_disp  = sorted({e.get("obra","") for e in dados if e.get("obra")})
-    tipos_disp  = sorted({e.get("tipo","") for e in dados if e.get("tipo")})
-
-    # ── Tabs: Produtividade | Lista ──────────────────────────────────────────
-    t_prod, t_lista = st.tabs(["📊 Produtividade por Laboratorista", "📋 Lista de Ensaios"])
-
-    with t_prod:
-        st.caption(
-            f"Últimos {len(datas_janela_prod)} dias com registros. "
-            f"Cells verde=Aprovado · amarelo=Pendente · vermelho=Reprovado. "
-            f"Após rodar `baixar_ensaios.py` novamente, aparecerão nomes individuais e empreiteiras."
-        )
-        _render_produtividade(dados, datas_janela_prod)
-
-    with t_lista:
-        # ── Filtros ──────────────────────────────────────────────────────────
-        fc1, fc2, fc3 = st.columns([2, 2, 2])
-        with fc1:
-            data_sel = st.selectbox(
-                "📅 Data:",
-                options=["Todas"] + [d.strftime("%d/%m/%Y") for d in datas_disp],
-                key="ens_data_sel",
-            )
-        with fc2:
-            obra_sel = st.multiselect(
-                "🏗️ Obra:", options=obras_disp, default=[], key="ens_obra_sel",
-                placeholder="Todas"
-            )
-        with fc3:
-            tipo_sel = st.multiselect(
-                "📄 Tipo:", options=tipos_disp, default=[], key="ens_tipo_sel",
-                placeholder="Todos"
-            )
-
-        # ── Filtragem ────────────────────────────────────────────────────────
-        filtrados = dados
-        if data_sel != "Todas":
-            d_obj = datetime.strptime(data_sel, "%d/%m/%Y").date()
-            filtrados = [e for e in filtrados if e["_date"] == d_obj]
-        if obra_sel:
-            filtrados = [e for e in filtrados if e.get("obra") in obra_sel]
-        if tipo_sel:
-            filtrados = [e for e in filtrados if e.get("tipo") in tipo_sel]
-
-        if not filtrados:
-            st.info("Nenhum ensaio para os filtros selecionados.")
+        # Normaliza nome do profissional
+        lab_raw  = (e.get("lab") or "").strip()
+        prof_raw = (e.get("profissional") or "").strip()
+        if lab_raw:
+            e["_prof"] = lab_raw
+            e["_is_grupo"] = False
+        elif _norm(prof_raw) in _GRUPOS_NORM:
+            e["_prof"] = prof_raw  # mantém original para label
+            e["_is_grupo"] = True
         else:
-            # ── KPIs ─────────────────────────────────────────────────────────
-            from collections import Counter
-            cnt_obras = Counter(e.get("obra","—") for e in filtrados)
-            cards_html = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">'
-            for obra, n in cnt_obras.most_common():
-                cor = _COR_OBRA.get(obra, "#8FA882")
-                cards_html += (
-                    f'<div style="background:rgba(0,0,0,0.2);border:1px solid {cor}55;'
-                    f'border-left:3px solid {cor};border-radius:8px;padding:8px 14px;min-width:100px">'
-                    f'<div style="font-size:1.3rem;font-weight:700;color:{cor}">{n}</div>'
-                    f'<div style="color:#C8D8A8;font-size:.7rem">{obra}</div></div>'
-                )
-            st.markdown(cards_html + "</div>", unsafe_allow_html=True)
+            e["_prof"] = prof_raw or "—"
+            e["_is_grupo"] = False
 
-            # ── Lista agrupada por data → obra ────────────────────────────────
-            datas_filtradas = sorted({e["_date"] for e in filtrados if e["_date"]}, reverse=True)
-            for d in datas_filtradas:
-                ensaios_dia = [e for e in filtrados if e["_date"] == d]
-                st.markdown(
-                    f'<div style="background:rgba(86,110,61,0.15);border-left:3px solid #7BBF6A;'
-                    f'border-radius:6px;padding:8px 14px;margin:10px 0;font-weight:600;color:#C8D8A8">'
-                    f'📅 {d.strftime("%A, %d/%m/%Y").capitalize()} — {len(ensaios_dia)} registro(s)</div>',
-                    unsafe_allow_html=True
+        # Normaliza status
+        s = str(e.get("status", "")).lower()
+        if "reprovado" in s:
+            e["_status"] = "rep"
+        elif "pendente" in s:
+            e["_status"] = "pend"
+        elif "aprovado" in s:
+            e["_status"] = "ok"
+        else:
+            e["_status"] = "ok"
+
+    # ── Filtra janela (sem futuro) ────────────────────────────────────────────
+    from datetime import timedelta
+    date_inicio = today - timedelta(days=delta_days)
+    dados_periodo = [
+        e for e in dados
+        if e["_dstr"] and e["_dstr"] <= today_str and e["_date"] >= date_inicio
+    ]
+
+    # ── KPIs globais ─────────────────────────────────────────────────────────
+    n_total    = len(dados_periodo)
+    n_pend     = sum(1 for e in dados_periodo if e["_status"] == "pend")
+    n_rep      = sum(1 for e in dados_periodo if e["_status"] == "rep")
+    n_cobrar   = n_pend + n_rep
+
+    st.markdown(_CSS_ENSAIOS, unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="ea-kpi-row">'
+        f'<div class="ea-kpi"><div class="val" style="color:#C8D8A8">{n_total}</div>'
+        f'<div class="lbl">Submissões</div></div>'
+        f'<div class="ea-kpi"><div class="val" style="color:#F7B731">{n_pend}</div>'
+        f'<div class="lbl">Pendentes</div></div>'
+        f'<div class="ea-kpi"><div class="val" style="color:#FF6B6B">{n_rep}</div>'
+        f'<div class="lbl">Reprovados</div></div>'
+        f'<div class="ea-kpi"><div class="val" style="color:#{"FF6B6B" if n_cobrar else "7BBF6A"}">'
+        f'{"🚨 " if n_cobrar else "✓ "}{n_cobrar}</div>'
+        f'<div class="lbl">A Cobrar</div></div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not dados_periodo:
+        st.info(f"Sem registros no período selecionado ({periodo}).")
+        return
+
+    # ── Dias com pelo menos 1 registro no período ─────────────────────────────
+    datas_com_dados = sorted(
+        {e["_dstr"] for e in dados_periodo if e["_dstr"]}
+    )
+
+    # ── Agrupa por profissional ───────────────────────────────────────────────
+    por_prof: dict = defaultdict(list)
+    for e in dados_periodo:
+        por_prof[e["_prof"]].append(e)
+
+    # Separa grupos dos indivíduos
+    grupos  = {p: v for p, v in por_prof.items()
+               if any(e["_is_grupo"] for e in v)}
+    indivs  = {p: v for p, v in por_prof.items()
+               if not any(e["_is_grupo"] for e in v)}
+
+    DAY_ABBR_E = {0: "SEG", 1: "TER", 2: "QUA", 3: "QUI",
+                  4: "SEX", 5: "SÁB", 6: "DOM"}
+
+    def _urgencia_prof(registros):
+        if any(e["_status"] == "rep"  for e in registros): return 0
+        if any(e["_status"] == "pend" for e in registros): return 1
+        return 2
+
+    def _render_person_expander(nome: str, registros: list, label_prefix: str = ""):
+        """Renderiza um expander por pessoa com todos os dados."""
+        a_cobrar = any(e["_status"] in ("pend", "rep") for e in registros)
+        has_rep  = any(e["_status"] == "rep" for e in registros)
+
+        expander_label = f"{label_prefix}{nome}"
+        if a_cobrar:
+            expander_label += "  🚨 A COBRAR"
+
+        with st.expander(expander_label, expanded=a_cobrar):
+            n_reg   = len(registros)
+            n_p_loc = sum(1 for e in registros if e["_status"] == "pend")
+            n_r_loc = sum(1 for e in registros if e["_status"] == "rep")
+
+            # Mini KPI row
+            kpi_color = "#FF6B6B" if (n_p_loc + n_r_loc) else "#7BBF6A"
+            st.markdown(
+                f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+                f'<span style="color:#C8D8A8;font-size:.8rem;font-weight:700">'
+                f'{n_reg} submissão(ões)</span>'
+                f'{"<span class=ea-cobrar>🚨 A COBRAR</span>" if a_cobrar else ""}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Breakdown por tipo (chips)
+            from collections import Counter
+            cnt_tipo = Counter(e.get("tipo", "—") for e in registros)
+            chips_html = ""
+            for tipo, cnt in cnt_tipo.most_common():
+                cor, icon = _TIPO_COR.get(tipo, ("#8FA882", "📄"))
+                chips_html += (
+                    f'<span class="ea-tipo-chip" '
+                    f'style="color:{cor};border-color:{cor}55;background:{cor}18">'
+                    f'{icon} {tipo} ({cnt})</span>'
                 )
-                obras_no_dia = list(dict.fromkeys(e.get("obra","—") for e in ensaios_dia))
-                for obra in obras_no_dia:
-                    cor_obra = _COR_OBRA.get(obra, "#8FA882")
-                    ens_obra = [e for e in ensaios_dia if e.get("obra") == obra]
-                    rows_html = ""
-                    for e in ens_obra:
-                        tipo = e.get("tipo", "—")
-                        # usa lab (novo) ou profissional (retrocompatível)
-                        lab  = e.get("lab") or e.get("profissional","—")
-                        emp  = e.get("empreiteira","") or ""
-                        url  = e.get("reportUrl","")
-                        icon = _ICON_TIPO.get(tipo, "📄")
-                        link = (f'<a href="{_BASE44_URL}{url}" target="_blank" '
-                                f'style="color:#4CC9F0;text-decoration:none">🔗 Relatório</a>'
-                                if url else "—")
-                        status = e.get("status","")
-                        s_color = ("#3cb44b" if "aprov" in status.lower()
-                                   else "#F7B731" if "pend" in status.lower()
-                                   else "#e6194b" if "reprov" in status.lower()
-                                   else "#8FA882")
-                        s_badge = (f'<span style="color:{s_color};font-size:.65rem;'
-                                   f'padding:1px 6px;border-radius:999px;'
-                                   f'border:1px solid {s_color}44">{status}</span>'
-                                   if status else "")
-                        rows_html += (
-                            f'<tr><td style="padding:6px 10px;color:{cor_obra}">{icon} {tipo}</td>'
-                            f'<td style="padding:6px 10px;color:#C8D8A8">{lab}</td>'
-                            f'<td style="padding:6px 10px;color:#8FA882;font-size:.75rem">{emp}</td>'
-                            f'<td style="padding:6px 8px">{s_badge}</td>'
-                            f'<td style="padding:6px 8px">{link}</td></tr>'
-                        )
-                    st.markdown(
-                        f'<div style="margin:6px 0 12px 0">'
-                        f'<div style="font-size:.8rem;font-weight:600;color:{cor_obra};'
-                        f'padding:4px 10px;background:rgba(0,0,0,.15);'
-                        f'border-radius:6px 6px 0 0;display:inline-block">🏗️ {obra} ({len(ens_obra)})</div>'
-                        f'<table style="width:100%;border-collapse:collapse;'
-                        f'background:rgba(0,0,0,.15);border-radius:0 6px 6px 6px">'
-                        f'<thead><tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
-                        f'<th style="padding:5px 10px;color:#8FA882;font-weight:500;text-align:left;font-size:.72rem">Tipo</th>'
-                        f'<th style="padding:5px 10px;color:#8FA882;font-weight:500;text-align:left;font-size:.72rem">Lab.</th>'
-                        f'<th style="padding:5px 10px;color:#8FA882;font-weight:500;text-align:left;font-size:.72rem">Empreiteira</th>'
-                        f'<th style="padding:5px 10px;color:#8FA882;font-weight:500;text-align:left;font-size:.72rem">Status</th>'
-                        f'<th style="padding:5px 10px;color:#8FA882;font-weight:500;text-align:left;font-size:.72rem">Link</th>'
-                        f'</tr></thead><tbody>{rows_html}</tbody></table></div>',
-                        unsafe_allow_html=True
-                    )
+            if chips_html:
+                st.markdown(chips_html, unsafe_allow_html=True)
+
+            # Dias com / sem submissão (compact calendar row)
+            por_data_p: dict = defaultdict(list)
+            for e in registros:
+                por_data_p[e["_dstr"]].append(e)
+
+            pills_html = ""
+            for d in datas_com_dados:
+                try:
+                    dt_obj = datetime.strptime(d, "%Y-%m-%d")
+                except Exception:
+                    continue
+                is_hoje  = (d == today_str)
+                ens_dia  = por_data_p.get(d, [])
+                dd_label = ("HOJE" if is_hoje
+                            else f"{DAY_ABBR_E[dt_obj.weekday()]} {dt_obj.day:02d}")
+                dd_style = "font-weight:700;color:#F7B731" if is_hoje else ""
+
+                if not ens_dia:
+                    cls = "c-vazio" + (" c-hoje" if is_hoje else "")
+                    txt = "—"
+                else:
+                    statuses = [e["_status"] for e in ens_dia]
+                    cls = ("c-rep"  if "rep"  in statuses else
+                           "c-pend" if "pend" in statuses else "c-ok")
+                    if is_hoje:
+                        cls += " c-hoje"
+                    n = len(ens_dia)
+                    txt = f"×{n}" if n > 1 else ("REP" if "rep" in statuses
+                                                  else "PND" if "pend" in statuses
+                                                  else "OK")
+
+                pills_html += (
+                    f'<div class="ea-day-pill">'
+                    f'<span class="ea-dd" style="{dd_style}">{dd_label}</span>'
+                    f'<div class="ea-cell {cls}">{txt}</div>'
+                    f'</div>'
+                )
+
+            if pills_html:
+                st.markdown(
+                    f'<div class="ea-day-row">{pills_html}</div>',
+                    unsafe_allow_html=True,
+                )
+
+            # Lista de entradas individuais com status badge + link
+            st.markdown(
+                '<div style="margin-top:8px;font-size:.7rem;color:#8FA882;font-weight:600">'
+                'Registros:</div>',
+                unsafe_allow_html=True,
+            )
+            rows_html = ""
+            for e in sorted(registros, key=lambda x: x["_dstr"], reverse=True):
+                tipo   = e.get("tipo", "—")
+                obra   = e.get("obra", "—")
+                local  = e.get("local", "")
+                emp    = e.get("empreiteira", "") or ""
+                url    = e.get("reportUrl", "")
+                status = e.get("status", "")
+                dstr   = e.get("data", "")
+                s_norm = e["_status"]
+                cor_s  = ("#7BBF6A" if s_norm == "ok"
+                           else "#F7B731" if s_norm == "pend"
+                           else "#FF6B6B")
+                s_badge = (
+                    f'<span class="ea-status-badge" '
+                    f'style="color:{cor_s};border-color:{cor_s}55">{status}</span>'
+                    if status else ""
+                )
+                ico_tipo = _TIPO_COR.get(tipo, ("#8FA882", "📄"))[1]
+                link_html = (
+                    f'<a class="ea-report-link" href="{_BASE44_URL}{url}" '
+                    f'target="_blank">🔗 Relatório</a>'
+                    if url else ""
+                )
+                detail = " · ".join(filter(None, [obra, emp, local]))
+                rows_html += (
+                    f'<div class="ea-entry-row">'
+                    f'<span style="color:#8FA882;min-width:70px;font-size:.65rem">{dstr}</span>'
+                    f'<span style="color:#C8D8A8">{ico_tipo} {tipo}</span>'
+                    f'<span style="color:#8FA882;font-size:.65rem;flex:1">{detail}</span>'
+                    f'{s_badge}{link_html}'
+                    f'</div>'
+                )
+            st.markdown(
+                f'<div style="background:rgba(0,0,0,.15);border-radius:8px;padding:6px 10px">'
+                f'{rows_html}</div>',
+                unsafe_allow_html=True,
+            )
+
+    # ── Render: indivíduos (ordenados por urgência) ───────────────────────────
+    indivs_sorted = sorted(
+        indivs.items(),
+        key=lambda kv: (_urgencia_prof(kv[1]), kv[0])
+    )
+    for nome, regs in indivs_sorted:
+        _render_person_expander(nome, regs, label_prefix="👤 ")
+
+    # ── Render: grupos (Eco Cerrado, ECO Minas Goiás etc.) ───────────────────
+    if grupos:
+        st.markdown(
+            '<div style="margin:12px 0 4px;font-size:.75rem;color:#8FA882;font-weight:600">'
+            'Grupos / Contratos (nome individual não disponível — execute o scraper):</div>',
+            unsafe_allow_html=True,
+        )
+        grupos_sorted = sorted(
+            grupos.items(),
+            key=lambda kv: (_urgencia_prof(kv[1]), kv[0])
+        )
+        for nome, regs in grupos_sorted:
+            _render_person_expander(nome, regs, label_prefix="📁 ")
 
 
 def _aba_checklist():
