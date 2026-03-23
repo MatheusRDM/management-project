@@ -236,10 +236,18 @@ def _renderizar_cards(people: list[dict], datas_janela: list[str]):
         if vu in ("N/E","NE"):       return 2
         return 3                                # OK = último
 
-    # Separa: exige checklist × isento
-    obrigados = [p for p in people if not _isento_checklist(p.get("funcao",""))]
-    isentos   = [p for p in people if     _isento_checklist(p.get("funcao",""))]
-    people_sorted = sorted(obrigados, key=_urgency)
+    def _tem_dado_no_periodo(p):
+        """True se a pessoa tem QUALQUER registro não-nulo na janela."""
+        dias = p.get("dias", {})
+        return any(v for d, v in dias.items() if d in datas_janela and v)
+
+    # Separa: exige checklist × isento por cargo × sem dados no período
+    isentos_cargo  = [p for p in people if _isento_checklist(p.get("funcao",""))]
+    com_checklist  = [p for p in people if not _isento_checklist(p.get("funcao",""))]
+    sem_dados      = [p for p in com_checklist if not _tem_dado_no_periodo(p)]
+    obrigados      = [p for p in com_checklist if _tem_dado_no_periodo(p)]
+    isentos        = isentos_cargo  # para o bloco visual abaixo
+    people_sorted  = sorted(obrigados, key=_urgency)
 
     cards_html = ['<div class="ck-wrap">', _CSS_CARDS, '<div class="ck-grid">']
 
@@ -304,19 +312,34 @@ def _renderizar_cards(people: list[dict], datas_janela: list[str]):
     cards_html.append("</div></div>")
     st.markdown("".join(cards_html), unsafe_allow_html=True)
 
-    # ── Bloco de isentos (sem checklist de campo) ─────────────────────────────
-    if isentos:
+    # ── Rodapé: isentos por cargo ─────────────────────────────────────────────
+    if isentos_cargo:
         nomes_isentos = " · ".join(
-            f"{p.get('colaborador','').split()[0]} <span style='color:#3a4a5e;font-size:.65rem'>"
-            f"({p.get('funcao','—')})</span>"
-            for p in sorted(isentos, key=lambda x: x.get("colaborador",""))
+            f"{p.get('colaborador','').split()[0]}"
+            f"<span style='color:#3a4a5e;font-size:.6rem'> ({p.get('funcao','—')})</span>"
+            for p in sorted(isentos_cargo, key=lambda x: x.get("colaborador",""))
         )
         st.markdown(
-            f'<div style="margin-top:8px;padding:8px 14px;'
-            f'background:rgba(58,74,94,.25);border-radius:8px;'
-            f'border-left:3px solid #3a4a5e;color:#5a6a7e;font-size:.78rem">'
+            f'<div style="margin-top:6px;padding:7px 12px;'
+            f'background:rgba(58,74,94,.2);border-radius:8px;'
+            f'border-left:3px solid #3a4a5e;color:#5a6a7e;font-size:.75rem">'
             f'<span style="font-weight:600;color:#8FA882">🚫 Sem checklist de campo:</span> '
             f'{nomes_isentos}</div>',
+            unsafe_allow_html=True
+        )
+
+    # ── Rodapé: sem dados no período (ex: afastados, novos) ──────────────────
+    if sem_dados:
+        nomes_sd = " · ".join(
+            p.get("colaborador","").split()[0]
+            for p in sorted(sem_dados, key=lambda x: x.get("colaborador",""))
+        )
+        st.markdown(
+            f'<div style="margin-top:4px;padding:6px 12px;'
+            f'background:rgba(40,40,40,.2);border-radius:8px;'
+            f'border-left:3px solid #2D3748;color:#4a5568;font-size:.72rem">'
+            f'<span style="font-weight:600;color:#4a5568">⚫ Sem registro no período ({len(sem_dados)}):</span> '
+            f'{nomes_sd}</div>',
             unsafe_allow_html=True
         )
 
