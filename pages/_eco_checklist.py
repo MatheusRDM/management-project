@@ -353,9 +353,13 @@ def _renderizar_calendario(people: list[dict], mes_ref: str):
     today      = date.today()
     today_str  = today.strftime("%Y-%m-%d")
 
+    # ── Filtra isentos e sem dados ANTES de qualquer renderização ─────────────
+    isentos_cargo_cal = [p for p in people if     _isento_checklist(p.get("funcao",""))]
+    campo_people      = [p for p in people if not _isento_checklist(p.get("funcao",""))]
+
     # Coleta datas do mês que já passaram (sem futuro)
     datas_mes = sorted(
-        d for p in people for d in p.get("dias", {}).keys()
+        d for p in campo_people for d in p.get("dias", {}).keys()
         if d and d <= today_str
     )
     datas_mes = sorted(set(datas_mes))
@@ -364,16 +368,47 @@ def _renderizar_calendario(people: list[dict], mes_ref: str):
         st.info("Sem datas registradas até hoje.")
         return
 
+    # Pessoas com pelo menos 1 registro no mês
+    def _tem_dado_mes(p):
+        return any(v for d,v in p.get("dias",{}).items() if d in datas_mes and v)
+
+    sem_dados_cal = [p for p in campo_people if not _tem_dado_mes(p)]
+    people_ativos = [p for p in campo_people if _tem_dado_mes(p)]
+
     # Janela: últimos 7 dias disponíveis (incluindo hoje se existir)
     datas_janela = datas_mes[-7:]
 
-    # ── View rápida: cards 7 dias ────────────────────────────────────────────
-    _renderizar_cards(people, datas_janela)
+    # ── View rápida: cards 7 dias (só ativos) ────────────────────────────────
+    _renderizar_cards(people_ativos, datas_janela)
+
+    # ── Rodapé compacto ───────────────────────────────────────────────────────
+    rodape = []
+    if isentos_cargo_cal:
+        nomes = " · ".join(
+            f"<span style='color:#5a6a7e'>{p['colaborador'].split()[0]}"
+            f"<span style='font-size:.6rem;color:#3a4a5e'> ({p.get('funcao','—')})</span></span>"
+            for p in sorted(isentos_cargo_cal, key=lambda x: x.get("colaborador",""))
+        )
+        rodape.append(f"🚫 <b style='color:#8FA882'>Sem checklist:</b> {nomes}")
+    if sem_dados_cal:
+        nomes = " · ".join(
+            f"<span style='color:#4a5568'>{p['colaborador'].split()[0]}</span>"
+            for p in sorted(sem_dados_cal, key=lambda x: x.get("colaborador",""))
+        )
+        rodape.append(f"⚫ <b style='color:#4a5568'>Sem registro ({len(sem_dados_cal)}):</b> {nomes}")
+    if rodape:
+        st.markdown(
+            '<div style="margin:6px 0;padding:7px 12px;background:rgba(30,30,40,.3);'
+            'border-radius:8px;font-size:.72rem;line-height:1.8">'
+            + "<br>".join(rodape) + "</div>",
+            unsafe_allow_html=True
+        )
 
     st.markdown('<div class="ck-sep"></div>', unsafe_allow_html=True)
 
-    # ── Expander: tabela completa do mês ─────────────────────────────────────
-    with st.expander(f"📊 Ver calendário completo do mês ({len(datas_mes)} dias)", expanded=False):
+    # ── Expander: tabela completa do mês (só ativos de campo) ────────────────
+    n_ativos = len(people_ativos)
+    with st.expander(f"📊 Calendário completo — {n_ativos} pessoas em campo · {len(datas_mes)} dias", expanded=False):
         DAY_ABBR = _DAY_ABBR
         html = ['<div class="cal-wrap"><table class="cal-table"><thead><tr>']
         html.append('<th>Colaborador</th><th>Função</th>')
@@ -389,7 +424,7 @@ def _renderizar_calendario(people: list[dict], mes_ref: str):
                         f'{DAY_ABBR[dt.weekday()]}</th>')
         html.append('<th></th><th></th></tr></thead><tbody>')
 
-        for p in people:
+        for p in people_ativos:
             dias      = p.get("dias", {})
             ok_count  = sum(1 for d,v in dias.items()
                             if v and str(v).upper().strip()=="OK" and d in datas_mes)
