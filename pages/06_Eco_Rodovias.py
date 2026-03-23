@@ -21,7 +21,7 @@ st.set_page_config(
     page_title="Eco Rodovias | Afirma E-vias",
     page_icon="Imagens/logo_icon.png",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 aplicar_estilos()
 proteger_pagina("Eco Rodovias")
@@ -31,6 +31,118 @@ proteger_pagina("Eco Rodovias")
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE-FIRST RESPONSIVE OVERRIDES
+   Forçar st.columns a empilhar em telas < 768px
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Streamlit columns → stack vertical no mobile ────────── */
+@media (max-width: 768px) {
+    /* Força colunas do Streamlit a empilharem */
+    [data-testid="stHorizontalBlock"] {
+        flex-direction: column !important;
+        gap: 4px !important;
+    }
+    [data-testid="stHorizontalBlock"] > div {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 0 !important;
+    }
+    /* Container principal: remove padding lateral */
+    .block-container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        padding-top: 1rem !important;
+    }
+    /* Sidebar: inicia recolhido no mobile */
+    section[data-testid="stSidebar"] {
+        width: 0 !important;
+        min-width: 0 !important;
+    }
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        width: 280px !important;
+        min-width: 280px !important;
+    }
+    /* Tabs: fonte menor, scroll horizontal */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0px !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        flex-wrap: nowrap !important;
+    }
+    .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+    .stTabs [data-baseweb="tab"] {
+        font-size: 0.72rem !important;
+        padding: 8px 10px !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+    }
+    /* Header: ajuste de texto */
+    .eco-header h1 { font-size: 1.1rem !important; }
+    .eco-header p  { font-size: 0.70rem !important; }
+    .eco-header { padding: 10px 0 6px 0 !important; margin-bottom: 12px !important; }
+    /* KPI cards: compactos no mobile */
+    .eco-kpi {
+        padding: 10px 8px !important;
+        border-radius: 8px !important;
+    }
+    .eco-kpi .val { font-size: 1.4rem !important; }
+    .eco-kpi .lbl { font-size: 0.62rem !important; }
+    /* Calendar table: touch scroll + nomes menores */
+    .cal-wrap { -webkit-overflow-scrolling: touch; }
+    .cal-table { font-size: 0.60rem !important; min-width: 700px !important; }
+    .cal-table th { font-size: 0.55rem !important; padding: 4px 2px !important; }
+    .cal-table td { padding: 4px 2px !important; }
+    .cal-table td.colab { min-width: 100px !important; max-width: 130px !important; font-size: 0.62rem !important; }
+    .cal-table td.funcao { min-width: 70px !important; max-width: 100px !important; font-size: 0.55rem !important; }
+    /* Legenda: wrap */
+    .legend-item { font-size: 0.65rem !important; margin-right: 8px !important; }
+    /* Plotly: garante full width */
+    .js-plotly-plot, .plotly { width: 100% !important; }
+    /* Streamlit dataframe: scroll horizontal */
+    [data-testid="stDataFrame"] { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+    /* Selectbox / inputs: altura mínima touch-friendly */
+    .stSelectbox > div > div,
+    .stDateInput > div > div,
+    .stMultiSelect > div > div {
+        min-height: 42px !important;
+    }
+    /* Buttons: maiores no mobile */
+    .stButton > button {
+        min-height: 44px !important;
+        font-size: 0.82rem !important;
+    }
+    /* Folium map: full width */
+    iframe[title*="streamlit_folium"] {
+        width: 100% !important;
+        height: 400px !important;
+    }
+    /* Flex stat cards dos módulos (min-width inline) */
+    div[style*="display:flex"][style*="gap"] > div[style*="min-width"] {
+        min-width: 0 !important;
+        flex: 1 1 calc(50% - 4px) !important;
+    }
+}
+
+/* ── Tablet (768–960px): 2 colunas max ──────────────────── */
+@media (min-width: 769px) and (max-width: 960px) {
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+    [data-testid="stHorizontalBlock"] > div {
+        min-width: calc(50% - 6px) !important;
+        flex: 1 1 calc(50% - 6px) !important;
+    }
+    .eco-header h1 { font-size: 1.3rem !important; }
+    .eco-kpi .val { font-size: 1.6rem !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ESTILOS BASE (desktop-first original, agora com overrides acima)
+   ═══════════════════════════════════════════════════════════ */
 
 .eco-header {
     padding: 18px 0 8px 0;
@@ -72,7 +184,7 @@ st.markdown("""
     text-transform: uppercase;
     letter-spacing: 0.06em;
 }
-.cal-wrap { overflow-x: auto; width: 100%; }
+.cal-wrap { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; }
 .cal-table {
     border-collapse: collapse;
     font-family: 'Poppins', sans-serif;
