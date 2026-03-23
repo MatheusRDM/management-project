@@ -122,70 +122,224 @@ def _status_class(v):
     return "status-vazio", v[:3] if v else "·"
 
 
+_CSS_CARDS = """
+<style>
+@keyframes pulse-dot {
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.35;transform:scale(.8)}
+}
+.ck-wrap{padding:0 2px}
+.ck-grid{display:flex;flex-direction:column;gap:10px}
+@media(min-width:620px){
+  .ck-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+}
+.ck-card{background:rgba(13,27,42,.75);border:1px solid rgba(86,110,61,.3);
+  border-radius:12px;padding:14px 14px 12px;border-left:4px solid #566E3D;
+  transition:border-color .15s}
+.ck-card.card-cob{border-left-color:#e6194b}
+.ck-card.card-ok{border-left-color:#3cb44b}
+.ck-card.card-ne{border-left-color:#3a4a5e}
+.ck-name{font-size:.92rem;font-weight:700;color:#E8EFD8;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ck-role{font-size:.7rem;color:#8FA882;margin-bottom:10px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ck-days{display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;
+  padding-bottom:2px;scrollbar-width:none}
+.ck-days::-webkit-scrollbar{display:none}
+.ck-pill{display:flex;flex-direction:column;align-items:center;gap:2px;
+  min-width:34px;flex-shrink:0}
+.ck-dd{font-size:.6rem;color:#8FA882;font-weight:500}
+.ck-badge{display:inline-flex;align-items:center;justify-content:center;
+  width:34px;height:26px;border-radius:6px;font-size:.65rem;font-weight:700;
+  letter-spacing:.02em}
+.ck-badge.b-ok{background:rgba(60,180,75,.25);color:#3cb44b;border:1px solid rgba(60,180,75,.5)}
+.ck-badge.b-cob{background:rgba(230,25,75,.25);color:#e6194b;border:1px solid rgba(230,25,75,.5)}
+.ck-badge.b-ne{background:rgba(58,74,94,.5);color:#7a90a8;border:1px solid rgba(58,74,94,.7)}
+.ck-badge.b-elab{background:rgba(67,99,216,.25);color:#4363d8;border:1px solid rgba(67,99,216,.5)}
+.ck-badge.b-vazio{background:rgba(255,255,255,.04);color:#4a5a6a;border:1px dashed #2D3748}
+.ck-badge.b-hoje-ok{background:rgba(60,180,75,.35);color:#3cb44b;
+  border:2px solid #3cb44b;box-shadow:0 0 6px rgba(60,180,75,.4)}
+.ck-badge.b-hoje-cob{background:rgba(230,25,75,.35);color:#e6194b;
+  border:2px solid #e6194b;box-shadow:0 0 6px rgba(230,25,75,.4)}
+.ck-badge.b-hoje-sem{background:rgba(247,183,49,.12);color:#F7B731;
+  border:2px dashed #F7B731}
+.ck-dot{width:7px;height:7px;border-radius:50%;background:#F7B731;
+  animation:pulse-dot 1.4s ease-in-out infinite;margin:0 auto}
+.ck-foot{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+.ck-stat{font-size:.68rem;padding:2px 8px;border-radius:999px;font-weight:600}
+.ck-stat.s-ok{background:rgba(60,180,75,.2);color:#3cb44b}
+.ck-stat.s-cob{background:rgba(230,25,75,.2);color:#e6194b}
+.ck-stat.s-ne{background:rgba(58,74,94,.5);color:#7a90a8}
+.ck-sep{height:1px;background:rgba(255,255,255,.05);margin:14px 0}
+</style>
+"""
+
+_DAY_ABBR = {0:"SEG",1:"TER",2:"QUA",3:"QUI",4:"SEX",5:"SÁB",6:"DOM"}
+
+def _badge_class(v: str | None, is_hoje: bool) -> tuple[str, str]:
+    """Retorna (css_class, texto) para um badge de status."""
+    if v is None or str(v).strip() == "":
+        if is_hoje:
+            return "b-hoje-sem", "?"
+        return "b-vazio", "·"
+    vu = str(v).upper().strip()
+    if vu == "OK":
+        return ("b-hoje-ok" if is_hoje else "b-ok"), "OK"
+    if vu in ("COBRAR","COBRE"):
+        return ("b-hoje-cob" if is_hoje else "b-cob"), "COB"
+    if vu in ("N/E","NE"):
+        return "b-ne", "N/E"
+    if vu in ("ELAB.","ELAB"):
+        return "b-elab", "ELB"
+    return "b-vazio", v[:3] if v else "·"
+
+
+def _renderizar_cards(people: list[dict], datas_janela: list[str]):
+    """Renderiza cards mobile-first com janela de 7 dias."""
+    today_str = date.today().strftime("%Y-%m-%d")
+
+    def _urgency(p):
+        dias = p.get("dias", {})
+        v_hoje = dias.get(today_str)
+        vu = str(v_hoje).upper().strip() if v_hoje else ""
+        if vu in ("COBRAR","COBRE"): return 0   # pior: cobrança hoje
+        if not v_hoje:               return 1   # sem registro hoje
+        if vu in ("N/E","NE"):       return 2
+        return 3                                # OK = último
+
+    people_sorted = sorted(people, key=_urgency)
+
+    cards_html = ['<div class="ck-wrap">', _CSS_CARDS, '<div class="ck-grid">']
+
+    for p in people_sorted:
+        dias      = p.get("dias", {})
+        ok_count  = sum(1 for d,v in dias.items()
+                        if v and str(v).upper().strip()=="OK" and d in datas_janela)
+        cob_count = sum(1 for d,v in dias.items()
+                        if v and str(v).upper().strip() in ("COBRAR","COBRE"))
+        ne_count  = sum(1 for d,v in dias.items()
+                        if v and str(v).upper().strip() in ("N/E","NE") and d in datas_janela)
+        v_hoje    = dias.get(today_str)
+        vu_hoje   = str(v_hoje).upper().strip() if v_hoje else ""
+
+        card_cls = "card-cob" if cob_count > 0 else ("card-ok" if ok_count > 0 else "card-ne")
+
+        # Pills dos dias
+        pills_html = ""
+        for d in datas_janela:
+            try:
+                dt_obj = datetime.strptime(d, "%Y-%m-%d")
+            except Exception:
+                continue
+            is_hoje = (d == today_str)
+            v       = dias.get(d)
+            b_cls, b_txt = _badge_class(v, is_hoje)
+
+            dot = ""
+            if is_hoje and not v:
+                dot = '<div class="ck-dot"></div>'
+
+            dd_label = ("HOJE" if is_hoje
+                        else f"{_DAY_ABBR[dt_obj.weekday()]} {dt_obj.day:02d}")
+            dd_style = ("font-weight:700;color:#F7B731" if is_hoje else "")
+
+            pills_html += (
+                f'<div class="ck-pill">'
+                f'<span class="ck-dd" style="{dd_style}">{dd_label}</span>'
+                f'<span class="ck-badge {b_cls}">{b_txt}</span>'
+                f'{dot}'
+                f'</div>'
+            )
+
+        # Footer stats
+        stats = f'<span class="ck-stat s-ok">✓ {ok_count} OK</span>'
+        if cob_count:
+            stats += f'<span class="ck-stat s-cob">⚠ {cob_count} pend.</span>'
+        if ne_count:
+            stats += f'<span class="ck-stat s-ne">N/E {ne_count}</span>'
+
+        nome   = p.get("colaborador","—")
+        funcao = p.get("funcao","—")
+
+        cards_html.append(f"""
+        <div class="ck-card {card_cls}">
+          <div class="ck-name">{nome}</div>
+          <div class="ck-role">{funcao}</div>
+          <div class="ck-days">{pills_html}</div>
+          <div class="ck-foot">{stats}</div>
+        </div>""")
+
+    cards_html.append("</div></div>")
+    st.markdown("".join(cards_html), unsafe_allow_html=True)
+
+
 def _renderizar_calendario(people: list[dict], mes_ref: str):
-    """Renderiza tabela HTML de calendário."""
+    """View principal: cards mobile-first (7 dias) + tabela completa em expander."""
     if not people:
         st.warning("Nenhum colaborador encontrado.")
         return
 
-    # Coleta todas as datas disponíveis
-    datas = set()
-    for p in people:
-        datas.update(p.get("dias", {}).keys())
-    datas = sorted(d for d in datas if d)
+    today      = date.today()
+    today_str  = today.strftime("%Y-%m-%d")
 
-    if not datas:
-        st.info("Sem datas registradas.")
+    # Coleta datas do mês que já passaram (sem futuro)
+    datas_mes = sorted(
+        d for p in people for d in p.get("dias", {}).keys()
+        if d and d <= today_str
+    )
+    datas_mes = sorted(set(datas_mes))
+
+    if not datas_mes:
+        st.info("Sem datas registradas até hoje.")
         return
 
-    # Monta cabeçalho de datas
-    DAY_ABBR = {0: "SEG", 1: "TER", 2: "QUA", 3: "QUI", 4: "SEX", 5: "SÁB", 6: "DOM"}
-    html = ['<div class="cal-wrap"><table class="cal-table">']
-    # Linha 1: números dos dias
-    html.append("<thead><tr>")
-    html.append('<th>Colaborador</th><th>Função</th>')
-    for d in datas:
-        dt = datetime.strptime(d, "%Y-%m-%d")
-        html.append(f'<th>{dt.day:02d}</th>')
-    html.append('<th>OK</th><th>COB</th></tr>')
-    # Linha 2: siglas dos dias da semana
-    html.append("<tr>")
-    html.append('<th></th><th></th>')
-    for d in datas:
-        dt = datetime.strptime(d, "%Y-%m-%d")
-        html.append(f'<th style="font-size:0.55rem;color:#8FA882">{DAY_ABBR[dt.weekday()]}</th>')
-    html.append('<th></th><th></th></tr></thead>')
+    # Janela: últimos 7 dias disponíveis (incluindo hoje se existir)
+    datas_janela = datas_mes[-7:]
 
-    # Linhas por colaborador
-    html.append("<tbody>")
-    for p in people:
-        dias = p.get("dias", {})
-        ok_count  = sum(1 for v in dias.values() if v and str(v).upper().strip() == "OK")
-        cob_count = sum(1 for v in dias.values() if v and str(v).upper().strip() in ("COBRAR", "COBRE"))
-        html.append("<tr>")
-        html.append(f'<td class="colab" title="{p["colaborador"]}">{p["colaborador"]}</td>')
-        html.append(f'<td class="funcao" title="{p["funcao"]}">{p["funcao"]}</td>')
-        for d in datas:
-            v = dias.get(d)
-            cls, txt = _status_class(v)
-            html.append(f'<td class="{cls}">{txt}</td>')
-        cor_ok  = "#3cb44b" if ok_count  > 0 else "#7a90a8"
-        cor_cob = "#ff5577" if cob_count > 0 else "#7a90a8"
-        html.append(f'<td style="color:{cor_ok};font-weight:700">{ok_count}</td>')
-        html.append(f'<td style="color:{cor_cob};font-weight:700">{cob_count if cob_count else "—"}</td>')
-        html.append("</tr>")
-    html.append("</tbody></table></div>")
+    # ── View rápida: cards 7 dias ────────────────────────────────────────────
+    _renderizar_cards(people, datas_janela)
 
-    # Legenda
-    html.append("""
-    <div style="margin-top:10px">
-        <span class="legend-item"><span class="legend-dot" style="background:rgba(60,180,75,0.35)"></span>OK — Checklist enviado</span>
-        <span class="legend-item"><span class="legend-dot" style="background:rgba(230,25,75,0.35)"></span>COBRAR — Pendente</span>
-        <span class="legend-item"><span class="legend-dot" style="background:rgba(58,74,94,0.6)"></span>N/E — Não estava em campo</span>
-        <span class="legend-item"><span class="legend-dot" style="background:rgba(67,99,216,0.35)"></span>ELAB. — Em elaboração</span>
-    </div>""")
+    st.markdown('<div class="ck-sep"></div>', unsafe_allow_html=True)
 
-    st.markdown("".join(html), unsafe_allow_html=True)
+    # ── Expander: tabela completa do mês ─────────────────────────────────────
+    with st.expander(f"📊 Ver calendário completo do mês ({len(datas_mes)} dias)", expanded=False):
+        DAY_ABBR = _DAY_ABBR
+        html = ['<div class="cal-wrap"><table class="cal-table"><thead><tr>']
+        html.append('<th>Colaborador</th><th>Função</th>')
+        for d in datas_mes:
+            dt = datetime.strptime(d, "%Y-%m-%d")
+            is_hj = (d == today_str)
+            style = "color:#F7B731;font-weight:700" if is_hj else ""
+            html.append(f'<th style="{style}">{dt.day:02d}</th>')
+        html.append('<th>OK</th><th>COB</th></tr><tr><th></th><th></th>')
+        for d in datas_mes:
+            dt = datetime.strptime(d, "%Y-%m-%d")
+            html.append(f'<th style="font-size:.55rem;color:#8FA882">'
+                        f'{DAY_ABBR[dt.weekday()]}</th>')
+        html.append('<th></th><th></th></tr></thead><tbody>')
+
+        for p in people:
+            dias      = p.get("dias", {})
+            ok_count  = sum(1 for d,v in dias.items()
+                            if v and str(v).upper().strip()=="OK" and d in datas_mes)
+            cob_count = sum(1 for d,v in dias.items()
+                            if v and str(v).upper().strip() in ("COBRAR","COBRE"))
+            html.append("<tr>")
+            html.append(f'<td class="colab">{p["colaborador"]}</td>')
+            html.append(f'<td class="funcao">{p["funcao"]}</td>')
+            for d in datas_mes:
+                v = dias.get(d)
+                cls, txt = _status_class(v)
+                sty = "outline:2px solid #F7B731" if d==today_str else ""
+                html.append(f'<td class="{cls}" style="{sty}">{txt}</td>')
+            c1 = "#3cb44b" if ok_count  > 0 else "#7a90a8"
+            c2 = "#e6194b" if cob_count > 0 else "#7a90a8"
+            html.append(f'<td style="color:{c1};font-weight:700">{ok_count}</td>')
+            html.append(f'<td style="color:{c2};font-weight:700">'
+                        f'{cob_count if cob_count else "—"}</td>')
+            html.append("</tr>")
+        html.append("</tbody></table></div>")
+        st.markdown("".join(html), unsafe_allow_html=True)
 
 
 # =============================================================================
