@@ -957,7 +957,7 @@ def _render_ensaios_aevias():
     st.markdown(
         f'<div class="ea-kpi-row">'
         f'<div class="ea-kpi"><div class="val" style="color:#C8D8A8">{n_total}</div>'
-        f'<div class="lbl">Submissões</div></div>'
+        f'<div class="lbl">Registros</div></div>'
         f'<div class="ea-kpi"><div class="val" style="color:#F7B731">{n_pend}</div>'
         f'<div class="lbl">Pendentes</div></div>'
         f'<div class="ea-kpi"><div class="val" style="color:#FF6B6B">{n_rep}</div>'
@@ -1013,7 +1013,7 @@ def _render_ensaios_aevias():
             st.markdown(
                 f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
                 f'<span style="color:#C8D8A8;font-size:.8rem;font-weight:700">'
-                f'{n_reg} submissão(ões)</span>'
+                f'{n_reg} {"registro" if n_reg == 1 else "registros"}</span>'
                 f'{"<span class=ea-cobrar>A COBRAR</span>" if a_cobrar else ""}'
                 f'</div>',
                 unsafe_allow_html=True,
