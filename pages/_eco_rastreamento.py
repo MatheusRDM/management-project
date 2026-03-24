@@ -1488,6 +1488,174 @@ def _render_analise_periodo(itens):
         st.plotly_chart(fig_hm2, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
+    # SEÇÃO 7B — 🚗 HORÁRIO DE PARTIDA (Ignição + Movimento)
+    # ═══════════════════════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("## 🚗 Horário de Partida — Quando Ligam e Começam a Andar")
+    st.caption(
+        "Análise do primeiro registro diário de cada motorista: "
+        "hora da primeira ignição (vel ≥ 0) e hora do primeiro movimento (vel > 3 km/h)."
+    )
+
+    if not df_pt.empty and dt_detectado and vel_detectada:
+        df_start = df_pt.copy()
+        df_start["dt_parsed"] = pd.to_datetime(df_start["dt"])
+        df_start["hora_decimal"] = (df_start["dt_parsed"].dt.hour
+                                     + df_start["dt_parsed"].dt.minute / 60)
+
+        # Primeira atividade do dia (qualquer registro = carro ligou)
+        first_on = (df_start.sort_values("dt_parsed")
+                            .groupby(["motorista", "data"])
+                            .first()
+                            .reset_index())
+        first_on["hora_lig"] = first_on["hora_decimal"]
+
+        # Primeiro movimento do dia (vel > 3)
+        df_mov = df_start[df_start["velocidade"] > 3]
+        first_mov = (df_mov.sort_values("dt_parsed")
+                           .groupby(["motorista", "data"])
+                           .first()
+                           .reset_index())
+        first_mov["hora_mov"] = first_mov["hora_decimal"]
+
+        col_s1, col_s2 = st.columns(2)
+
+        with col_s1:
+            # Distribution of first ignition times (fleet-wide)
+            fig_lig = go.Figure()
+            if not first_on.empty:
+                bins_lig = first_on["hora_lig"].dropna()
+                fig_lig.add_trace(go.Histogram(
+                    x=bins_lig,
+                    nbinsx=24,
+                    marker_color="#7BBF6A",
+                    marker_line_width=0,
+                    opacity=0.85,
+                    hovertemplate="<b>%{x:.0f}h</b>: %{y} ocorrências<extra></extra>",
+                ))
+                media_lig = bins_lig.mean()
+                fig_lig.add_vline(x=media_lig, line_dash="dash", line_color="#F7B731",
+                                  annotation_text=f"Média: {int(media_lig)}:{int((media_lig%1)*60):02d}",
+                                  annotation_font_color="#F7B731",
+                                  annotation_font_size=11)
+            fig_lig.update_layout(
+                **_BASE,
+                title=dict(text="🔑 Primeira Ignição do Dia (frota)",
+                           font=dict(size=13, color=_C["text"]), x=0),
+                height=300,
+                xaxis=dict(tickmode="array", tickvals=list(range(0,24,2)),
+                           ticktext=[f"{h}h" for h in range(0,24,2)],
+                           gridcolor=_C["grid"], zeroline=False, range=[4,22]),
+                yaxis=dict(title="Dias", gridcolor=_C["grid"], zeroline=False),
+                bargap=0.08,
+            )
+            st.plotly_chart(fig_lig, use_container_width=True, config=_NO_INTERACT)
+
+        with col_s2:
+            # Distribution of first movement times
+            fig_mov = go.Figure()
+            if not first_mov.empty:
+                bins_mov = first_mov["hora_mov"].dropna()
+                fig_mov.add_trace(go.Histogram(
+                    x=bins_mov,
+                    nbinsx=24,
+                    marker_color="#4CC9F0",
+                    marker_line_width=0,
+                    opacity=0.85,
+                    hovertemplate="<b>%{x:.0f}h</b>: %{y} ocorrências<extra></extra>",
+                ))
+                media_mov = bins_mov.mean()
+                fig_mov.add_vline(x=media_mov, line_dash="dash", line_color="#F7B731",
+                                  annotation_text=f"Média: {int(media_mov)}:{int((media_mov%1)*60):02d}",
+                                  annotation_font_color="#F7B731",
+                                  annotation_font_size=11)
+            fig_mov.update_layout(
+                **_BASE,
+                title=dict(text="🏎️ Primeiro Movimento do Dia (vel > 3 km/h)",
+                           font=dict(size=13, color=_C["text"]), x=0),
+                height=300,
+                xaxis=dict(tickmode="array", tickvals=list(range(0,24,2)),
+                           ticktext=[f"{h}h" for h in range(0,24,2)],
+                           gridcolor=_C["grid"], zeroline=False, range=[4,22]),
+                yaxis=dict(title="Dias", gridcolor=_C["grid"], zeroline=False),
+                bargap=0.08,
+            )
+            st.plotly_chart(fig_mov, use_container_width=True, config=_NO_INTERACT)
+
+        # ── Individual start time cards (scroll infinito) ──────────────────────
+        st.markdown("### 👤 Padrão Individual de Partida")
+        st.caption("Horário médio de ignição e movimento por motorista, com consistência (desvio-padrão).")
+
+        _SEQ_S = ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"]
+
+        # Aggregate per driver
+        agg_lig = (first_on.groupby("motorista")["hora_lig"]
+                           .agg(["mean","std","count"])
+                           .rename(columns={"mean":"media_lig","std":"std_lig","count":"dias_lig"}))
+        agg_mov = (first_mov.groupby("motorista")["hora_mov"]
+                            .agg(["mean","std","count"])
+                            .rename(columns={"mean":"media_mov","std":"std_mov","count":"dias_mov"}))
+        agg_start = agg_lig.join(agg_mov, how="outer").fillna(0).sort_values("media_lig")
+
+        for idx, (mot, row_s) in enumerate(agg_start.iterrows()):
+            initials = "".join(w[0] for w in mot.split()[:2]).upper()
+            cor_av = _SEQ_S[idx % len(_SEQ_S)]
+
+            m_lig = row_s["media_lig"]
+            s_lig = row_s["std_lig"]
+            d_lig = int(row_s["dias_lig"])
+            m_mov = row_s["media_mov"]
+            s_mov = row_s["std_mov"]
+            d_mov = int(row_s["dias_mov"])
+
+            h_lig = f"{int(m_lig)}:{int((m_lig%1)*60):02d}" if d_lig > 0 else "—"
+            h_mov = f"{int(m_mov)}:{int((m_mov%1)*60):02d}" if d_mov > 0 else "—"
+
+            # Consistency label
+            if s_lig <= 0.5:
+                consist = "Muito consistente"
+                consist_cor = "#7BBF6A"
+            elif s_lig <= 1.0:
+                consist = "Consistente"
+                consist_cor = "#4CC9F0"
+            elif s_lig <= 2.0:
+                consist = "Variável"
+                consist_cor = "#F7B731"
+            else:
+                consist = "Irregular"
+                consist_cor = "#FF6B6B"
+
+            # Delta between ignition and movement
+            delta_min = int((m_mov - m_lig) * 60) if d_mov > 0 and d_lig > 0 else 0
+            delta_txt = f"{delta_min} min" if delta_min > 0 else "—"
+
+            card = f"""
+            <div class="st-card">
+              <div class="st-hdr">
+                <div class="st-av" style="background:linear-gradient(135deg,{cor_av},{cor_av}88)">{initials}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="st-name">{mot}</div>
+                  <span style="font-size:.58rem;color:{consist_cor};background:rgba(255,255,255,.05);
+                        padding:2px 8px;border-radius:8px">{consist}</span>
+                </div>
+              </div>
+              <div class="st-grid">
+                <div class="st-met"><div class="v" style="color:#7BBF6A">{h_lig}</div>
+                  <div class="l">Liga carro</div></div>
+                <div class="st-met"><div class="v" style="color:#4CC9F0">{h_mov}</div>
+                  <div class="l">Começa andar</div></div>
+                <div class="st-met"><div class="v" style="color:#F7B731">{delta_txt}</div>
+                  <div class="l">Aquecimento</div></div>
+                <div class="st-met"><div class="v" style="color:#A29BFE">{d_lig}</div>
+                  <div class="l">Dias ativos</div></div>
+              </div>
+            </div>"""
+            st.markdown(card, unsafe_allow_html=True)
+
+    else:
+        st.info("Carregue dados do período acima para ver a análise de horários de partida.")
+
+    # ═══════════════════════════════════════════════════════════════════════════
     # SEÇÃO 8 — 📍 ONDE ANDAM
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
