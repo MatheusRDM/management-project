@@ -127,206 +127,171 @@ def _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=560):
 # =============================================================================
 
 def _render_estatisticas(itens):
-    import plotly.express as px
-    import plotly.graph_objects as go
+    """Estatísticas — análise individual por motorista com scroll infinito."""
 
-    # Paleta da aplicação
-    _C = {
-        "bg":      "rgba(0,0,0,0)",
-        "grid":    "rgba(255,255,255,0.06)",
-        "text":    "#C8D8A8",
-        "eco135":  "#7BBF6A",
-        "cerrado": "#4CC9F0",
-        "acc1":    "#F7B731",
-        "acc2":    "#FF6B6B",
-        "seq":     ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"],
-    }
-    _NO_INTERACT = dict(displayModeBar=False, scrollZoom=False)
-    _BASE = dict(
-        paper_bgcolor=_C["bg"], plot_bgcolor=_C["bg"],
-        font=dict(family="Inter, sans-serif", color=_C["text"], size=12),
-        margin=dict(l=12, r=12, t=36, b=12),
-    )
+    # ── CSS for stats cards ──────────────────────────────────────────────────
+    st.markdown("""
+    <style>
+    .st-card{background:rgba(18,25,38,.85);backdrop-filter:blur(12px);
+      -webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.06);
+      border-radius:16px;padding:16px;margin-bottom:12px;transition:border-color .2s}
+    .st-card:hover{border-color:rgba(123,191,106,.2)}
+    .st-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .st-av{width:44px;height:44px;border-radius:50%;display:flex;
+      align-items:center;justify-content:center;font-size:.9rem;
+      font-weight:700;color:#fff;flex-shrink:0}
+    .st-name{font-size:.92rem;font-weight:700;color:#E8EFD8;flex:1;min-width:0;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .st-ign{font-size:.62rem;font-weight:700;padding:3px 10px;border-radius:12px;
+      display:inline-flex;align-items:center;gap:4px}
+    .st-ign.on{background:rgba(123,191,106,.15);color:#7BBF6A;border:1px solid rgba(123,191,106,.3)}
+    .st-ign.mov{background:rgba(247,183,49,.15);color:#F7B731;border:1px solid rgba(247,183,49,.3)}
+    .st-ign.off{background:rgba(255,71,87,.1);color:#FF4757;border:1px solid rgba(255,71,87,.2)}
+    .st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-bottom:8px}
+    .st-met{background:rgba(255,255,255,.04);border-radius:10px;padding:8px;text-align:center}
+    .st-met .v{font-size:.95rem;font-weight:700;line-height:1.2}
+    .st-met .l{font-size:.52rem;color:#6b7f8d;letter-spacing:.03em;margin-top:2px}
+    .st-loc{font-size:.7rem;color:#8FA882;padding:6px 0;
+      border-top:1px solid rgba(255,255,255,.04);margin-top:4px}
+    .st-placa{font-size:.6rem;color:#6b7f8d;background:rgba(255,255,255,.04);
+      padding:2px 8px;border-radius:8px;display:inline-block}
+    .st-filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+    .st-fbtn{background:rgba(255,255,255,.06);backdrop-filter:blur(8px);
+      border:1px solid rgba(255,255,255,.08);border-radius:20px;
+      padding:8px 16px;display:flex;align-items:center;gap:6px;cursor:pointer;
+      transition:all .15s;flex-shrink:0}
+    .st-fbtn:hover{background:rgba(255,255,255,.1)}
+    .st-fbtn .fv{font-size:1rem;font-weight:700;line-height:1}
+    .st-fbtn .fl{font-size:.6rem;color:#8FA882}
+    </style>""", unsafe_allow_html=True)
 
     df = pd.DataFrame(itens)
-    ligados      = int(df["ignicao"].sum())
-    deslig       = len(df) - ligados
-    n_estados    = df["uf"].nunique()
-    n_cidades    = df["cidade"].nunique()
-    # pos_odometro = hodômetro VITALÍCIO do veículo (km totais na vida do veículo)
-    # NÃO é km rodado no período — apenas indicativo do estado da frota
-    odo_medio    = int(df["odometro"].median()) if df["odometro"].sum() > 0 else 0
-    h_dir_total  = round(df["tempo_dir_h"].sum(), 1)   # horas dirigindo hoje (snapshot)
+    ligados    = int(df["ignicao"].sum())
+    deslig     = len(df) - ligados
+    em_mov     = int((df["velocidade"] > 3).sum())
+    h_dir_total = round(df["tempo_dir_h"].sum(), 1)
 
-    # ── Cards interativos ──────────────────────────────────────────────────────
-    st.caption("Snapshot atual — dados da última posição de cada veículo")
-    _filt = st.session_state.get("rast_kpi_filtro", None)
-    _kpi_meta = [
-        ("total",   f"{len(df)}",         "Veiculos ECO",            "#7BBF6A", "rgba(123,191,106,0.12)", "#7BBF6A55"),
-        ("ligados", f"{ligados}",          "Ligados agora",           "#4CC9F0", "rgba(76,201,240,0.12)",  "#4CC9F055"),
-        ("deslig",  f"{deslig}",           "Desligados",              "#FF6B6B", "rgba(255,107,107,0.12)", "#FF6B6B55"),
-        ("odo",     f"{odo_medio:,} km",   "Hodometro medio",         "#F7B731", "rgba(247,183,49,0.12)",  "#F7B73155"),
-        ("horas",   f"{h_dir_total:.0f}h", "Horas dirigindo hoje",    "#A29BFE", "rgba(162,155,254,0.12)", "#A29BFE55"),
-        ("geo",     f"{n_estados} UFs",    f"{n_cidades} cidades",    "#00CEC9", "rgba(0,206,201,0.12)",   "#00CEC955"),
-    ]
-    _kpi_cols = st.columns(6)
-    for col, (key, val, lbl, cor, bg, bdr) in zip(_kpi_cols, _kpi_meta):
-        ativo = (_filt == key)
-        shadow = f"box-shadow:0 0 14px {cor}55;" if ativo else ""
-        bg_f   = bg.replace("0.12", "0.30") if ativo else bg
-        bdr_f  = cor if ativo else bdr
-        with col:
-            st.markdown(
-                f'<div style="background:{bg_f};border:2px solid {bdr_f};border-radius:10px;'
-                f'padding:12px 6px;text-align:center;{shadow}">'
-                f'<div style="font-size:1.6rem;font-weight:700;color:{cor}">{val}</div>'
-                f'<div style="color:#C8D8A8;font-size:.70rem;margin-top:2px">{lbl}</div></div>',
-                unsafe_allow_html=True,
-            )
-            if key in ("ligados", "deslig", "total"):
-                btn_lbl = "Limpar" if ativo else "Filtrar"
-                if st.button(btn_lbl, key=f"kpi_{key}", use_container_width=True):
-                    st.session_state["rast_kpi_filtro"] = None if ativo else key
-                    st.rerun()
-
-    # Aplica filtro na tabela
-    df_filt = df.copy()
-    if _filt == "ligados": df_filt = df_filt[df_filt["ignicao"] == True]
-    elif _filt == "deslig": df_filt = df_filt[df_filt["ignicao"] == False]
-
-    # ── Hodômetro por motorista ────────────────────────────────────────────────
-    df_odo = df.sort_values("odometro", ascending=True)
-    cores_contrato = {c: _C["seq"][i % len(_C["seq"])]
-                      for i, c in enumerate(df["contrato"].unique())}
-    fig_odo = go.Figure()
-    for contrato, grp in df_odo.groupby("contrato"):
-        fig_odo.add_trace(go.Bar(
-            x=grp["odometro"], y=grp["motorista"], orientation="h",
-            name=contrato,
-            marker_color=cores_contrato[contrato],
-            marker_line_width=0,
-            text=[f"{v:,.0f} km" for v in grp["odometro"]],
-            textposition="outside",
-            textfont=dict(size=10, color=_C["text"]),
-            hovertemplate="<b>%{y}</b><br>Hodômetro: %{x:,.0f} km<extra></extra>",
-        ))
-    fig_odo.update_layout(
-        **_BASE,
-        title=dict(text="Hodômetro Acumulado por Motorista", font=dict(size=14, color=_C["text"]), x=0),
-        barmode="group",
-        height=max(420, len(df) * 24),
-        xaxis=dict(tickformat=",", gridcolor=_C["grid"], zeroline=False, showline=False),
-        yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=10)),
-        legend=dict(orientation="h", y=1.04, x=0, font=dict(size=11)),
-        bargap=0.25,
+    # ── Interactive KPI filter buttons ────────────────────────────────────────
+    filtro = st.radio(
+        "Filtrar por:",
+        options=["Todos", "🟢 Ligados", "🟡 Em Movimento", "🔴 Desligados"],
+        index=0,
+        horizontal=True,
+        key="stats_filtro",
     )
-    st.plotly_chart(fig_odo, use_container_width=True, config=_NO_INTERACT)
 
-    col1, col2 = st.columns(2)
+    # KPI chips with counts
+    st.markdown(f"""
+    <div class="st-filter-row">
+      <div class="st-fbtn"><span class="fv" style="color:#7BBF6A">{len(df)}</span>
+        <span class="fl">veículos</span></div>
+      <div class="st-fbtn"><span class="fv" style="color:#4CC9F0">{ligados}</span>
+        <span class="fl">ligados</span></div>
+      <div class="st-fbtn"><span class="fv" style="color:#F7B731">{em_mov}</span>
+        <span class="fl">andando</span></div>
+      <div class="st-fbtn"><span class="fv" style="color:#FF6B6B">{deslig}</span>
+        <span class="fl">desligados</span></div>
+      <div class="st-fbtn"><span class="fv" style="color:#A29BFE">{h_dir_total:.0f}h</span>
+        <span class="fl">dirigindo</span></div>
+    </div>""", unsafe_allow_html=True)
 
-    # ── Ignição: donut ─────────────────────────────────────────────────────────
-    with col1:
-        fig_ign = go.Figure(go.Pie(
-            labels=["Ligados", "Desligados"],
-            values=[ligados, deslig],
-            hole=0.62,
-            marker=dict(colors=["#7BBF6A", "#FF6B6B"],
-                        line=dict(color="#0E1117", width=2)),
-            textinfo="label+percent",
-            textfont=dict(size=11, color=_C["text"]),
-            hovertemplate="<b>%{label}</b>: %{value}<extra></extra>",
-        ))
-        fig_ign.add_annotation(text=f"<b>{len(df)}</b><br>ECO", x=0.5, y=0.5,
-                               font=dict(size=16, color=_C["text"]), showarrow=False)
-        fig_ign.update_layout(**_BASE, height=280,
-                              title=dict(text="Status de Ignição", font=dict(size=13, color=_C["text"]), x=0),
-                              showlegend=False)
-        st.plotly_chart(fig_ign, use_container_width=True, config=_NO_INTERACT)
+    # Apply filter
+    if filtro == "🟢 Ligados":
+        df_show = df[df["ignicao"] == True]
+    elif filtro == "🟡 Em Movimento":
+        df_show = df[(df["ignicao"] == True) & (df["velocidade"] > 3)]
+    elif filtro == "🔴 Desligados":
+        df_show = df[df["ignicao"] == False]
+    else:
+        df_show = df
 
-    # ── Por Contrato: donut ────────────────────────────────────────────────────
-    with col2:
-        cnt_c = df.groupby("contrato").size().reset_index(name="n")
-        fig_cont = go.Figure(go.Pie(
-            labels=cnt_c["contrato"], values=cnt_c["n"],
-            hole=0.62,
-            marker=dict(colors=_C["seq"], line=dict(color="#0E1117", width=2)),
-            textinfo="label+value",
-            textfont=dict(size=11, color=_C["text"]),
-            hovertemplate="<b>%{label}</b>: %{value} veículos<extra></extra>",
-        ))
-        fig_cont.add_annotation(text="<b>Contratos</b>", x=0.5, y=0.5,
-                                font=dict(size=13, color=_C["text"]), showarrow=False)
-        fig_cont.update_layout(**_BASE, height=280,
-                               title=dict(text="Distribuição por Contrato", font=dict(size=13, color=_C["text"]), x=0),
-                               showlegend=False)
-        st.plotly_chart(fig_cont, use_container_width=True, config=_NO_INTERACT)
+    if df_show.empty:
+        st.info("Nenhum veículo nesta categoria.")
+        return
 
-    # ── Cidades e estados ──────────────────────────────────────────────────────
-    col3, col4 = st.columns(2)
+    # ── Sort: moving first, then ON-stopped, then OFF ────────────────────────
+    def _sort_key(row):
+        if row["velocidade"] > 3:
+            return (0, -row["velocidade"])
+        if row["ignicao"]:
+            return (1, 0)
+        return (2, 0)
 
-    with col3:
-        cnt_uf = df.groupby("uf").size().reset_index(name="n").sort_values("n")
-        fig_uf = go.Figure(go.Bar(
-            x=cnt_uf["n"], y=cnt_uf["uf"], orientation="h",
-            marker=dict(
-                color=cnt_uf["n"],
-                colorscale=[[0,"#1a3a2a"],[0.5,"#4A8A5A"],[1,"#7BBF6A"]],
-                line_width=0,
-            ),
-            text=cnt_uf["n"], textposition="outside",
-            textfont=dict(size=11, color=_C["text"]),
-            hovertemplate="<b>%{y}</b>: %{x} veículos<extra></extra>",
-        ))
-        fig_uf.update_layout(
-            **_BASE,
-            title=dict(text="Veículos por Estado", font=dict(size=13, color=_C["text"]), x=0),
-            height=280,
-            xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
-            yaxis=dict(gridcolor="rgba(0,0,0,0)"),
-        )
-        st.plotly_chart(fig_uf, use_container_width=True, config=_NO_INTERACT)
+    df_sorted = df_show.copy()
+    df_sorted["_sort"] = df_sorted.apply(_sort_key, axis=1)
+    df_sorted = df_sorted.sort_values("_sort")
 
-    with col4:
-        cnt_cid = (df.groupby(["cidade","uf"]).size()
-                     .reset_index(name="n")
-                     .sort_values("n", ascending=False)
-                     .head(12))
-        cnt_cid["label"] = cnt_cid["cidade"] + " · " + cnt_cid["uf"]
-        fig_cid = go.Figure(go.Bar(
-            x=cnt_cid["n"], y=cnt_cid["label"].iloc[::-1],
-            orientation="h",
-            marker=dict(
-                color=cnt_cid["n"].iloc[::-1],
-                colorscale=[[0,"#132840"],[0.5,"#1E6B9E"],[1,"#4CC9F0"]],
-                line_width=0,
-            ),
-            text=cnt_cid["n"].iloc[::-1], textposition="outside",
-            textfont=dict(size=10, color=_C["text"]),
-            hovertemplate="<b>%{y}</b>: %{x} veículos<extra></extra>",
-        ))
-        fig_cid.update_layout(
-            **_BASE,
-            title=dict(text="Top 12 Cidades", font=dict(size=13, color=_C["text"]), x=0),
-            height=280,
-            xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
-            yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9)),
-        )
-        st.plotly_chart(fig_cid, use_container_width=True, config=_NO_INTERACT)
+    # ── Individual cards — infinite scroll ────────────────────────────────────
+    _SEQ = ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"]
 
-    # ── Tabela completa ────────────────────────────────────────────────────────
-    _filt_lbl = f" — {_filt}" if _filt else ""
-    st.markdown(f"#### Tabela Completa{_filt_lbl}")
-    df_tab = df_filt[["contrato","motorista","placa","odometro","velocidade",
-                      "tempo_dir_h","cidade","uf","dt_posicao","ignicao"]].copy()
-    df_tab["ignicao"] = df_tab["ignicao"].map({True:"Ligado", False:"Desligado"})
-    df_tab = df_tab.rename(columns={
-        "contrato":"Contrato","motorista":"Motorista","placa":"Placa",
-        "odometro":"Hodômetro km","velocidade":"Vel. km/h",
-        "tempo_dir_h":"Tempo dirigindo (h)","cidade":"Cidade","uf":"UF",
-        "dt_posicao":"Última posição","ignicao":"Ignição",
-    })
-    st.dataframe(df_tab.sort_values("Hodômetro km", ascending=False),
-                 use_container_width=True, hide_index=True)
+    for idx, (_, row) in enumerate(df_sorted.iterrows()):
+        initials = "".join(w[0] for w in row["motorista"].split()[:2]).upper()
+        vel = row.get("velocidade", 0)
+        em_movimento = vel > 3
+        cor_av = _SEQ[idx % len(_SEQ)]
+
+        # Ignition badge
+        if em_movimento:
+            ign_cls = "mov"
+            ign_txt = f"🟡 {int(vel)} km/h"
+        elif row["ignicao"]:
+            ign_cls = "on"
+            ign_txt = "🟢 Ligado"
+        else:
+            ign_cls = "off"
+            ign_txt = "🔴 Desligado"
+
+        # Metrics
+        odo = row.get("odometro", 0)
+        h_dir = row.get("tempo_dir_h", 0)
+        h_par = row.get("tempo_par_min", 0)
+        horim = row.get("horimetro", 0)
+        bat = row.get("bateria", "")
+        cidade = row.get("cidade", "—")
+        uf = row.get("uf", "")
+        placa = row.get("placa", "")
+        contrato = row.get("contrato", "")
+        dt_pos = row.get("dt_posicao", "—")
+
+        # Try to extract hour from dt_posicao for "ligou às" info
+        hora_lig = ""
+        if dt_pos and dt_pos != "—":
+            try:
+                hora_lig = dt_pos.split(" ")[1] if " " in dt_pos else ""
+            except Exception:
+                pass
+
+        card_html = f"""
+        <div class="st-card">
+          <div class="st-hdr">
+            <div class="st-av" style="background:linear-gradient(135deg,{cor_av},{cor_av}88)">{initials}</div>
+            <div style="flex:1;min-width:0">
+              <div class="st-name">{row['motorista']}</div>
+              <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
+                <span class="st-placa">{placa}</span>
+                <span style="font-size:.58rem;color:#6b7f8d">{contrato}</span>
+              </div>
+            </div>
+            <span class="st-ign {ign_cls}">{ign_txt}</span>
+          </div>
+          <div class="st-grid">
+            <div class="st-met"><div class="v" style="color:#7BBF6A">{h_dir:.1f}h</div>
+              <div class="l">Dirigindo</div></div>
+            <div class="st-met"><div class="v" style="color:#F7B731">{h_par:.0f}min</div>
+              <div class="l">Parado lig.</div></div>
+            <div class="st-met"><div class="v" style="color:#4CC9F0">{odo:,}</div>
+              <div class="l">Hodômetro km</div></div>
+            <div class="st-met"><div class="v" style="color:#A29BFE">{int(vel)}</div>
+              <div class="l">km/h agora</div></div>
+            {"<div class='st-met'><div class='v' style=color:#00CEC9>" + str(horim) + "</div><div class='l'>Horímetro</div></div>" if horim else ""}
+          </div>
+          <div class="st-loc">
+            📍 {cidade}{(' · ' + uf) if uf else ''} · Atualizado: {dt_pos}
+            {(' · Última atividade: ' + hora_lig) if hora_lig else ''}
+          </div>
+        </div>"""
+
+        st.markdown(card_html, unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -434,6 +399,7 @@ def _render_analise_periodo(itens):
         paper_bgcolor=_C["bg"], plot_bgcolor=_C["bg"],
         font=dict(family="Inter, sans-serif", color=_C["text"], size=12),
         margin=dict(l=12, r=12, t=36, b=12),
+        dragmode=False,
     )
 
     # Padrão fixo: 01/03/2026 → hoje (conforme solicitado)
@@ -1500,6 +1466,174 @@ def _render_analise_periodo(itens):
         )
         fig_hm2.update_layout(margin=dict(l=120, r=12, t=36, b=12))
         st.plotly_chart(fig_hm2, use_container_width=True, config=_NO_INTERACT)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SEÇÃO 7B — 🚗 HORÁRIO DE PARTIDA (Ignição + Movimento)
+    # ═══════════════════════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("## 🚗 Horário de Partida — Quando Ligam e Começam a Andar")
+    st.caption(
+        "Análise do primeiro registro diário de cada motorista: "
+        "hora da primeira ignição (vel ≥ 0) e hora do primeiro movimento (vel > 3 km/h)."
+    )
+
+    if not df_pt.empty and dt_detectado and vel_detectada:
+        df_start = df_pt.copy()
+        df_start["dt_parsed"] = pd.to_datetime(df_start["dt"])
+        df_start["hora_decimal"] = (df_start["dt_parsed"].dt.hour
+                                     + df_start["dt_parsed"].dt.minute / 60)
+
+        # Primeira atividade do dia (qualquer registro = carro ligou)
+        first_on = (df_start.sort_values("dt_parsed")
+                            .groupby(["motorista", "data"])
+                            .first()
+                            .reset_index())
+        first_on["hora_lig"] = first_on["hora_decimal"]
+
+        # Primeiro movimento do dia (vel > 3)
+        df_mov = df_start[df_start["velocidade"] > 3]
+        first_mov = (df_mov.sort_values("dt_parsed")
+                           .groupby(["motorista", "data"])
+                           .first()
+                           .reset_index())
+        first_mov["hora_mov"] = first_mov["hora_decimal"]
+
+        col_s1, col_s2 = st.columns(2)
+
+        with col_s1:
+            # Distribution of first ignition times (fleet-wide)
+            fig_lig = go.Figure()
+            if not first_on.empty:
+                bins_lig = first_on["hora_lig"].dropna()
+                fig_lig.add_trace(go.Histogram(
+                    x=bins_lig,
+                    nbinsx=24,
+                    marker_color="#7BBF6A",
+                    marker_line_width=0,
+                    opacity=0.85,
+                    hovertemplate="<b>%{x:.0f}h</b>: %{y} ocorrências<extra></extra>",
+                ))
+                media_lig = bins_lig.mean()
+                fig_lig.add_vline(x=media_lig, line_dash="dash", line_color="#F7B731",
+                                  annotation_text=f"Média: {int(media_lig)}:{int((media_lig%1)*60):02d}",
+                                  annotation_font_color="#F7B731",
+                                  annotation_font_size=11)
+            fig_lig.update_layout(
+                **_BASE,
+                title=dict(text="🔑 Primeira Ignição do Dia (frota)",
+                           font=dict(size=13, color=_C["text"]), x=0),
+                height=300,
+                xaxis=dict(tickmode="array", tickvals=list(range(0,24,2)),
+                           ticktext=[f"{h}h" for h in range(0,24,2)],
+                           gridcolor=_C["grid"], zeroline=False, range=[4,22]),
+                yaxis=dict(title="Dias", gridcolor=_C["grid"], zeroline=False),
+                bargap=0.08,
+            )
+            st.plotly_chart(fig_lig, use_container_width=True, config=_NO_INTERACT)
+
+        with col_s2:
+            # Distribution of first movement times
+            fig_mov = go.Figure()
+            if not first_mov.empty:
+                bins_mov = first_mov["hora_mov"].dropna()
+                fig_mov.add_trace(go.Histogram(
+                    x=bins_mov,
+                    nbinsx=24,
+                    marker_color="#4CC9F0",
+                    marker_line_width=0,
+                    opacity=0.85,
+                    hovertemplate="<b>%{x:.0f}h</b>: %{y} ocorrências<extra></extra>",
+                ))
+                media_mov = bins_mov.mean()
+                fig_mov.add_vline(x=media_mov, line_dash="dash", line_color="#F7B731",
+                                  annotation_text=f"Média: {int(media_mov)}:{int((media_mov%1)*60):02d}",
+                                  annotation_font_color="#F7B731",
+                                  annotation_font_size=11)
+            fig_mov.update_layout(
+                **_BASE,
+                title=dict(text="🏎️ Primeiro Movimento do Dia (vel > 3 km/h)",
+                           font=dict(size=13, color=_C["text"]), x=0),
+                height=300,
+                xaxis=dict(tickmode="array", tickvals=list(range(0,24,2)),
+                           ticktext=[f"{h}h" for h in range(0,24,2)],
+                           gridcolor=_C["grid"], zeroline=False, range=[4,22]),
+                yaxis=dict(title="Dias", gridcolor=_C["grid"], zeroline=False),
+                bargap=0.08,
+            )
+            st.plotly_chart(fig_mov, use_container_width=True, config=_NO_INTERACT)
+
+        # ── Individual start time cards (scroll infinito) ──────────────────────
+        st.markdown("### 👤 Padrão Individual de Partida")
+        st.caption("Horário médio de ignição e movimento por motorista, com consistência (desvio-padrão).")
+
+        _SEQ_S = ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"]
+
+        # Aggregate per driver
+        agg_lig = (first_on.groupby("motorista")["hora_lig"]
+                           .agg(["mean","std","count"])
+                           .rename(columns={"mean":"media_lig","std":"std_lig","count":"dias_lig"}))
+        agg_mov = (first_mov.groupby("motorista")["hora_mov"]
+                            .agg(["mean","std","count"])
+                            .rename(columns={"mean":"media_mov","std":"std_mov","count":"dias_mov"}))
+        agg_start = agg_lig.join(agg_mov, how="outer").fillna(0).sort_values("media_lig")
+
+        for idx, (mot, row_s) in enumerate(agg_start.iterrows()):
+            initials = "".join(w[0] for w in mot.split()[:2]).upper()
+            cor_av = _SEQ_S[idx % len(_SEQ_S)]
+
+            m_lig = row_s["media_lig"]
+            s_lig = row_s["std_lig"]
+            d_lig = int(row_s["dias_lig"])
+            m_mov = row_s["media_mov"]
+            s_mov = row_s["std_mov"]
+            d_mov = int(row_s["dias_mov"])
+
+            h_lig = f"{int(m_lig)}:{int((m_lig%1)*60):02d}" if d_lig > 0 else "—"
+            h_mov = f"{int(m_mov)}:{int((m_mov%1)*60):02d}" if d_mov > 0 else "—"
+
+            # Consistency label
+            if s_lig <= 0.5:
+                consist = "Muito consistente"
+                consist_cor = "#7BBF6A"
+            elif s_lig <= 1.0:
+                consist = "Consistente"
+                consist_cor = "#4CC9F0"
+            elif s_lig <= 2.0:
+                consist = "Variável"
+                consist_cor = "#F7B731"
+            else:
+                consist = "Irregular"
+                consist_cor = "#FF6B6B"
+
+            # Delta between ignition and movement
+            delta_min = int((m_mov - m_lig) * 60) if d_mov > 0 and d_lig > 0 else 0
+            delta_txt = f"{delta_min} min" if delta_min > 0 else "—"
+
+            card = f"""
+            <div class="st-card">
+              <div class="st-hdr">
+                <div class="st-av" style="background:linear-gradient(135deg,{cor_av},{cor_av}88)">{initials}</div>
+                <div style="flex:1;min-width:0">
+                  <div class="st-name">{mot}</div>
+                  <span style="font-size:.58rem;color:{consist_cor};background:rgba(255,255,255,.05);
+                        padding:2px 8px;border-radius:8px">{consist}</span>
+                </div>
+              </div>
+              <div class="st-grid">
+                <div class="st-met"><div class="v" style="color:#7BBF6A">{h_lig}</div>
+                  <div class="l">Liga carro</div></div>
+                <div class="st-met"><div class="v" style="color:#4CC9F0">{h_mov}</div>
+                  <div class="l">Começa andar</div></div>
+                <div class="st-met"><div class="v" style="color:#F7B731">{delta_txt}</div>
+                  <div class="l">Aquecimento</div></div>
+                <div class="st-met"><div class="v" style="color:#A29BFE">{d_lig}</div>
+                  <div class="l">Dias ativos</div></div>
+              </div>
+            </div>"""
+            st.markdown(card, unsafe_allow_html=True)
+
+    else:
+        st.info("Carregue dados do período acima para ver a análise de horários de partida.")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SEÇÃO 8 —  ONDE ANDAM

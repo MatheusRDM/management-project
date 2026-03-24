@@ -172,11 +172,9 @@ _CSS_CARDS = """
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ck-role{font-size:.7rem;color:#8FA882;margin-bottom:10px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ck-days{display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;
-  padding-bottom:2px;scrollbar-width:none}
-.ck-days::-webkit-scrollbar{display:none}
-.ck-pill{display:flex;flex-direction:column;align-items:center;gap:2px;
-  min-width:34px;flex-shrink:0}
+.ck-days{display:grid;grid-template-columns:repeat(auto-fill,minmax(36px,1fr));
+  gap:4px;padding-bottom:2px}
+.ck-pill{display:flex;flex-direction:column;align-items:center;gap:2px}
 .ck-dd{font-size:.6rem;color:#8FA882;font-weight:500}
 .ck-badge{display:inline-flex;align-items:center;justify-content:center;
   width:34px;height:26px;border-radius:6px;font-size:.65rem;font-weight:700;
@@ -375,8 +373,8 @@ def _renderizar_calendario(people: list[dict], mes_ref: str):
     sem_dados_cal = [p for p in campo_people if not _tem_dado_mes(p)]
     people_ativos = [p for p in campo_people if _tem_dado_mes(p)]
 
-    # Janela: últimos 7 dias disponíveis (incluindo hoje se existir)
-    datas_janela = datas_mes[-7:]
+    # Todos os dias do mês (sem limitar a 7)
+    datas_janela = datas_mes
 
     # ── View rápida: cards 7 dias (só ativos) ────────────────────────────────
     _renderizar_cards(people_ativos, datas_janela)
@@ -504,11 +502,9 @@ _CSS_PROD = """
 .prod-card.pc-rep{border-left-color:#e6194b}
 .prod-name{font-size:.92rem;font-weight:700;color:#E8EFD8;margin-bottom:2px}
 .prod-sub{font-size:.7rem;color:#8FA882;margin-bottom:10px}
-.prod-days{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;
-  padding-bottom:4px;scrollbar-width:none}
-.prod-days::-webkit-scrollbar{display:none}
-.prod-pill{display:flex;flex-direction:column;align-items:center;gap:2px;
-  min-width:44px;flex-shrink:0;cursor:default}
+.prod-days{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));
+  gap:4px;padding-bottom:4px}
+.prod-pill{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:default}
 .prod-dd{font-size:.58rem;color:#8FA882;font-weight:500;text-align:center}
 .prod-cell{width:44px;min-height:28px;border-radius:6px;font-size:.6rem;
   font-weight:700;display:flex;flex-direction:column;align-items:center;
@@ -819,37 +815,109 @@ _GRUPOS_NORM = {"eco cerrado", "eco minas goias", "eco minas goiás",
 
 _CSS_ENSAIOS = """
 <style>
-.ea-kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 16px}
-.ea-kpi{background:rgba(13,27,42,.75);border:1px solid rgba(86,110,61,.3);
-  border-radius:10px;padding:10px 16px;min-width:90px;text-align:center}
-.ea-kpi .val{font-size:1.5rem;font-weight:700}
-.ea-kpi .lbl{font-size:.65rem;color:#8FA882;margin-top:2px}
-.ea-tipo-chip{display:inline-block;font-size:.62rem;font-weight:700;
-  padding:2px 8px;border-radius:999px;margin:2px 3px 2px 0;border:1px solid}
-.ea-day-row{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;
-  padding-bottom:4px;scrollbar-width:none;margin:6px 0}
-.ea-day-row::-webkit-scrollbar{display:none}
-.ea-day-pill{display:flex;flex-direction:column;align-items:center;gap:2px;
-  min-width:38px;flex-shrink:0}
-.ea-dd{font-size:.57rem;color:#8FA882;font-weight:500;text-align:center}
-.ea-cell{width:38px;height:26px;border-radius:6px;font-size:.6rem;font-weight:700;
-  display:flex;align-items:center;justify-content:center;text-align:center}
-.ea-cell.c-ok{background:rgba(60,180,75,.25);color:#3cb44b;border:1px solid rgba(60,180,75,.4)}
-.ea-cell.c-pend{background:rgba(247,183,49,.2);color:#F7B731;border:1px solid rgba(247,183,49,.4)}
-.ea-cell.c-rep{background:rgba(230,25,75,.2);color:#e6194b;border:1px solid rgba(230,25,75,.4)}
-.ea-cell.c-vazio{background:rgba(255,255,255,.03);color:#3a4a5e;border:1px dashed #2D3748}
-.ea-cell.c-warn{background:rgba(247,183,49,.1);color:#F7B731;border:2px dashed #F7B731}
-.ea-cell.c-hoje{outline:2px solid #F7B731;outline-offset:1px}
-.ea-cobrar{display:inline-block;font-size:.65rem;font-weight:700;
-  color:#FF6B6B;background:rgba(255,107,107,.15);border:1px solid rgba(255,107,107,.4);
-  border-radius:6px;padding:2px 8px;margin-left:8px}
-.ea-report-link{color:#4CC9F0;text-decoration:none;font-size:.7rem}
-.ea-report-link:hover{text-decoration:underline}
-.ea-status-badge{display:inline-block;font-size:.6rem;padding:1px 6px;
-  border-radius:999px;border:1px solid;font-weight:600;margin-right:4px}
-.ea-entry-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}
-.ea-entry-row:last-child{border-bottom:none}
+/* ═══ Instagram-inspired Ensaios Design ═══ */
+
+/* KPI strip — compact glass bar */
+.ea-kpi-strip{display:flex;gap:6px;margin:8px 0 14px;overflow-x:auto;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ea-kpi-strip::-webkit-scrollbar{display:none}
+.ea-chip{background:rgba(255,255,255,.06);backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.08);
+  border-radius:20px;padding:6px 14px;white-space:nowrap;
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+  transition:background .2s,border-color .2s}
+.ea-chip:first-child{margin-left:0}
+.ea-chip .cv{font-size:.95rem;font-weight:700;line-height:1}
+.ea-chip .cl{font-size:.62rem;color:#8FA882;letter-spacing:.03em}
+
+/* Person card — glassmorphism */
+.ea-person{background:rgba(18,25,38,.85);backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.06);border-radius:16px;
+  padding:16px;margin-bottom:12px;
+  transition:border-color .2s,transform .15s}
+.ea-person:hover{border-color:rgba(123,191,106,.25)}
+.ea-person.ep-alert{border-left:3px solid #FF6B6B}
+.ea-person.ep-ok{border-left:3px solid #3cb44b}
+
+/* Person header row */
+.ea-person-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.ea-avatar{width:40px;height:40px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.85rem;font-weight:700;color:#fff;flex-shrink:0;
+  background:linear-gradient(135deg,#566E3D,#7BBF6A)}
+.ea-avatar.av-alert{background:linear-gradient(135deg,#c0392b,#FF6B6B)}
+.ea-avatar.av-pend{background:linear-gradient(135deg,#d4a017,#F7B731)}
+.ea-pname{font-size:.92rem;font-weight:700;color:#E8EFD8;line-height:1.2;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.ea-pstats{display:flex;gap:4px;flex-shrink:0}
+.ea-pstat{font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:12px}
+.ea-pstat.ps-ok{background:rgba(60,180,75,.15);color:#3cb44b}
+.ea-pstat.ps-pend{background:rgba(247,183,49,.15);color:#F7B731}
+.ea-pstat.ps-rep{background:rgba(255,107,107,.15);color:#FF6B6B}
+.ea-pstat.ps-cobrar{background:rgba(255,107,107,.2);color:#FF6B6B;
+  border:1px solid rgba(255,107,107,.3);animation:ea-pulse 2s infinite}
+
+@keyframes ea-pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* Type chips row */
+.ea-tipos{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.ea-tipo{font-size:.58rem;font-weight:600;padding:2px 8px;border-radius:12px;
+  border:1px solid;letter-spacing:.02em}
+
+/* ─── Story-style day circles (Instagram highlights) ─── */
+.ea-stories{display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));
+  gap:6px 4px;margin-bottom:12px}
+.ea-story{display:flex;flex-direction:column;align-items:center;gap:3px}
+.ea-sday{font-size:.52rem;color:#6b7f8d;font-weight:500;text-transform:uppercase;
+  letter-spacing:.03em}
+.ea-sday.sd-hoje{color:#F7B731;font-weight:700}
+.ea-sring{width:36px;height:36px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;font-size:.58rem;font-weight:700;
+  transition:transform .15s,box-shadow .15s;cursor:default;
+  position:relative}
+.ea-sring:hover{transform:scale(1.1)}
+.ea-sring.sr-ok{background:rgba(60,180,75,.2);color:#3cb44b;
+  box-shadow:inset 0 0 0 2px rgba(60,180,75,.5)}
+.ea-sring.sr-pend{background:rgba(247,183,49,.2);color:#F7B731;
+  box-shadow:inset 0 0 0 2px rgba(247,183,49,.5)}
+.ea-sring.sr-rep{background:rgba(230,25,75,.2);color:#e6194b;
+  box-shadow:inset 0 0 0 2px rgba(230,25,75,.5)}
+.ea-sring.sr-vazio{background:rgba(255,255,255,.03);color:#2D3748;
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.06)}
+.ea-sring.sr-hoje{box-shadow:inset 0 0 0 2.5px #F7B731,0 0 8px rgba(247,183,49,.3)}
+.ea-sring .sr-n{font-size:.48rem;opacity:.7;position:absolute;bottom:2px}
+
+/* ─── Record entries — clean list ─── */
+.ea-records{background:rgba(0,0,0,.15);border-radius:12px;padding:8px;
+  max-height:220px;overflow-y:auto;scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,.1) transparent}
+.ea-records::-webkit-scrollbar{width:4px}
+.ea-records::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+.ea-rec{display:flex;align-items:center;gap:8px;padding:7px 8px;
+  border-radius:8px;margin-bottom:3px;transition:background .15s}
+.ea-rec:hover{background:rgba(255,255,255,.04)}
+.ea-rec:last-child{margin-bottom:0}
+.ea-rec-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ea-rec-body{flex:1;min-width:0}
+.ea-rec-title{font-size:.75rem;color:#E8EFD8;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ea-rec-meta{font-size:.6rem;color:#6b7f8d;margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ea-rec-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.ea-rec-status{font-size:.55rem;font-weight:700;padding:2px 7px;
+  border-radius:10px;white-space:nowrap}
+.ea-rec-link{width:28px;height:28px;border-radius:50%;
+  background:rgba(76,201,240,.1);display:flex;align-items:center;
+  justify-content:center;color:#4CC9F0;text-decoration:none;
+  font-size:.7rem;transition:background .15s;flex-shrink:0}
+.ea-rec-link:hover{background:rgba(76,201,240,.2)}
+
+/* ─── "Sem registro" section ─── */
+.ea-missing{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.ea-miss-pill{font-size:.7rem;padding:5px 12px;border-radius:20px;
+  background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.2);
+  color:#FF6B6B;font-weight:500}
 </style>
 """
 
@@ -858,31 +926,28 @@ def _render_ensaios_aevias():
     """Seção de ensaios — view per-person limpa com cobrar tracking."""
     from collections import defaultdict
 
-    st.markdown("## Ensaios & Relatórios — AEVIAS Controle")
-
-    # ── Header: info + refresh ────────────────────────────────────────────────
-    col_info, col_btn = st.columns([5, 1])
+    st.markdown(
+        '<div style="margin-bottom:6px">'
+        '<span style="font-size:1.1rem;font-weight:700;color:#E8EFD8">'
+        'Ensaios & Relatórios</span> '
+        '<span style="font-size:.7rem;color:#6b7f8d">AEVIAS Controle</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     dados, mtime = _carregar_ensaios()
 
-    with col_info:
-        if mtime:
-            dt_mod = datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
-            st.caption(
-                f"Fonte: `ensaios_aevias.json` · Atualizado: **{dt_mod}** · "
-                f"{len(dados)} registros · "
-                f"[Abrir site ↗]({_BASE44_URL}/MeusEnsaios)"
-            )
-        else:
-            st.warning(
-                "`cache_certificados/ensaios_aevias.json` não encontrado. "
-                "Execute `baixar_ensaios.py` para gerar o cache."
-            )
-            return
-    with col_btn:
-        if st.button("Refresh", key="btn_refresh_ensaios", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
+    if mtime:
+        dt_mod = datetime.fromtimestamp(mtime).strftime("%d/%m %H:%M")
+        st.caption(f"Atualizado: {dt_mod} · {len(dados)} registros · "
+                   f"[Abrir site ↗]({_BASE44_URL}/MeusEnsaios)")
+    else:
+        st.warning("Cache não encontrado. Execute `baixar_ensaios.py`.")
+        return
+
+    if st.button("🔄", key="btn_refresh_ensaios", help="Atualizar dados"):
+        st.cache_data.clear()
+        st.rerun()
 
     if not dados:
         st.info("Nenhum ensaio carregado.")
@@ -954,17 +1019,18 @@ def _render_ensaios_aevias():
     n_cobrar   = n_pend + n_rep
 
     st.markdown(_CSS_ENSAIOS, unsafe_allow_html=True)
+
+    # KPI chips — compact pill-style strip
     st.markdown(
-        f'<div class="ea-kpi-row">'
-        f'<div class="ea-kpi"><div class="val" style="color:#C8D8A8">{n_total}</div>'
-        f'<div class="lbl">Submissões</div></div>'
-        f'<div class="ea-kpi"><div class="val" style="color:#F7B731">{n_pend}</div>'
-        f'<div class="lbl">Pendentes</div></div>'
-        f'<div class="ea-kpi"><div class="val" style="color:#FF6B6B">{n_rep}</div>'
-        f'<div class="lbl">Reprovados</div></div>'
-        f'<div class="ea-kpi"><div class="val" style="color:#{"FF6B6B" if n_cobrar else "7BBF6A"}">'
-        f'{n_cobrar}</div>'
-        f'<div class="lbl">A Cobrar</div></div>'
+        f'<div class="ea-kpi-strip">'
+        f'<div class="ea-chip"><span class="cv" style="color:#C8D8A8">{n_total}</span>'
+        f'<span class="cl">registros</span></div>'
+        f'<div class="ea-chip"><span class="cv" style="color:#F7B731">{n_pend}</span>'
+        f'<span class="cl">pendentes</span></div>'
+        f'<div class="ea-chip"><span class="cv" style="color:#FF6B6B">{n_rep}</span>'
+        f'<span class="cl">reprovados</span></div>'
+        f'<div class="ea-chip"><span class="cv" style="color:#{"FF6B6B" if n_cobrar else "7BBF6A"}">'
+        f'{n_cobrar}</span><span class="cl">cobrar</span></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -997,129 +1063,139 @@ def _render_ensaios_aevias():
         if any(e["_status"] == "pend" for e in registros): return 1
         return 2
 
-    def _render_person_expander(nome: str, registros: list, label_prefix: str = ""):
-        """Renderiza um expander por pessoa com todos os dados."""
+    def _render_person_card(nome: str, registros: list, label_prefix: str = ""):
+        """Renderiza card Instagram-style por pessoa."""
+        from collections import Counter
         a_cobrar = any(e["_status"] in ("pend", "rep") for e in registros)
+        n_reg   = len(registros)
+        n_ok    = sum(1 for e in registros if e["_status"] == "ok")
+        n_p_loc = sum(1 for e in registros if e["_status"] == "pend")
+        n_r_loc = sum(1 for e in registros if e["_status"] == "rep")
 
-        expander_label = f"{label_prefix}{nome}"
+        # Avatar initials + color
+        initials = "".join(w[0] for w in nome.split()[:2]).upper() if nome else "?"
+        av_cls = "av-alert" if n_r_loc else ("av-pend" if n_p_loc else "")
+        card_cls = "ep-alert" if a_cobrar else "ep-ok"
+
+        # Stats badges
+        stats_html = f'<span class="ea-pstat ps-ok">{n_ok}</span>'
+        if n_p_loc:
+            stats_html += f'<span class="ea-pstat ps-pend">{n_p_loc}</span>'
+        if n_r_loc:
+            stats_html += f'<span class="ea-pstat ps-rep">{n_r_loc}</span>'
         if a_cobrar:
-            expander_label += "  · A COBRAR"
+            stats_html += '<span class="ea-pstat ps-cobrar">COBRAR</span>'
 
-        with st.expander(expander_label, expanded=a_cobrar):
-            n_reg   = len(registros)
-            n_p_loc = sum(1 for e in registros if e["_status"] == "pend")
-            n_r_loc = sum(1 for e in registros if e["_status"] == "rep")
-
-            st.markdown(
-                f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
-                f'<span style="color:#C8D8A8;font-size:.8rem;font-weight:700">'
-                f'{n_reg} submissão(ões)</span>'
-                f'{"<span class=ea-cobrar>A COBRAR</span>" if a_cobrar else ""}'
-                f'</div>',
-                unsafe_allow_html=True,
+        # Type chips
+        cnt_tipo = Counter(e.get("tipo", "—") for e in registros)
+        tipos_html = ""
+        for tipo, cnt in cnt_tipo.most_common():
+            cor, _ = _TIPO_COR.get(tipo, ("#8FA882", ""))
+            tipos_html += (
+                f'<span class="ea-tipo" '
+                f'style="color:{cor};border-color:{cor}44;background:{cor}15">'
+                f'{tipo} ({cnt})</span>'
             )
 
-            # Breakdown por tipo (chips)
-            from collections import Counter
-            cnt_tipo = Counter(e.get("tipo", "—") for e in registros)
-            chips_html = ""
-            for tipo, cnt in cnt_tipo.most_common():
-                cor, _icon = _TIPO_COR.get(tipo, ("#8FA882", ""))
-                chips_html += (
-                    f'<span class="ea-tipo-chip" '
-                    f'style="color:{cor};border-color:{cor}55;background:{cor}18">'
-                    f'{tipo} ({cnt})</span>'
-                )
-            if chips_html:
-                st.markdown(chips_html, unsafe_allow_html=True)
+        # Story-style day circles
+        por_data_p: dict = defaultdict(list)
+        for e in registros:
+            por_data_p[e["_dstr"]].append(e)
 
-            # Dias com / sem submissão (compact calendar row)
-            por_data_p: dict = defaultdict(list)
-            for e in registros:
-                por_data_p[e["_dstr"]].append(e)
+        stories_html = ""
+        for d in datas_com_dados:
+            try:
+                dt_obj = datetime.strptime(d, "%Y-%m-%d")
+            except Exception:
+                continue
+            is_hoje = (d == today_str)
+            ens_dia = por_data_p.get(d, [])
+            day_lbl = "HOJ" if is_hoje else f"{dt_obj.day:02d}"
+            dd_cls  = "sd-hoje" if is_hoje else ""
+            weekday = DAY_ABBR_E[dt_obj.weekday()][:3]
 
-            pills_html = ""
-            for d in datas_com_dados:
-                try:
-                    dt_obj = datetime.strptime(d, "%Y-%m-%d")
-                except Exception:
-                    continue
-                is_hoje  = (d == today_str)
-                ens_dia  = por_data_p.get(d, [])
-                dd_label = ("HOJE" if is_hoje
-                            else f"{DAY_ABBR_E[dt_obj.weekday()]} {dt_obj.day:02d}")
-                dd_style = "font-weight:700;color:#F7B731" if is_hoje else ""
+            if not ens_dia:
+                ring_cls = "sr-vazio" + (" sr-hoje" if is_hoje else "")
+                ring_txt = "—"
+                n_sub    = ""
+            else:
+                statuses = [e["_status"] for e in ens_dia]
+                ring_cls = ("sr-rep"  if "rep"  in statuses else
+                            "sr-pend" if "pend" in statuses else "sr-ok")
+                if is_hoje:
+                    ring_cls += " sr-hoje"
+                n = len(ens_dia)
+                ring_txt = str(n) if n > 1 else ("!" if "rep" in statuses
+                                                   else "?" if "pend" in statuses
+                                                   else "✓")
+                n_sub = f'<span class="sr-n">×{n}</span>' if n > 1 else ""
 
-                if not ens_dia:
-                    cls = "c-vazio" + (" c-hoje" if is_hoje else "")
-                    txt = "—"
-                else:
-                    statuses = [e["_status"] for e in ens_dia]
-                    cls = ("c-rep"  if "rep"  in statuses else
-                           "c-pend" if "pend" in statuses else "c-ok")
-                    if is_hoje:
-                        cls += " c-hoje"
-                    n = len(ens_dia)
-                    txt = f"×{n}" if n > 1 else ("REP" if "rep" in statuses
-                                                  else "PND" if "pend" in statuses
-                                                  else "OK")
-
-                pills_html += (
-                    f'<div class="ea-day-pill">'
-                    f'<span class="ea-dd" style="{dd_style}">{dd_label}</span>'
-                    f'<div class="ea-cell {cls}">{txt}</div>'
-                    f'</div>'
-                )
-
-            if pills_html:
-                st.markdown(
-                    f'<div class="ea-day-row">{pills_html}</div>',
-                    unsafe_allow_html=True,
-                )
-
-            # Lista de entradas individuais com status badge + link
-            st.markdown(
-                '<div style="margin-top:8px;font-size:.7rem;color:#8FA882;font-weight:600">'
-                'Registros:</div>',
-                unsafe_allow_html=True,
+            stories_html += (
+                f'<div class="ea-story">'
+                f'<span class="ea-sday {dd_cls}">{weekday}</span>'
+                f'<div class="ea-sring {ring_cls}">{ring_txt}{n_sub}</div>'
+                f'<span class="ea-sday {dd_cls}">{day_lbl}</span>'
+                f'</div>'
             )
-            rows_html = ""
-            for e in sorted(registros, key=lambda x: x["_dstr"], reverse=True):
-                tipo   = e.get("tipo", "—")
-                obra   = e.get("obra", "—")
-                local  = e.get("local", "")
-                emp    = e.get("empreiteira", "") or ""
-                url    = e.get("reportUrl", "")
-                status = e.get("status", "")
-                dstr   = e.get("data", "")
-                s_norm = e["_status"]
-                cor_s  = ("#7BBF6A" if s_norm == "ok"
-                           else "#F7B731" if s_norm == "pend"
-                           else "#FF6B6B")
-                s_badge = (
-                    f'<span class="ea-status-badge" '
-                    f'style="color:{cor_s};border-color:{cor_s}55">{status}</span>'
-                    if status else ""
-                )
-                link_html = (
-                    f'<a class="ea-report-link" href="{_BASE44_URL}{url}" '
-                    f'target="_blank">Relatório ↗</a>'
-                    if url else ""
-                )
-                detail = " · ".join(filter(None, [obra, emp, local]))
-                rows_html += (
-                    f'<div class="ea-entry-row">'
-                    f'<span style="color:#8FA882;min-width:70px;font-size:.65rem">{dstr}</span>'
-                    f'<span style="color:#C8D8A8">{tipo}</span>'
-                    f'<span style="color:#8FA882;font-size:.65rem;flex:1">{detail}</span>'
-                    f'{s_badge}{link_html}'
-                    f'</div>'
-                )
-            st.markdown(
-                f'<div style="background:rgba(0,0,0,.15);border-radius:8px;padding:6px 10px">'
-                f'{rows_html}</div>',
-                unsafe_allow_html=True,
+
+        # Record entries — clean list
+        recs_html = ""
+        for e in sorted(registros, key=lambda x: x["_dstr"], reverse=True)[:10]:
+            tipo   = e.get("tipo", "—")
+            obra   = e.get("obra", "—")
+            emp    = e.get("empreiteira", "") or ""
+            local  = e.get("local", "")
+            url    = e.get("reportUrl", "")
+            status = e.get("status", "")
+            dstr   = e.get("data", "")
+            s_norm = e["_status"]
+
+            dot_color = ("#3cb44b" if s_norm == "ok"
+                          else "#F7B731" if s_norm == "pend"
+                          else "#FF6B6B")
+            st_bg = (f"background:{dot_color}22;color:{dot_color}" if status else
+                     "background:transparent;color:#6b7f8d")
+            link_btn = (
+                f'<a class="ea-rec-link" href="{_BASE44_URL}{url}" '
+                f'target="_blank">↗</a>'
+                if url else ""
             )
+            detail = " · ".join(filter(None, [obra, emp, local]))
+
+            recs_html += (
+                f'<div class="ea-rec">'
+                f'<div class="ea-rec-dot" style="background:{dot_color}"></div>'
+                f'<div class="ea-rec-body">'
+                f'<div class="ea-rec-title">{tipo}</div>'
+                f'<div class="ea-rec-meta">{dstr} · {detail}</div>'
+                f'</div>'
+                f'<div class="ea-rec-right">'
+                f'<span class="ea-rec-status" style="{st_bg}">{status}</span>'
+                f'{link_btn}'
+                f'</div></div>'
+            )
+
+        # Show remaining count
+        if n_reg > 10:
+            recs_html += (
+                f'<div style="text-align:center;padding:6px;color:#6b7f8d;'
+                f'font-size:.65rem">+ {n_reg - 10} registros anteriores</div>'
+            )
+
+        # Full card HTML
+        card_html = (
+            f'<div class="ea-person {card_cls}">'
+            f'<div class="ea-person-hdr">'
+            f'<div class="ea-avatar {av_cls}">{initials}</div>'
+            f'<div class="ea-pname">{label_prefix}{nome}</div>'
+            f'<div class="ea-pstats">{stats_html}</div>'
+            f'</div>'
+            f'<div class="ea-tipos">{tipos_html}</div>'
+            f'<div class="ea-stories">{stories_html}</div>'
+            f'<div class="ea-records">{recs_html}</div>'
+            f'</div>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
 
     # ── Pessoas sem registro no período ──────────────────────────────────────
     # Usa o histórico completo como universo de profissionais conhecidos
@@ -1143,7 +1219,7 @@ def _render_ensaios_aevias():
             key=lambda kv: (_urgencia_prof(kv[1]), kv[0])
         )
         for nome, regs in indivs_sorted:
-            _render_person_expander(nome, regs)
+            _render_person_card(nome, regs)
 
         # Render: grupos (Eco Cerrado, ECO Minas Goiás etc.) — se ainda existirem
         if grupos:
@@ -1157,25 +1233,20 @@ def _render_ensaios_aevias():
                 key=lambda kv: (_urgencia_prof(kv[1]), kv[0])
             )
             for nome, regs in grupos_sorted:
-                _render_person_expander(nome, regs, label_prefix="[contrato] ")
+                _render_person_card(nome, regs, label_prefix="[contrato] ")
 
         # Render: sem registro no período
         if sem_registro:
             st.markdown(
-                '<div style="margin:18px 0 6px;font-size:.8rem;color:#FF6B6B;'
-                'font-weight:700;letter-spacing:.5px;border-top:1px solid #FF6B6B33;'
-                'padding-top:12px">'
-                f'SEM REGISTRO NO PERÍODO — {len(sem_registro)} pessoa(s)</div>',
+                f'<div style="margin:16px 0 8px;font-size:.78rem;color:#FF6B6B;'
+                f'font-weight:600">Sem registro no período — {len(sem_registro)}</div>',
                 unsafe_allow_html=True,
             )
             pills = "".join(
-                f'<span style="display:inline-block;margin:3px 4px;padding:4px 10px;'
-                f'border-radius:20px;background:rgba(255,107,107,.1);'
-                f'border:1px solid #FF6B6B44;color:#FF6B6B;font-size:.75rem">'
-                f'{p}</span>'
+                f'<span class="ea-miss-pill">{p}</span>'
                 for p in sem_registro
             )
-            st.markdown(f'<div style="line-height:2">{pills}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="ea-missing">{pills}</div>', unsafe_allow_html=True)
 
     with tab_cat:
         _render_produtividade(dados_periodo, datas_com_dados)
@@ -1188,13 +1259,14 @@ def _aba_checklist():
         return
 
     meds_reversed = list(reversed(meds))
-    col_sel, _ = st.columns([2, 4])
-    with col_sel:
-        med_escolhida = st.selectbox(
-            "Medição:",
-            options=meds_reversed,
-            key="eco_med_sel",
-        )
+
+    # Filtro mensal — compacto, sem KPIs
+    med_escolhida = st.selectbox(
+        "📅 Mês / Medição:",
+        options=meds_reversed,
+        format_func=lambda x: x,
+        key="eco_med_sel",
+    )
 
     # Carrega dados da medição selecionada
     with st.spinner("Carregando checklist..."):
@@ -1209,28 +1281,6 @@ def _aba_checklist():
     if not sheets:
         st.warning(f"Nenhum arquivo de controle encontrado para **{med_escolhida}**.")
         return
-
-    # KPIs globais
-    total_ok = total_cob = total_ne = 0
-    for plist in sheets.values():
-        for p in plist:
-            for v in p.get("dias", {}).values():
-                vu = str(v).upper().strip() if v else ""
-                if vu == "OK":
-                    total_ok += 1
-                elif vu in ("COBRAR", "COBRE"):
-                    total_cob += 1
-                elif vu in ("N/E", "NE"):
-                    total_ne += 1
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(_kpi_card(total_ok,  "Checklists OK",     COR_OK),    unsafe_allow_html=True)
-    c2.markdown(_kpi_card(total_cob, "A Cobrar",          COR_COBRAR), unsafe_allow_html=True)
-    c3.markdown(_kpi_card(total_ne,  "Não em Campo (N/E)", COR_MUTED), unsafe_allow_html=True)
-    pct = f"{100*total_ok/(total_ok+total_cob):.0f}%" if (total_ok+total_cob) > 0 else "—"
-    c4.markdown(_kpi_card(pct, "Taxa de Conformidade", COR_ACCENT), unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
 
     # Sub-abas por contrato
     sheet_names = list(sheets.keys())
