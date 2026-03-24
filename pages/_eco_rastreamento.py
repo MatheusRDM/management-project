@@ -1463,13 +1463,13 @@ def _render_analise_periodo(itens):
             ))
             fig_hm.update_layout(
                 **_BASE,
-                title=dict(text="️ Heatmap: hora × dia (intensidade = atividade)",
+                title=dict(text="Heatmap: hora x dia (intensidade = atividade)",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=280,
                 xaxis=dict(tickfont=dict(size=9)),
                 yaxis=dict(tickfont=dict(size=10)),
-                margin=dict(l=60, r=12, t=36, b=12),
             )
+            fig_hm.update_layout(margin=dict(l=60, r=12, t=36, b=12))
             st.plotly_chart(fig_hm, use_container_width=True, config=_NO_INTERACT)
 
         # Heatmap: motorista × hora do dia (quem trabalha quando)
@@ -1492,13 +1492,13 @@ def _render_analise_periodo(itens):
         ))
         fig_hm2.update_layout(
             **_BASE,
-            title=dict(text=" Quando cada motorista trabalha (top 20)",
+            title=dict(text="Quando cada motorista trabalha (top 20)",
                        font=dict(size=13, color=_C["text"]), x=0),
             height=max(380, len(top_mots) * 22),
             xaxis=dict(tickfont=dict(size=9)),
             yaxis=dict(tickfont=dict(size=9)),
-            margin=dict(l=120, r=12, t=36, b=12),
         )
+        fig_hm2.update_layout(margin=dict(l=120, r=12, t=36, b=12))
         st.plotly_chart(fig_hm2, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
