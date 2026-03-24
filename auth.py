@@ -165,12 +165,11 @@ def mostrar_tela_login():
         st.rerun()
         return
 
-    # Se não tem token no query param, injeta JS para ler o cookie
-    if _COOKIE_NAME not in st.query_params:
-        if not st.session_state.get("_cookie_check_done"):
-            st.session_state["_cookie_check_done"] = True
-            _js_read_cookie_to_query()
-            st.stop()  # aguarda o reload com o token
+    # Injeta JS para ler cookie uma vez (sem bloquear o render)
+    if _COOKIE_NAME not in st.query_params and not st.session_state.get("_cookie_check_done"):
+        st.session_state["_cookie_check_done"] = True
+        _js_read_cookie_to_query()
+        # Não chama st.stop() — continua renderizando o formulário normalmente
 
     # ── Tela de login normal ───────────────────────────────────────────────
     # CSS mínimo para esconder sidebar + rótulo dev fixo
