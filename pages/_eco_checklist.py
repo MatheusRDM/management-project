@@ -172,11 +172,9 @@ _CSS_CARDS = """
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ck-role{font-size:.7rem;color:#8FA882;margin-bottom:10px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ck-days{display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;
-  padding-bottom:2px;scrollbar-width:none}
-.ck-days::-webkit-scrollbar{display:none}
-.ck-pill{display:flex;flex-direction:column;align-items:center;gap:2px;
-  min-width:34px;flex-shrink:0}
+.ck-days{display:grid;grid-template-columns:repeat(auto-fill,minmax(36px,1fr));
+  gap:4px;padding-bottom:2px}
+.ck-pill{display:flex;flex-direction:column;align-items:center;gap:2px}
 .ck-dd{font-size:.6rem;color:#8FA882;font-weight:500}
 .ck-badge{display:inline-flex;align-items:center;justify-content:center;
   width:34px;height:26px;border-radius:6px;font-size:.65rem;font-weight:700;
@@ -375,8 +373,8 @@ def _renderizar_calendario(people: list[dict], mes_ref: str):
     sem_dados_cal = [p for p in campo_people if not _tem_dado_mes(p)]
     people_ativos = [p for p in campo_people if _tem_dado_mes(p)]
 
-    # Janela: últimos 7 dias disponíveis (incluindo hoje se existir)
-    datas_janela = datas_mes[-7:]
+    # Todos os dias do mês (sem limitar a 7)
+    datas_janela = datas_mes
 
     # ── View rápida: cards 7 dias (só ativos) ────────────────────────────────
     _renderizar_cards(people_ativos, datas_janela)
@@ -504,11 +502,9 @@ _CSS_PROD = """
 .prod-card.pc-rep{border-left-color:#e6194b}
 .prod-name{font-size:.92rem;font-weight:700;color:#E8EFD8;margin-bottom:2px}
 .prod-sub{font-size:.7rem;color:#8FA882;margin-bottom:10px}
-.prod-days{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;
-  padding-bottom:4px;scrollbar-width:none}
-.prod-days::-webkit-scrollbar{display:none}
-.prod-pill{display:flex;flex-direction:column;align-items:center;gap:2px;
-  min-width:44px;flex-shrink:0;cursor:default}
+.prod-days{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));
+  gap:4px;padding-bottom:4px}
+.prod-pill{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:default}
 .prod-dd{font-size:.58rem;color:#8FA882;font-weight:500;text-align:center}
 .prod-cell{width:44px;min-height:28px;border-radius:6px;font-size:.6rem;
   font-weight:700;display:flex;flex-direction:column;align-items:center;
@@ -826,11 +822,9 @@ _CSS_ENSAIOS = """
 .ea-kpi .lbl{font-size:.65rem;color:#8FA882;margin-top:2px}
 .ea-tipo-chip{display:inline-block;font-size:.62rem;font-weight:700;
   padding:2px 8px;border-radius:999px;margin:2px 3px 2px 0;border:1px solid}
-.ea-day-row{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;
-  padding-bottom:4px;scrollbar-width:none;margin:6px 0}
-.ea-day-row::-webkit-scrollbar{display:none}
-.ea-day-pill{display:flex;flex-direction:column;align-items:center;gap:2px;
-  min-width:38px;flex-shrink:0}
+.ea-day-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));
+  gap:4px;margin:6px 0}
+.ea-day-pill{display:flex;flex-direction:column;align-items:center;gap:2px}
 .ea-dd{font-size:.57rem;color:#8FA882;font-weight:500;text-align:center}
 .ea-cell{width:38px;height:26px;border-radius:6px;font-size:.6rem;font-weight:700;
   display:flex;align-items:center;justify-content:center;text-align:center}
@@ -847,9 +841,12 @@ _CSS_ENSAIOS = """
 .ea-report-link:hover{text-decoration:underline}
 .ea-status-badge{display:inline-block;font-size:.6rem;padding:1px 6px;
   border-radius:999px;border:1px solid;font-weight:600;margin-right:4px}
-.ea-entry-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}
-.ea-entry-row:last-child{border-bottom:none}
+.ea-entry-row{display:grid;grid-template-columns:60px 1fr auto;
+  gap:4px 8px;align-items:center;padding:6px 8px;border-radius:6px;
+  margin-bottom:4px;background:rgba(255,255,255,.02)}
+.ea-entry-row:nth-child(odd){background:rgba(255,255,255,.04)}
+.ea-entry-detail{font-size:.65rem;color:#8FA882;grid-column:2/4}
+.ea-entry-actions{display:flex;gap:6px;align-items:center}
 </style>
 """
 
@@ -1103,16 +1100,16 @@ def _render_ensaios_aevias():
                 )
                 link_html = (
                     f'<a class="ea-report-link" href="{_BASE44_URL}{url}" '
-                    f'target="_blank">Relatório ↗</a>'
+                    f'target="_blank">↗</a>'
                     if url else ""
                 )
                 detail = " · ".join(filter(None, [obra, emp, local]))
                 rows_html += (
                     f'<div class="ea-entry-row">'
-                    f'<span style="color:#8FA882;min-width:70px;font-size:.65rem">{dstr}</span>'
-                    f'<span style="color:#C8D8A8">{tipo}</span>'
-                    f'<span style="color:#8FA882;font-size:.65rem;flex:1">{detail}</span>'
-                    f'{s_badge}{link_html}'
+                    f'<span style="color:#8FA882;font-size:.65rem">{dstr}</span>'
+                    f'<span style="color:#C8D8A8;font-size:.78rem">{tipo}</span>'
+                    f'<div class="ea-entry-actions">{s_badge}{link_html}</div>'
+                    f'<span class="ea-entry-detail">{detail}</span>'
                     f'</div>'
                 )
             st.markdown(
@@ -1187,17 +1184,15 @@ def _aba_checklist():
         st.info("Nenhuma medição encontrada. Verifique o acesso ao servidor Y:")
         return
 
-    med_labels = {m: m for m in reversed(meds)}  # mais recente primeiro
     meds_reversed = list(reversed(meds))
 
-    col_sel, col_info = st.columns([2, 4])
-    with col_sel:
-        med_escolhida = st.selectbox(
-            "Medição:",
-            options=meds_reversed,
-            format_func=lambda x: x,
-            key="eco_med_sel",
-        )
+    # Filtro mensal — compacto, sem KPIs
+    med_escolhida = st.selectbox(
+        "📅 Mês / Medição:",
+        options=meds_reversed,
+        format_func=lambda x: x,
+        key="eco_med_sel",
+    )
 
     # Carrega dados da medição selecionada
     with st.spinner("Carregando checklist..."):
@@ -1212,28 +1207,6 @@ def _aba_checklist():
     if not sheets:
         st.warning(f"Nenhum arquivo de controle encontrado para **{med_escolhida}**.")
         return
-
-    # KPIs globais
-    total_ok = total_cob = total_ne = 0
-    for plist in sheets.values():
-        for p in plist:
-            for v in p.get("dias", {}).values():
-                vu = str(v).upper().strip() if v else ""
-                if vu == "OK":
-                    total_ok += 1
-                elif vu in ("COBRAR", "COBRE"):
-                    total_cob += 1
-                elif vu in ("N/E", "NE"):
-                    total_ne += 1
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(_kpi_card(total_ok,  "Checklists OK",     COR_OK),    unsafe_allow_html=True)
-    c2.markdown(_kpi_card(total_cob, "A Cobrar",          COR_COBRAR), unsafe_allow_html=True)
-    c3.markdown(_kpi_card(total_ne,  "Não em Campo (N/E)", COR_MUTED), unsafe_allow_html=True)
-    pct = f"{100*total_ok/(total_ok+total_cob):.0f}%" if (total_ok+total_cob) > 0 else "—"
-    c4.markdown(_kpi_card(pct, "Taxa de Conformidade", COR_ACCENT), unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
 
     # Sub-abas por contrato
     sheet_names = list(sheets.keys())

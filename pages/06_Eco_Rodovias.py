@@ -90,13 +90,14 @@ st.markdown("""
     }
     .eco-kpi .val { font-size: 1.4rem !important; }
     .eco-kpi .lbl { font-size: 0.62rem !important; }
-    /* Calendar table: touch scroll + nomes menores */
-    .cal-wrap { -webkit-overflow-scrolling: touch; }
-    .cal-table { font-size: 0.60rem !important; min-width: 700px !important; }
-    .cal-table th { font-size: 0.55rem !important; padding: 4px 2px !important; }
-    .cal-table td { padding: 4px 2px !important; }
-    .cal-table td.colab { min-width: 100px !important; max-width: 130px !important; font-size: 0.62rem !important; }
-    .cal-table td.funcao { min-width: 70px !important; max-width: 100px !important; font-size: 0.55rem !important; }
+    /* Calendar table: compact for mobile */
+    .cal-wrap { -webkit-overflow-scrolling: touch; overflow-x: auto; }
+    .cal-table { font-size: 0.52rem !important; min-width: 0 !important; }
+    .cal-table th { font-size: 0.48rem !important; padding: 3px 1px !important; }
+    .cal-table td { padding: 3px 1px !important; font-size: 0.50rem !important; }
+    .cal-table td.colab { min-width: 60px !important; max-width: 80px !important; font-size: 0.50rem !important; }
+    .cal-table td.funcao { display: none !important; }
+    .cal-table th:nth-child(2) { display: none !important; }
     /* Legenda: wrap */
     .legend-item { font-size: 0.65rem !important; margin-right: 8px !important; }
     /* Plotly: garante full width */
@@ -188,9 +189,9 @@ st.markdown("""
 .cal-table {
     border-collapse: collapse;
     font-family: 'Poppins', sans-serif;
-    font-size: 0.68rem;
+    font-size: 0.62rem;
     width: 100%;
-    min-width: 900px;
+    min-width: 600px;
 }
 .cal-table th {
     background: rgba(86,110,61,0.25);
