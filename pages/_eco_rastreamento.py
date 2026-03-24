@@ -41,9 +41,29 @@ def _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=560):
     from folium.plugins import MarkerCluster
     mapa = folium.Map(
         location=[-18.5, -47.5], zoom_start=6,
-        tiles="CartoDB dark_matter",
+        tiles=None,
         prefer_canvas=True,
     )
+    # Mapbox-style dark tile layer (free, beautiful, no API key)
+    folium.TileLayer(
+        tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        attr='&copy; <a href="https://carto.com/">CARTO</a>',
+        name="Escuro",
+        max_zoom=19,
+    ).add_to(mapa)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr='&copy; Esri',
+        name="Satélite",
+        max_zoom=18,
+    ).add_to(mapa)
+    folium.TileLayer(
+        tiles="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        attr='&copy; CARTO',
+        name="Claro",
+        max_zoom=19,
+    ).add_to(mapa)
+    folium.LayerControl(collapsed=True).add_to(mapa)
 
     # Legenda flutuante
     legend_html = """
@@ -146,6 +166,7 @@ def _render_estatisticas(itens):
         paper_bgcolor=_C["bg"], plot_bgcolor=_C["bg"],
         font=dict(family="Inter, sans-serif", color=_C["text"], size=12),
         margin=dict(l=12, r=12, t=36, b=12),
+        dragmode=False,
     )
 
     df = pd.DataFrame(itens)
@@ -158,35 +179,63 @@ def _render_estatisticas(itens):
     odo_medio    = int(df["odometro"].median()) if df["odometro"].sum() > 0 else 0
     h_dir_total  = round(df["tempo_dir_h"].sum(), 1)   # horas dirigindo hoje (snapshot)
 
-    # ── Cards ─────────────────────────────────────────────────────────────────
+    # ── KPI Chips (compact, Instagram-style) ─────────────────────────────────
     st.caption("📍 Snapshot atual — dados da última posição de cada veículo")
     st.markdown(f"""
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
-      <div style="flex:1;min-width:120px;background:rgba(123,191,106,0.12);border:1px solid #7BBF6A55;
-                  border-radius:10px;padding:16px;text-align:center">
-        <div style="font-size:1.8rem;font-weight:700;color:#7BBF6A">{len(df)}</div>
-        <div style="color:#C8D8A8;font-size:.8rem">Veículos ECO</div></div>
-      <div style="flex:1;min-width:120px;background:rgba(76,201,240,0.12);border:1px solid #4CC9F055;
-                  border-radius:10px;padding:16px;text-align:center">
-        <div style="font-size:1.8rem;font-weight:700;color:#4CC9F0">{ligados}</div>
-        <div style="color:#C8D8A8;font-size:.8rem">🟢 Ligados agora</div></div>
-      <div style="flex:1;min-width:120px;background:rgba(255,107,107,0.12);border:1px solid #FF6B6B55;
-                  border-radius:10px;padding:16px;text-align:center">
-        <div style="font-size:1.8rem;font-weight:700;color:#FF6B6B">{deslig}</div>
-        <div style="color:#C8D8A8;font-size:.8rem">🔴 Desligados</div></div>
-      <div style="flex:1;min-width:120px;background:rgba(247,183,49,0.12);border:1px solid #F7B73155;
-                  border-radius:10px;padding:16px;text-align:center">
-        <div style="font-size:1.8rem;font-weight:700;color:#F7B731">{odo_medio:,} km</div>
-        <div style="color:#C8D8A8;font-size:.8rem">Hodômetro médio da frota</div></div>
-      <div style="flex:1;min-width:120px;background:rgba(162,155,254,0.12);border:1px solid #A29BFE55;
-                  border-radius:10px;padding:16px;text-align:center">
-        <div style="font-size:1.8rem;font-weight:700;color:#A29BFE">{h_dir_total:.0f}h</div>
-        <div style="color:#C8D8A8;font-size:.8rem">Horas dirigindo hoje (frota)</div></div>
-      <div style="flex:1;min-width:120px;background:rgba(0,206,201,0.12);border:1px solid #00CEC955;
-                  border-radius:10px;padding:16px;text-align:center">
-        <div style="font-size:1.8rem;font-weight:700;color:#00CEC9">{n_estados} UFs</div>
-        <div style="color:#C8D8A8;font-size:.8rem">{n_cidades} cidades</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="background:rgba(255,255,255,.06);backdrop-filter:blur(8px);
+                  border:1px solid rgba(255,255,255,.08);border-radius:20px;
+                  padding:8px 14px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:1rem;font-weight:700;color:#7BBF6A">{len(df)}</span>
+        <span style="font-size:.62rem;color:#8FA882">veículos</span></div>
+      <div style="background:rgba(255,255,255,.06);backdrop-filter:blur(8px);
+                  border:1px solid rgba(255,255,255,.08);border-radius:20px;
+                  padding:8px 14px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:1rem;font-weight:700;color:#4CC9F0">{ligados}</span>
+        <span style="font-size:.62rem;color:#8FA882">ligados</span></div>
+      <div style="background:rgba(255,255,255,.06);backdrop-filter:blur(8px);
+                  border:1px solid rgba(255,255,255,.08);border-radius:20px;
+                  padding:8px 14px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:1rem;font-weight:700;color:#FF6B6B">{deslig}</span>
+        <span style="font-size:.62rem;color:#8FA882">desligados</span></div>
+      <div style="background:rgba(255,255,255,.06);backdrop-filter:blur(8px);
+                  border:1px solid rgba(255,255,255,.08);border-radius:20px;
+                  padding:8px 14px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:1rem;font-weight:700;color:#A29BFE">{h_dir_total:.0f}h</span>
+        <span style="font-size:.62rem;color:#8FA882">dirigindo</span></div>
+      <div style="background:rgba(255,255,255,.06);backdrop-filter:blur(8px);
+                  border:1px solid rgba(255,255,255,.08);border-radius:20px;
+                  padding:8px 14px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:1rem;font-weight:700;color:#00CEC9">{n_cidades}</span>
+        <span style="font-size:.62rem;color:#8FA882">cidades</span></div>
     </div>""", unsafe_allow_html=True)
+
+    # ── Interactive: Who has car ON right now ──────────────────────────────
+    df_on  = df[df["ignicao"] == True].sort_values("velocidade", ascending=False)
+    df_off = df[df["ignicao"] == False]
+
+    if not df_on.empty:
+        ligados_html = ""
+        for _, row in df_on.iterrows():
+            em_mov = row.get("velocidade", 0) > 3
+            status_icon = "🟡" if em_mov else "🟢"
+            vel_txt = f"{int(row['velocidade'])} km/h" if em_mov else "Parado"
+            ligados_html += (
+                f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
+                f'border-bottom:1px solid rgba(255,255,255,.04)">'
+                f'<span>{status_icon}</span>'
+                f'<span style="flex:1;font-size:.78rem;color:#E8EFD8;font-weight:500">'
+                f'{row["motorista"]}</span>'
+                f'<span style="font-size:.68rem;color:#8FA882">{vel_txt}</span>'
+                f'<span style="font-size:.6rem;color:#6b7f8d">{row.get("cidade","—")}</span>'
+                f'</div>'
+            )
+        with st.expander(f"🟢 {ligados} veículo(s) ligado(s) agora", expanded=True):
+            st.markdown(
+                f'<div style="background:rgba(18,25,38,.85);border-radius:12px;padding:10px">'
+                f'{ligados_html}</div>',
+                unsafe_allow_html=True,
+            )
 
     # ── Hodômetro por motorista ────────────────────────────────────────────────
     df_odo = df.sort_values("odometro", ascending=True)
@@ -427,6 +476,7 @@ def _render_analise_periodo(itens):
         paper_bgcolor=_C["bg"], plot_bgcolor=_C["bg"],
         font=dict(family="Inter, sans-serif", color=_C["text"], size=12),
         margin=dict(l=12, r=12, t=36, b=12),
+        dragmode=False,
     )
 
     # Padrão fixo: 01/03/2026 → hoje (conforme solicitado)

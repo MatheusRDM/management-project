@@ -243,6 +243,7 @@ from _eco_shared import _IS_CLOUD
 from _eco_checklist import _aba_checklist
 from _eco_ensaios import _aba_ensaios
 from _eco_rastreamento import _aba_rastreamento
+from _eco_resumo import _aba_resumo
 
 
 # =============================================================================
@@ -310,11 +311,15 @@ def main():
         <p>BR-050 (Eco Minas Goiás) · BR-365 (Eco Cerrado) · Supervisão de Obras AFIRMA E-VIAS</p>
     </div>""", unsafe_allow_html=True)
 
-    tab_checklist, tab_ensaios, tab_rastr = st.tabs([
-        "📋 Checklist APP",
-        "🔬 Ensaios AEVIAS",
+    tab_resumo, tab_checklist, tab_ensaios, tab_rastr = st.tabs([
+        "📊 Resumo",
+        "📋 Checklist",
+        "🔬 Ensaios",
         "🛰️ Rastreamento",
     ])
+
+    with tab_resumo:
+        _aba_resumo()
 
     with tab_checklist:
         _aba_checklist()
