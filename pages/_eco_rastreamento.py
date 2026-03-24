@@ -2305,10 +2305,41 @@ def _render_frota_dia(itens):
     st.markdown("#### Detalhamento por Motorista")
     for idx, (motorista, dados) in enumerate(sorted(resultados.items())):
         cor = dados["cor"] if dados["cor"] else _CORES_FROTA[idx % len(_CORES_FROTA)]
-        km   = _km_from_hist(dados["hist"])
-        n_pts = len(dados["hist"])
+        km      = _km_from_hist(dados["hist"])
         paradas = _detectar_paradas(dados["hist"])
-        total_parada_min = sum(p["dur_min"] for p in paradas)
+
+        # --- Primeira ignição: 1º ponto com ignicao=True ou 1º ponto do histórico ---
+        primeira_ignicao = None
+        for pt in dados["hist"]:
+            ign    = pt.get("ignicao") or pt.get("ignition")
+            dt_str = pt.get("dt", "")
+            if ign and dt_str:
+                try:
+                    primeira_ignicao = datetime.fromisoformat(dt_str.replace("Z", ""))
+                    break
+                except Exception:
+                    pass
+        if primeira_ignicao is None and dados["hist"]:
+            try:
+                primeira_ignicao = datetime.fromisoformat(
+                    dados["hist"][0].get("dt", "").replace("Z", "")
+                )
+            except Exception:
+                pass
+        primeira_ign_txt = primeira_ignicao.strftime("%H:%M") if primeira_ignicao else "—"
+
+        # --- Jornada: 1ª ignição → última parada (retorno ao alojamento) ---
+        jornada_txt = "—"
+        if paradas and primeira_ignicao:
+            try:
+                h_ini_str = paradas[-1]["h_ini"]   # "HH:MM"
+                hh, mm    = int(h_ini_str[:2]), int(h_ini_str[3:])
+                t_retorno = primeira_ignicao.replace(hour=hh, minute=mm, second=0, microsecond=0)
+                jornada_min = max(0, int((t_retorno - primeira_ignicao).total_seconds() / 60))
+                jornada_txt = (f"{jornada_min // 60}h{jornada_min % 60:02d}min"
+                               if jornada_min >= 60 else f"{jornada_min} min")
+            except Exception:
+                jornada_txt = "—"
 
         st.markdown(
             f'<div style="border-left:3px solid {cor};padding:4px 0 4px 12px;'
@@ -2319,11 +2350,10 @@ def _render_frota_dia(itens):
             unsafe_allow_html=True,
         )
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Km percorridos", f"{km:,} km")
-        c2.metric("Posicoes GPS", n_pts)
-        c3.metric("Paradas detectadas", len(paradas))
-        c4.metric("Tempo parado", f"{total_parada_min} min" if total_parada_min < 60
-                  else f"{total_parada_min//60}h{total_parada_min%60}min")
+        c1.metric("Km percorridos",       f"{km:,.1f} km")
+        c2.metric("Primeira ignicao",     primeira_ign_txt)
+        c3.metric("Paradas detectadas",   len(paradas))
+        c4.metric("Jornada (ignicao->retorno)", jornada_txt)
 
         if paradas:
             rows_html = "".join(
