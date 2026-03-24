@@ -72,6 +72,7 @@ _BASE = dict(
     paper_bgcolor=_C["bg"], plot_bgcolor=_C["bg"],
     font=dict(family="Inter, sans-serif", color=_C["text"], size=12),
     margin=dict(l=12, r=12, t=36, b=12),
+    dragmode=False,
 )
 _NI = dict(displayModeBar=False, scrollZoom=False)
 
@@ -174,7 +175,7 @@ def _cards_resumo(df: pd.DataFrame, ultima_sync: str):
 
 
 def _grafico_timeline(df: pd.DataFrame):
-    st.markdown("### 📅 Timeline — Produção Diária por Categoria")
+    st.markdown("### Timeline — Produção Diária por Categoria")
     df_t = df.dropna(subset=["data_dt"]).copy()
     timeline = df_t.groupby(["data_iso","obra"]).size().reset_index(name="qtd")
     todas_datas = sorted(df_t["data_iso"].unique())
@@ -202,7 +203,7 @@ def _grafico_timeline(df: pd.DataFrame):
 
 
 def _heatmap_profissional(df: pd.DataFrame):
-    st.markdown("### 🗓️ Heatmap — Quem Trabalhou Cada Dia")
+    st.markdown("### ️ Heatmap — Quem Trabalhou Cada Dia")
     df_t = df.dropna(subset=["data_dt"]).copy()
     profs = sorted(df_t["profissional"].unique())
     datas = sorted(df_t["data_iso"].unique())
@@ -237,7 +238,7 @@ def _heatmap_profissional(df: pd.DataFrame):
 
 
 def _pivot_quem_fez_o_que(df: pd.DataFrame):
-    st.markdown("### 📋 Pivot: Profissional × Dia × Tipo")
+    st.markdown("### Pivot: Profissional × Dia × Tipo")
     df_t = df.dropna(subset=["data_dt"]).copy()
     datas = sorted(df_t["data_iso"].unique())
     profs = sorted(df_t["profissional"].unique())
@@ -273,7 +274,7 @@ def _grafico_por_profissional(df: pd.DataFrame):
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("### 👤 Registros por Profissional")
+        st.markdown("### Registros por Profissional")
         cnt = (df.groupby(["profissional","tipo"]).size()
                   .reset_index(name="n"))
         profs_sorted = (df.groupby("profissional").size()
@@ -300,7 +301,7 @@ def _grafico_por_profissional(df: pd.DataFrame):
         st.plotly_chart(fig, use_container_width=True, config=_NI)
 
     with col2:
-        st.markdown("### 🏗️ Registros por Categoria de Obra")
+        st.markdown("### ️ Registros por Categoria de Obra")
         cnt2 = (df.groupby(["obra","tipo"]).size()
                    .reset_index(name="n"))
         obras_sorted = (df.groupby("obra").size()
@@ -328,7 +329,7 @@ def _grafico_por_profissional(df: pd.DataFrame):
 
 
 def _dias_sem_registro(df: pd.DataFrame):
-    st.markdown("### ⚠️ Dias Úteis SEM Registro por Profissional")
+    st.markdown("### ️ Dias Úteis SEM Registro por Profissional")
     if df.empty or df["data_dt"].isna().all():
         st.info("Sem dados.")
         return
@@ -391,7 +392,7 @@ def _dias_sem_registro(df: pd.DataFrame):
 
 
 def _tabela_com_links(df: pd.DataFrame):
-    st.markdown("### 🔗 Tabela Completa com Links")
+    st.markdown("### Tabela Completa com Links")
     f1, f2, f3, f4 = st.columns(4)
     with f1:
         f_obra = st.multiselect("Categoria:", sorted(df["obra"].unique()), key="ens_obra")
@@ -434,7 +435,7 @@ def _aba_ensaios():
     # ── Cabeçalho + sincronização ──────────────────────────────────────────────
     c_titulo, c_btn = st.columns([6, 1])
     with c_titulo:
-        st.markdown("## 📊 Ensaios AEVIAS — Dashboard de Produção")
+        st.markdown("## Ensaios AEVIAS — Dashboard de Produção")
         st.caption(
             "Dados extraídos automaticamente de "
             f"[aevias-controle.base44.app]({_AEVIAS_BASE}) "
@@ -451,17 +452,17 @@ def _aba_ensaios():
 
     with c_btn:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if st.button("🔄 Sincronizar", key="ens_sync", use_container_width=True,
+        if st.button(" Sincronizar", key="ens_sync", use_container_width=True,
                      disabled=_IS_CLOUD,
                      help="Executa baixar_ensaios.py (apenas máquina local)"):
             with st.spinner("Sincronizando com AEVIAS CONTROLE..."):
                 ok, msg = _sincronizar_e_copiar()
             if ok:
-                st.success(f"✅ {msg}")
+                st.success(f" {msg}")
                 st.cache_data.clear()
                 st.rerun()
             else:
-                st.error(f"❌ {msg}")
+                st.error(f" {msg}")
 
     if _IS_CLOUD:
         st.info(
@@ -478,19 +479,31 @@ def _aba_ensaios():
 
     df = _df_ensaios(dados)
 
-    # ── Filtro global de período ───────────────────────────────────────────────
-    with st.expander("🗓️ Filtrar período global", expanded=False):
-        dts = df["data_dt"].dropna()
-        col_ini, col_fim = st.columns(2)
-        with col_ini:
-            d_ini_g = st.date_input("Início:", value=dts.min().date(),
-                                    key="ens_g_ini")
-        with col_fim:
-            d_fim_g = st.date_input("Fim:", value=dts.max().date(),
-                                    key="ens_g_fim")
-        if d_ini_g and d_fim_g:
-            df = df[(df["data_dt"].dt.date >= d_ini_g) &
-                    (df["data_dt"].dt.date <= d_fim_g)]
+    # ── Filtro mensal ─────────────────────────────────────────────────────────
+    dts_valid = df["data_dt"].dropna()
+    if not dts_valid.empty:
+        # Gera lista de meses disponíveis: "Mar/2026", "Fev/2026", etc.
+        meses_disp = (
+            dts_valid.dt.to_period("M")
+            .drop_duplicates()
+            .sort_values(ascending=False)
+        )
+        _MESES_PT = {1:"Jan",2:"Fev",3:"Mar",4:"Abr",5:"Mai",6:"Jun",
+                     7:"Jul",8:"Ago",9:"Set",10:"Out",11:"Nov",12:"Dez"}
+        opcoes_mes = {
+            f"{_MESES_PT[p.month]}/{p.year}": p
+            for p in meses_disp
+        }
+        col_mes, _ = st.columns([2, 4])
+        with col_mes:
+            mes_sel_lbl = st.selectbox(
+                "Mes:", list(opcoes_mes.keys()), key="ens_mes_sel"
+            )
+        per_sel = opcoes_mes[mes_sel_lbl]
+        d_ini_g = per_sel.to_timestamp().date()
+        d_fim_g = (per_sel + 1).to_timestamp().date() - timedelta(days=1)
+        df = df[(df["data_dt"].dt.date >= d_ini_g) &
+                (df["data_dt"].dt.date <= d_fim_g)]
 
     # ── Cards de resumo ────────────────────────────────────────────────────────
     _cards_resumo(df, _mtime or "—")

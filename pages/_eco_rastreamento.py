@@ -41,29 +41,9 @@ def _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=560):
     from folium.plugins import MarkerCluster
     mapa = folium.Map(
         location=[-18.5, -47.5], zoom_start=6,
-        tiles=None,
+        tiles="CartoDB dark_matter",
         prefer_canvas=True,
     )
-    # Mapbox-style dark tile layer (free, beautiful, no API key)
-    folium.TileLayer(
-        tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-        attr='&copy; <a href="https://carto.com/">CARTO</a>',
-        name="Escuro",
-        max_zoom=19,
-    ).add_to(mapa)
-    folium.TileLayer(
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr='&copy; Esri',
-        name="Satélite",
-        max_zoom=18,
-    ).add_to(mapa)
-    folium.TileLayer(
-        tiles="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-        attr='&copy; CARTO',
-        name="Claro",
-        max_zoom=19,
-    ).add_to(mapa)
-    folium.LayerControl(collapsed=True).add_to(mapa)
 
     # Legenda flutuante
     legend_html = """
@@ -71,7 +51,7 @@ def _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=560):
                 background:rgba(13,27,42,0.92);border:1px solid rgba(86,110,61,0.5);
                 border-radius:10px;padding:12px 16px;font-family:Inter,sans-serif;
                 font-size:12px;color:#C8D8A8;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,0.5)">
-      <b style="color:#BFCF99;font-size:13px">🛰️ ECO Rodovias</b><br><br>
+      <b style="color:#BFCF99;font-size:13px">ECO Rodovias</b><br><br>
       <span style="color:#7BBF6A">●</span> Ignição ON<br>
       <span style="color:#FF4757">●</span> Ignição OFF<br>
       <span style="color:#F7B731">●</span> Em movimento
@@ -114,7 +94,7 @@ def _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=560):
                   <b style="color:{cor_pin};font-size:14px">{it['desc']}</b><br>
                   <span style="color:#8FA882">Placa:</span> {it['placa']}<br>
                   <span style="color:#8FA882">Status:</span>
-                  {'🟡 Em movimento — ' + vel_str if em_movimento else ('🟢 Ligado parado' if it['ignicao'] else '🔴 Desligado')}<br>
+                  {'Em movimento — ' + vel_str if em_movimento else ('Ligado parado' if it['ignicao'] else 'Desligado')}<br>
                   <span style="color:#8FA882">Odômetro:</span> {it['odometro']:,} km<br>
                   <span style="color:#8FA882">Local:</span> {it.get('cidade','—')} / {it.get('uf','—')}<br>
                   <span style="color:#8FA882">Atualizado:</span> {it.get('dt_posicao','—')}
@@ -147,171 +127,206 @@ def _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=560):
 # =============================================================================
 
 def _render_estatisticas(itens):
-    """Estatísticas — análise individual por motorista com scroll infinito."""
+    import plotly.express as px
+    import plotly.graph_objects as go
 
-    # ── CSS for stats cards ──────────────────────────────────────────────────
-    st.markdown("""
-    <style>
-    .st-card{background:rgba(18,25,38,.85);backdrop-filter:blur(12px);
-      -webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.06);
-      border-radius:16px;padding:16px;margin-bottom:12px;transition:border-color .2s}
-    .st-card:hover{border-color:rgba(123,191,106,.2)}
-    .st-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-    .st-av{width:44px;height:44px;border-radius:50%;display:flex;
-      align-items:center;justify-content:center;font-size:.9rem;
-      font-weight:700;color:#fff;flex-shrink:0}
-    .st-name{font-size:.92rem;font-weight:700;color:#E8EFD8;flex:1;min-width:0;
-      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .st-ign{font-size:.62rem;font-weight:700;padding:3px 10px;border-radius:12px;
-      display:inline-flex;align-items:center;gap:4px}
-    .st-ign.on{background:rgba(123,191,106,.15);color:#7BBF6A;border:1px solid rgba(123,191,106,.3)}
-    .st-ign.mov{background:rgba(247,183,49,.15);color:#F7B731;border:1px solid rgba(247,183,49,.3)}
-    .st-ign.off{background:rgba(255,71,87,.1);color:#FF4757;border:1px solid rgba(255,71,87,.2)}
-    .st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-bottom:8px}
-    .st-met{background:rgba(255,255,255,.04);border-radius:10px;padding:8px;text-align:center}
-    .st-met .v{font-size:.95rem;font-weight:700;line-height:1.2}
-    .st-met .l{font-size:.52rem;color:#6b7f8d;letter-spacing:.03em;margin-top:2px}
-    .st-loc{font-size:.7rem;color:#8FA882;padding:6px 0;
-      border-top:1px solid rgba(255,255,255,.04);margin-top:4px}
-    .st-placa{font-size:.6rem;color:#6b7f8d;background:rgba(255,255,255,.04);
-      padding:2px 8px;border-radius:8px;display:inline-block}
-    .st-filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-    .st-fbtn{background:rgba(255,255,255,.06);backdrop-filter:blur(8px);
-      border:1px solid rgba(255,255,255,.08);border-radius:20px;
-      padding:8px 16px;display:flex;align-items:center;gap:6px;cursor:pointer;
-      transition:all .15s;flex-shrink:0}
-    .st-fbtn:hover{background:rgba(255,255,255,.1)}
-    .st-fbtn .fv{font-size:1rem;font-weight:700;line-height:1}
-    .st-fbtn .fl{font-size:.6rem;color:#8FA882}
-    </style>""", unsafe_allow_html=True)
-
-    df = pd.DataFrame(itens)
-    ligados    = int(df["ignicao"].sum())
-    deslig     = len(df) - ligados
-    em_mov     = int((df["velocidade"] > 3).sum())
-    h_dir_total = round(df["tempo_dir_h"].sum(), 1)
-
-    # ── Interactive KPI filter buttons ────────────────────────────────────────
-    filtro = st.radio(
-        "Filtrar por:",
-        options=["Todos", "🟢 Ligados", "🟡 Em Movimento", "🔴 Desligados"],
-        index=0,
-        horizontal=True,
-        key="stats_filtro",
+    # Paleta da aplicação
+    _C = {
+        "bg":      "rgba(0,0,0,0)",
+        "grid":    "rgba(255,255,255,0.06)",
+        "text":    "#C8D8A8",
+        "eco135":  "#7BBF6A",
+        "cerrado": "#4CC9F0",
+        "acc1":    "#F7B731",
+        "acc2":    "#FF6B6B",
+        "seq":     ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"],
+    }
+    _NO_INTERACT = dict(displayModeBar=False, scrollZoom=False)
+    _BASE = dict(
+        paper_bgcolor=_C["bg"], plot_bgcolor=_C["bg"],
+        font=dict(family="Inter, sans-serif", color=_C["text"], size=12),
+        margin=dict(l=12, r=12, t=36, b=12),
     )
 
-    # KPI chips with counts
-    st.markdown(f"""
-    <div class="st-filter-row">
-      <div class="st-fbtn"><span class="fv" style="color:#7BBF6A">{len(df)}</span>
-        <span class="fl">veículos</span></div>
-      <div class="st-fbtn"><span class="fv" style="color:#4CC9F0">{ligados}</span>
-        <span class="fl">ligados</span></div>
-      <div class="st-fbtn"><span class="fv" style="color:#F7B731">{em_mov}</span>
-        <span class="fl">andando</span></div>
-      <div class="st-fbtn"><span class="fv" style="color:#FF6B6B">{deslig}</span>
-        <span class="fl">desligados</span></div>
-      <div class="st-fbtn"><span class="fv" style="color:#A29BFE">{h_dir_total:.0f}h</span>
-        <span class="fl">dirigindo</span></div>
-    </div>""", unsafe_allow_html=True)
+    df = pd.DataFrame(itens)
+    ligados      = int(df["ignicao"].sum())
+    deslig       = len(df) - ligados
+    n_estados    = df["uf"].nunique()
+    n_cidades    = df["cidade"].nunique()
+    # pos_odometro = hodômetro VITALÍCIO do veículo (km totais na vida do veículo)
+    # NÃO é km rodado no período — apenas indicativo do estado da frota
+    odo_medio    = int(df["odometro"].median()) if df["odometro"].sum() > 0 else 0
+    h_dir_total  = round(df["tempo_dir_h"].sum(), 1)   # horas dirigindo hoje (snapshot)
 
-    # Apply filter
-    if filtro == "🟢 Ligados":
-        df_show = df[df["ignicao"] == True]
-    elif filtro == "🟡 Em Movimento":
-        df_show = df[(df["ignicao"] == True) & (df["velocidade"] > 3)]
-    elif filtro == "🔴 Desligados":
-        df_show = df[df["ignicao"] == False]
-    else:
-        df_show = df
+    # ── Cards interativos ──────────────────────────────────────────────────────
+    st.caption("Snapshot atual — dados da última posição de cada veículo")
+    _filt = st.session_state.get("rast_kpi_filtro", None)
+    _kpi_meta = [
+        ("total",   f"{len(df)}",         "Veiculos ECO",            "#7BBF6A", "rgba(123,191,106,0.12)", "#7BBF6A55"),
+        ("ligados", f"{ligados}",          "Ligados agora",           "#4CC9F0", "rgba(76,201,240,0.12)",  "#4CC9F055"),
+        ("deslig",  f"{deslig}",           "Desligados",              "#FF6B6B", "rgba(255,107,107,0.12)", "#FF6B6B55"),
+        ("odo",     f"{odo_medio:,} km",   "Hodometro medio",         "#F7B731", "rgba(247,183,49,0.12)",  "#F7B73155"),
+        ("horas",   f"{h_dir_total:.0f}h", "Horas dirigindo hoje",    "#A29BFE", "rgba(162,155,254,0.12)", "#A29BFE55"),
+        ("geo",     f"{n_estados} UFs",    f"{n_cidades} cidades",    "#00CEC9", "rgba(0,206,201,0.12)",   "#00CEC955"),
+    ]
+    _kpi_cols = st.columns(6)
+    for col, (key, val, lbl, cor, bg, bdr) in zip(_kpi_cols, _kpi_meta):
+        ativo = (_filt == key)
+        shadow = f"box-shadow:0 0 14px {cor}55;" if ativo else ""
+        bg_f   = bg.replace("0.12", "0.30") if ativo else bg
+        bdr_f  = cor if ativo else bdr
+        with col:
+            st.markdown(
+                f'<div style="background:{bg_f};border:2px solid {bdr_f};border-radius:10px;'
+                f'padding:12px 6px;text-align:center;{shadow}">'
+                f'<div style="font-size:1.6rem;font-weight:700;color:{cor}">{val}</div>'
+                f'<div style="color:#C8D8A8;font-size:.70rem;margin-top:2px">{lbl}</div></div>',
+                unsafe_allow_html=True,
+            )
+            if key in ("ligados", "deslig", "total"):
+                btn_lbl = "Limpar" if ativo else "Filtrar"
+                if st.button(btn_lbl, key=f"kpi_{key}", use_container_width=True):
+                    st.session_state["rast_kpi_filtro"] = None if ativo else key
+                    st.rerun()
 
-    if df_show.empty:
-        st.info("Nenhum veículo nesta categoria.")
-        return
+    # Aplica filtro na tabela
+    df_filt = df.copy()
+    if _filt == "ligados": df_filt = df_filt[df_filt["ignicao"] == True]
+    elif _filt == "deslig": df_filt = df_filt[df_filt["ignicao"] == False]
 
-    # ── Sort: moving first, then ON-stopped, then OFF ────────────────────────
-    def _sort_key(row):
-        if row["velocidade"] > 3:
-            return (0, -row["velocidade"])
-        if row["ignicao"]:
-            return (1, 0)
-        return (2, 0)
+    # ── Hodômetro por motorista ────────────────────────────────────────────────
+    df_odo = df.sort_values("odometro", ascending=True)
+    cores_contrato = {c: _C["seq"][i % len(_C["seq"])]
+                      for i, c in enumerate(df["contrato"].unique())}
+    fig_odo = go.Figure()
+    for contrato, grp in df_odo.groupby("contrato"):
+        fig_odo.add_trace(go.Bar(
+            x=grp["odometro"], y=grp["motorista"], orientation="h",
+            name=contrato,
+            marker_color=cores_contrato[contrato],
+            marker_line_width=0,
+            text=[f"{v:,.0f} km" for v in grp["odometro"]],
+            textposition="outside",
+            textfont=dict(size=10, color=_C["text"]),
+            hovertemplate="<b>%{y}</b><br>Hodômetro: %{x:,.0f} km<extra></extra>",
+        ))
+    fig_odo.update_layout(
+        **_BASE,
+        title=dict(text="Hodômetro Acumulado por Motorista", font=dict(size=14, color=_C["text"]), x=0),
+        barmode="group",
+        height=max(420, len(df) * 24),
+        xaxis=dict(tickformat=",", gridcolor=_C["grid"], zeroline=False, showline=False),
+        yaxis=dict(gridcolor=_C["grid"], tickfont=dict(size=10)),
+        legend=dict(orientation="h", y=1.04, x=0, font=dict(size=11)),
+        bargap=0.25,
+    )
+    st.plotly_chart(fig_odo, use_container_width=True, config=_NO_INTERACT)
 
-    df_sorted = df_show.copy()
-    df_sorted["_sort"] = df_sorted.apply(_sort_key, axis=1)
-    df_sorted = df_sorted.sort_values("_sort")
+    col1, col2 = st.columns(2)
 
-    # ── Individual cards — infinite scroll ────────────────────────────────────
-    _SEQ = ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"]
+    # ── Ignição: donut ─────────────────────────────────────────────────────────
+    with col1:
+        fig_ign = go.Figure(go.Pie(
+            labels=["Ligados", "Desligados"],
+            values=[ligados, deslig],
+            hole=0.62,
+            marker=dict(colors=["#7BBF6A", "#FF6B6B"],
+                        line=dict(color="#0E1117", width=2)),
+            textinfo="label+percent",
+            textfont=dict(size=11, color=_C["text"]),
+            hovertemplate="<b>%{label}</b>: %{value}<extra></extra>",
+        ))
+        fig_ign.add_annotation(text=f"<b>{len(df)}</b><br>ECO", x=0.5, y=0.5,
+                               font=dict(size=16, color=_C["text"]), showarrow=False)
+        fig_ign.update_layout(**_BASE, height=280,
+                              title=dict(text="Status de Ignição", font=dict(size=13, color=_C["text"]), x=0),
+                              showlegend=False)
+        st.plotly_chart(fig_ign, use_container_width=True, config=_NO_INTERACT)
 
-    for idx, (_, row) in enumerate(df_sorted.iterrows()):
-        initials = "".join(w[0] for w in row["motorista"].split()[:2]).upper()
-        vel = row.get("velocidade", 0)
-        em_movimento = vel > 3
-        cor_av = _SEQ[idx % len(_SEQ)]
+    # ── Por Contrato: donut ────────────────────────────────────────────────────
+    with col2:
+        cnt_c = df.groupby("contrato").size().reset_index(name="n")
+        fig_cont = go.Figure(go.Pie(
+            labels=cnt_c["contrato"], values=cnt_c["n"],
+            hole=0.62,
+            marker=dict(colors=_C["seq"], line=dict(color="#0E1117", width=2)),
+            textinfo="label+value",
+            textfont=dict(size=11, color=_C["text"]),
+            hovertemplate="<b>%{label}</b>: %{value} veículos<extra></extra>",
+        ))
+        fig_cont.add_annotation(text="<b>Contratos</b>", x=0.5, y=0.5,
+                                font=dict(size=13, color=_C["text"]), showarrow=False)
+        fig_cont.update_layout(**_BASE, height=280,
+                               title=dict(text="Distribuição por Contrato", font=dict(size=13, color=_C["text"]), x=0),
+                               showlegend=False)
+        st.plotly_chart(fig_cont, use_container_width=True, config=_NO_INTERACT)
 
-        # Ignition badge
-        if em_movimento:
-            ign_cls = "mov"
-            ign_txt = f"🟡 {int(vel)} km/h"
-        elif row["ignicao"]:
-            ign_cls = "on"
-            ign_txt = "🟢 Ligado"
-        else:
-            ign_cls = "off"
-            ign_txt = "🔴 Desligado"
+    # ── Cidades e estados ──────────────────────────────────────────────────────
+    col3, col4 = st.columns(2)
 
-        # Metrics
-        odo = row.get("odometro", 0)
-        h_dir = row.get("tempo_dir_h", 0)
-        h_par = row.get("tempo_par_min", 0)
-        horim = row.get("horimetro", 0)
-        bat = row.get("bateria", "")
-        cidade = row.get("cidade", "—")
-        uf = row.get("uf", "")
-        placa = row.get("placa", "")
-        contrato = row.get("contrato", "")
-        dt_pos = row.get("dt_posicao", "—")
+    with col3:
+        cnt_uf = df.groupby("uf").size().reset_index(name="n").sort_values("n")
+        fig_uf = go.Figure(go.Bar(
+            x=cnt_uf["n"], y=cnt_uf["uf"], orientation="h",
+            marker=dict(
+                color=cnt_uf["n"],
+                colorscale=[[0,"#1a3a2a"],[0.5,"#4A8A5A"],[1,"#7BBF6A"]],
+                line_width=0,
+            ),
+            text=cnt_uf["n"], textposition="outside",
+            textfont=dict(size=11, color=_C["text"]),
+            hovertemplate="<b>%{y}</b>: %{x} veículos<extra></extra>",
+        ))
+        fig_uf.update_layout(
+            **_BASE,
+            title=dict(text="Veículos por Estado", font=dict(size=13, color=_C["text"]), x=0),
+            height=280,
+            xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
+            yaxis=dict(gridcolor="rgba(0,0,0,0)"),
+        )
+        st.plotly_chart(fig_uf, use_container_width=True, config=_NO_INTERACT)
 
-        # Try to extract hour from dt_posicao for "ligou às" info
-        hora_lig = ""
-        if dt_pos and dt_pos != "—":
-            try:
-                hora_lig = dt_pos.split(" ")[1] if " " in dt_pos else ""
-            except Exception:
-                pass
+    with col4:
+        cnt_cid = (df.groupby(["cidade","uf"]).size()
+                     .reset_index(name="n")
+                     .sort_values("n", ascending=False)
+                     .head(12))
+        cnt_cid["label"] = cnt_cid["cidade"] + " · " + cnt_cid["uf"]
+        fig_cid = go.Figure(go.Bar(
+            x=cnt_cid["n"], y=cnt_cid["label"].iloc[::-1],
+            orientation="h",
+            marker=dict(
+                color=cnt_cid["n"].iloc[::-1],
+                colorscale=[[0,"#132840"],[0.5,"#1E6B9E"],[1,"#4CC9F0"]],
+                line_width=0,
+            ),
+            text=cnt_cid["n"].iloc[::-1], textposition="outside",
+            textfont=dict(size=10, color=_C["text"]),
+            hovertemplate="<b>%{y}</b>: %{x} veículos<extra></extra>",
+        ))
+        fig_cid.update_layout(
+            **_BASE,
+            title=dict(text="Top 12 Cidades", font=dict(size=13, color=_C["text"]), x=0),
+            height=280,
+            xaxis=dict(gridcolor=_C["grid"], zeroline=False, showline=False),
+            yaxis=dict(gridcolor="rgba(0,0,0,0)", tickfont=dict(size=9)),
+        )
+        st.plotly_chart(fig_cid, use_container_width=True, config=_NO_INTERACT)
 
-        card_html = f"""
-        <div class="st-card">
-          <div class="st-hdr">
-            <div class="st-av" style="background:linear-gradient(135deg,{cor_av},{cor_av}88)">{initials}</div>
-            <div style="flex:1;min-width:0">
-              <div class="st-name">{row['motorista']}</div>
-              <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
-                <span class="st-placa">{placa}</span>
-                <span style="font-size:.58rem;color:#6b7f8d">{contrato}</span>
-              </div>
-            </div>
-            <span class="st-ign {ign_cls}">{ign_txt}</span>
-          </div>
-          <div class="st-grid">
-            <div class="st-met"><div class="v" style="color:#7BBF6A">{h_dir:.1f}h</div>
-              <div class="l">Dirigindo</div></div>
-            <div class="st-met"><div class="v" style="color:#F7B731">{h_par:.0f}min</div>
-              <div class="l">Parado lig.</div></div>
-            <div class="st-met"><div class="v" style="color:#4CC9F0">{odo:,}</div>
-              <div class="l">Hodômetro km</div></div>
-            <div class="st-met"><div class="v" style="color:#A29BFE">{int(vel)}</div>
-              <div class="l">km/h agora</div></div>
-            {"<div class='st-met'><div class='v' style=color:#00CEC9>" + str(horim) + "</div><div class='l'>Horímetro</div></div>" if horim else ""}
-          </div>
-          <div class="st-loc">
-            📍 {cidade}{(' · ' + uf) if uf else ''} · Atualizado: {dt_pos}
-            {(' · Última atividade: ' + hora_lig) if hora_lig else ''}
-          </div>
-        </div>"""
-
-        st.markdown(card_html, unsafe_allow_html=True)
+    # ── Tabela completa ────────────────────────────────────────────────────────
+    _filt_lbl = f" — {_filt}" if _filt else ""
+    st.markdown(f"#### Tabela Completa{_filt_lbl}")
+    df_tab = df_filt[["contrato","motorista","placa","odometro","velocidade",
+                      "tempo_dir_h","cidade","uf","dt_posicao","ignicao"]].copy()
+    df_tab["ignicao"] = df_tab["ignicao"].map({True:"Ligado", False:"Desligado"})
+    df_tab = df_tab.rename(columns={
+        "contrato":"Contrato","motorista":"Motorista","placa":"Placa",
+        "odometro":"Hodômetro km","velocidade":"Vel. km/h",
+        "tempo_dir_h":"Tempo dirigindo (h)","cidade":"Cidade","uf":"UF",
+        "dt_posicao":"Última posição","ignicao":"Ignição",
+    })
+    st.dataframe(df_tab.sort_values("Hodômetro km", ascending=False),
+                 use_container_width=True, hide_index=True)
 
 
 # =============================================================================
@@ -331,7 +346,7 @@ def _render_rota_individual(itens):
         d_fim = st.date_input("Até:", value=it_sel["ultima_data"], key="logos_r_fim")
     with r4:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        ver_rota = st.button("🗺️ Ver Rota", key="logos_btn_rota", use_container_width=True)
+        ver_rota = st.button("Ver Rota", key="logos_btn_rota", use_container_width=True)
 
     if ver_rota:
         with st.spinner("Buscando rota..."):
@@ -349,7 +364,7 @@ def _render_rota_individual(itens):
                 st.session_state["logos_rota_sel"] = sel
                 st.session_state["logos_rota_cor"] = it_sel["cor"]
             except Exception as e:
-                st.error(f"❌ {e}")
+                st.error(f"{e}")
                 return
 
     hist = st.session_state.get("logos_rota", [])
@@ -419,7 +434,6 @@ def _render_analise_periodo(itens):
         paper_bgcolor=_C["bg"], plot_bgcolor=_C["bg"],
         font=dict(family="Inter, sans-serif", color=_C["text"], size=12),
         margin=dict(l=12, r=12, t=36, b=12),
-        dragmode=False,
     )
 
     # Padrão fixo: 01/03/2026 → hoje (conforme solicitado)
@@ -437,7 +451,7 @@ def _render_analise_periodo(itens):
         pd_fim = st.date_input("Data fim:", value=_d_max, key="logos_p_fim")
     with p3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        carregar = st.button("📊 Carregar Período", key="logos_btn_periodo", use_container_width=True)
+        carregar = st.button(" Carregar Período", key="logos_btn_periodo", use_container_width=True)
 
     if carregar:
         resultados = []
@@ -513,7 +527,7 @@ def _render_analise_periodo(itens):
                 st.session_state["logos_periodo_label"]  = f"{pd_ini} a {pd_fim}"
                 st.session_state["logos_hist_sample"] = _raw_sample
             except Exception as e:
-                st.error(f"❌ {e}")
+                st.error(f" {e}")
                 return
 
     res = st.session_state.get("logos_periodo_result", [])
@@ -531,7 +545,7 @@ def _render_analise_periodo(itens):
 
     if total_km == 0 and df_pt.empty:
         st.warning(
-            "⚠️ Nenhum dado encontrado para este período. "
+            "️ Nenhum dado encontrado para este período. "
             "Verifique se as datas selecionadas têm dados disponíveis — "
             f"a última posição conhecida dos veículos é **{_d_max.strftime('%d/%m/%Y')}**."
         )
@@ -541,7 +555,7 @@ def _render_analise_periodo(itens):
     if total_km == 0 and not df_pt.empty:
         total_regs = df_p["registros"].sum()
         st.warning(
-            f"⚠️ {total_regs} registros GPS encontrados, mas km calculado = 0. "
+            f"️ {total_regs} registros GPS encontrados, mas km calculado = 0. "
             f"Isso pode significar que o campo odômetro está zerado na API. "
             f"Usando velocidade × tempo como método alternativo..."
         )
@@ -552,13 +566,13 @@ def _render_analise_periodo(itens):
     if _sample:
         total_km_check = sum(r.get("km_periodo", 0) for r in res)
         if total_km_check == 0:
-            st.error("⚠️ Km = 0 para todos os veículos. Exibindo campos reais da API para diagnóstico:")
-            with st.expander("🔍 Campos retornados pelo historicoposicao (clique para ver)", expanded=True):
+            st.error("️ Km = 0 para todos os veículos. Exibindo campos reais da API para diagnóstico:")
+            with st.expander(" Campos retornados pelo historicoposicao (clique para ver)", expanded=True):
                 st.json({k: v for k, v in _sample.items()})
                 st.caption("Os campos acima são os REAIS retornados. Se 'pos_odometro' não aparecer, "
                             "o nome correto está nessa lista.")
         else:
-            with st.expander("🔍 Debug: campos da API (opcional)"):
+            with st.expander(" Debug: campos da API (opcional)"):
                 st.json({k: v for k, v in _sample.items()})
 
     CUSTO_KM       = 0.62   # R$/km — gasolina ~11 km/L × R$6,82/L (mar/2026)
@@ -583,11 +597,11 @@ def _render_analise_periodo(itens):
 
     _diag_msgs = []
     if not vel_detectada:
-        _diag_msgs.append("⚠️ **Velocidade** não detectada nos dados — eficiência e idle calculados por estimativa")
+        _diag_msgs.append("️ **Velocidade** não detectada nos dados — eficiência e idle calculados por estimativa")
     if not odo_detectado:
-        _diag_msgs.append("⚠️ **Odômetro** zerado — km calculados por velocidade × tempo ou GPS")
+        _diag_msgs.append("️ **Odômetro** zerado — km calculados por velocidade × tempo ou GPS")
     if _diag_msgs:
-        with st.expander("🔍 Diagnóstico de dados da API", expanded=True):
+        with st.expander(" Diagnóstico de dados da API", expanded=True):
             for m in _diag_msgs: st.markdown(m)
             _sample = st.session_state.get("logos_hist_sample")
             if _sample:
@@ -730,10 +744,10 @@ def _render_analise_periodo(itens):
     </div>""", unsafe_allow_html=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 1 — ⚠️ ALERTAS CRÍTICOS (nomes específicos)
+    # SEÇÃO 1 — ️ ALERTAS CRÍTICOS (nomes específicos)
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## ⚠️ Alertas Críticos — Pessoas e Quantidades")
+    st.markdown("## ️ Alertas Críticos — Pessoas e Quantidades")
     st.caption("Baseado em: Geotab Fleet KPIs · Lei 13.103/2015 · CTB Art. 61 · gasolina R$6,82/L (preço médio BR mar/2026)")
 
     if not df_mot.empty:
@@ -746,7 +760,7 @@ def _render_analise_periodo(itens):
             <div style="background:rgba(255,70,70,0.12);border:1px solid #FF6B6B88;border-radius:10px;
                         padding:14px;margin-bottom:12px">
               <div style="color:#FF6B6B;font-weight:700;font-size:1rem">
-                🔴 Motor Ocioso &gt;{LIMIAR_IDLE_AL}% — {len(df_idle_al)} motorista(s)
+                 Motor Ocioso &gt;{LIMIAR_IDLE_AL}% — {len(df_idle_al)} motorista(s)
               </div>
               <div style="color:#C8D8A8;font-size:.75rem">Benchmark Geotab: alvo ≤5%, alarme &gt;10%<br>
               Custo: ~R$5,09/hora parado</div>
@@ -759,7 +773,7 @@ def _render_analise_periodo(itens):
                 st.success("Nenhum motorista acima do limite.")
             df_idle_wa = df_mot[(df_mot["idle_pct"] > LIMIAR_IDLE_OK) & (df_mot["idle_pct"] <= LIMIAR_IDLE_AL)]
             if not df_idle_wa.empty:
-                st.markdown(f"🟡 **Atenção ({LIMIAR_IDLE_OK}–{LIMIAR_IDLE_AL}%):** {', '.join(df_idle_wa['motorista'].tolist())}")
+                st.markdown(f" **Atenção ({LIMIAR_IDLE_OK}–{LIMIAR_IDLE_AL}%):** {', '.join(df_idle_wa['motorista'].tolist())}")
 
         # Alerta 2: Km/dia excessivo
         with a2:
@@ -775,7 +789,7 @@ def _render_analise_periodo(itens):
                 <div style="background:rgba(255,70,70,0.12);border:1px solid #FF6B6B88;border-radius:10px;
                             padding:14px;margin-bottom:12px">
                   <div style="color:#FF6B6B;font-weight:700;font-size:1rem">
-                    🔴 Km/dia &gt;{LIMIAR_KM_AL} — {len(dias_alarme)} ocorrência(s)
+                     Km/dia &gt;{LIMIAR_KM_AL} — {len(dias_alarme)} ocorrência(s)
                   </div>
                   <div style="color:#C8D8A8;font-size:.75rem">Alarme: &gt;500 km/dia ≈ risco Lei 13.103<br>
                   {len(dias_atencao)} ocorrências em zona atenção ({LIMIAR_KM_WA}–{LIMIAR_KM_AL} km)</div>
@@ -795,7 +809,7 @@ def _render_analise_periodo(itens):
                 <div style="background:rgba(255,183,49,0.12);border:1px solid #F7B73188;border-radius:10px;
                             padding:14px;margin-bottom:12px">
                   <div style="color:#F7B731;font-weight:700;font-size:1rem">
-                    🟡 Ativos no Fim de Semana — {len(df_fds_al)} motorista(s)
+                     Ativos no Fim de Semana — {len(df_fds_al)} motorista(s)
                   </div>
                   <div style="color:#C8D8A8;font-size:.75rem">Qualquer trip FDS sem OS aprovada = custo não justificado<br>
                   Benchmark: 0% FDS sem autorização</div>
@@ -806,10 +820,10 @@ def _render_analise_periodo(itens):
                     st.dataframe(tab_fds, use_container_width=True, hide_index=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 2 — 💰 ANÁLISE DE CUSTO POR MOTORISTA
+    # SEÇÃO 2 —  ANÁLISE DE CUSTO POR MOTORISTA
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 💰 Custo Estimado por Motorista")
+    st.markdown("##  Custo Estimado por Motorista")
     st.caption("Combustível: R$0,62/km · Idle: R$6,82/h (1L gasolina/h × R$6,82/L — preço médio BR mar/2026)")
 
     if not df_mot.empty:
@@ -828,7 +842,7 @@ def _render_analise_periodo(itens):
         ))
         fig_custo.update_layout(
             **_BASE,
-            title=dict(text="💰 Custo estimado: combustível + idle por motorista",
+            title=dict(text=" Custo estimado: combustível + idle por motorista",
                        font=dict(size=14, color=_C["text"]), x=0),
             barmode="stack",
             height=max(400, len(df_custo) * 22),
@@ -840,10 +854,10 @@ def _render_analise_periodo(itens):
         st.plotly_chart(fig_custo, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 3 — 📊 SCORE DE EFICIÊNCIA
+    # SEÇÃO 3 —  SCORE DE EFICIÊNCIA
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 📊 Score de Eficiência — km por hora em movimento")
+    st.markdown("##  Score de Eficiência — km por hora em movimento")
     st.caption("km / horas com vel >3 km/h (cap 120 km/h). Baixo = viagens curtas · Alto = rodovia contínua.")
 
     if not df_mot.empty:
@@ -868,7 +882,7 @@ def _render_analise_periodo(itens):
                               annotation_font_color=_C["acc1"])
             fig_eff.update_layout(
                 **_BASE,
-                title=dict(text="⚡ Eficiência: km por hora em movimento",
+                title=dict(text=" Eficiência: km por hora em movimento",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=max(400, len(df_eff) * 22),
                 xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -906,7 +920,7 @@ def _render_analise_periodo(itens):
                     ))
             fig_sc.update_layout(
                 **_BASE,
-                title=dict(text="🎯 Km rodado vs Horas idle (tamanho = km total)",
+                title=dict(text=" Km rodado vs Horas idle (tamanho = km total)",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=420,
                 xaxis=dict(title="Horas idle", gridcolor=_C["grid"], zeroline=False),
@@ -945,7 +959,7 @@ def _render_analise_periodo(itens):
                                    annotation_text="Alarme 10%", annotation_font_color=_C["acc2"])
             fig_idle_pct.update_layout(
                 **_BASE,
-                title=dict(text="🔴 % de Idle por Motorista (verde ≤5% · amarelo 5–10% · vermelho >10%)",
+                title=dict(text=" % de Idle por Motorista (verde ≤5% · amarelo 5–10% · vermelho >10%)",
                            font=dict(size=12, color=_C["text"]), x=0),
                 height=max(400, len(df_idle_r) * 22),
                 xaxis=dict(ticksuffix="%", gridcolor=_C["grid"], zeroline=False),
@@ -978,11 +992,11 @@ def _render_analise_periodo(itens):
             st.plotly_chart(fig_idle_h, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 4.5 — 🔬 COMPORTAMENTO DETALHADO: VEL MAX · IDLE · LOCAL
+    # SEÇÃO 4.5 —  COMPORTAMENTO DETALHADO: VEL MAX · IDLE · LOCAL
     # ═══════════════════════════════════════════════════════════════════════════
     if not df_mot.empty:
         st.markdown("---")
-        st.markdown("## 🔬 Comportamento Detalhado — Velocidade · Idle · Onde Ficou Parado")
+        st.markdown("##  Comportamento Detalhado — Velocidade · Idle · Onde Ficou Parado")
         st.caption("Velocidade máxima atingida · horas ligado parado · local de maior permanência")
 
         # ── Gráfico: velocidade máxima por motorista ──────────────────────────
@@ -1010,7 +1024,7 @@ def _render_analise_periodo(itens):
                                annotation_position="top right")
             fig_vmax.update_layout(
                 **_BASE,
-                title=dict(text="🚀 Velocidade Máxima Atingida por Motorista",
+                title=dict(text=" Velocidade Máxima Atingida por Motorista",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=max(400, len(df_vel_max) * 24),
                 xaxis=dict(ticksuffix=" km/h", gridcolor=_C["grid"], zeroline=False),
@@ -1048,7 +1062,7 @@ def _render_analise_periodo(itens):
             st.plotly_chart(fig_idle_abs, use_container_width=True, config=_NO_INTERACT)
 
         # ── Tabela: local onde mais ficou parado + vel_max + idle ─────────────
-        st.markdown("##### 📋 Onde Cada Motorista Mais Ficou Parado")
+        st.markdown("#####  Onde Cada Motorista Mais Ficou Parado")
         df_local = df_mot[["motorista","vel_max","h_idle","idle_pct","idle_local","idle_local_min"]].copy()
         df_local["h_idle_str"]     = df_local["h_idle"].apply(lambda h: f"{h:.1f}h")
         df_local["idle_pct_str"]   = df_local["idle_pct"].apply(lambda p: f"{p:.1f}%")
@@ -1063,13 +1077,13 @@ def _render_analise_periodo(itens):
         st.dataframe(df_display_local, use_container_width=True, hide_index=True)
 
         # ── Destaque: top 3 maiores velocidades ───────────────────────────────
-        st.markdown("##### 🏎️ Top 5 — Maiores Velocidades Registradas")
+        st.markdown("##### ️ Top 5 — Maiores Velocidades Registradas")
         top_vel = df_mot.sort_values("vel_max", ascending=False).head(5)
         cols_tv = st.columns(5)
         for i, (_, row) in enumerate(top_vel.iterrows()):
             with cols_tv[i]:
                 cor = _C["acc2"] if row["vel_max"] > 110 else (_C["acc1"] if row["vel_max"] > 90 else _C["eco135"])
-                alerta = "🚨" if row["vel_max"] > 110 else ("⚠️" if row["vel_max"] > 90 else "✅")
+                alerta = "" if row["vel_max"] > 110 else ("️" if row["vel_max"] > 90 else "")
                 st.markdown(f"""
                 <div style="background:rgba(0,0,0,0.2);border:1px solid {cor}55;
                             border-radius:10px;padding:12px;text-align:center">
@@ -1098,10 +1112,10 @@ def _render_analise_periodo(itens):
                 </div>""", unsafe_allow_html=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 5 — 🏆 RANKING KM + MÉDIA KM/DIA
+    # SEÇÃO 5 —  RANKING KM + MÉDIA KM/DIA
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 🏆 Quem Mais Rodou no Período")
+    st.markdown("##  Quem Mais Rodou no Período")
 
     col_k1, col_k2 = st.columns(2)
 
@@ -1171,7 +1185,7 @@ def _render_analise_periodo(itens):
                               annotation_font_color=_C["acc2"])
             fig_med.update_layout(
                 **_BASE,
-                title=dict(text="🚗 Média km/dia (verde OK · amarelo >300 · vermelho >500)",
+                title=dict(text=" Média km/dia (verde OK · amarelo >300 · vermelho >500)",
                            font=dict(size=12, color=_C["text"]), x=0),
                 height=max(400, len(df_media) * 22),
                 xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1203,7 +1217,7 @@ def _render_analise_periodo(itens):
         ))
         fig_kmd.update_layout(
             **_BASE,
-            title=dict(text="📈 Km percorrido por dia — frota total",
+            title=dict(text=" Km percorrido por dia — frota total",
                        font=dict(size=13, color=_C["text"]), x=0),
             height=280,
             xaxis=dict(gridcolor=_C["grid"], zeroline=False, tickangle=-35, tickfont=dict(size=9)),
@@ -1213,10 +1227,10 @@ def _render_analise_periodo(itens):
 
     # ═══════════════════════════════════════════════════════════════════════════
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 6 — 🚨 FIM DE SEMANA — QUEM TRABALHOU + KM POR ODÔMETRO
+    # SEÇÃO 6 —  FIM DE SEMANA — QUEM TRABALHOU + KM POR ODÔMETRO
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 🚨 Fim de Semana — Quem Trabalhou e Quantos Km")
+    st.markdown("##  Fim de Semana — Quem Trabalhou e Quantos Km")
     st.caption(
         "Km calculados por **odômetro**: max − min por motorista por dia · "
         "fallback: velocidade × tempo quando odômetro=0"
@@ -1319,7 +1333,7 @@ def _render_analise_periodo(itens):
                     ))
                     fig_km_fds.update_layout(
                         **_BASE,
-                        title=dict(text="🚗 Km rodados no Fim de Semana (por odômetro)",
+                        title=dict(text=" Km rodados no Fim de Semana (por odômetro)",
                                    font=dict(size=13, color=_C["text"]), x=0),
                         height=max(380, len(df_km_plot) * 26),
                         xaxis=dict(ticksuffix=" km", gridcolor=_C["grid"], zeroline=False),
@@ -1347,7 +1361,7 @@ def _render_analise_periodo(itens):
                 ))
                 fig_sd.update_layout(
                     **_BASE, barmode="stack",
-                    title=dict(text="📅 Sábado vs Domingo — registros por motorista",
+                    title=dict(text=" Sábado vs Domingo — registros por motorista",
                                font=dict(size=13, color=_C["text"]), x=0),
                     height=max(380, len(sab_dom) * 26),
                     xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1375,7 +1389,7 @@ def _render_analise_periodo(itens):
             ))
             fig_dia.update_layout(
                 **_BASE,
-                title=dict(text=f"📅 Registros por dia — {fds_pct_tot}% são Sáb/Dom",
+                title=dict(text=f" Registros por dia — {fds_pct_tot}% são Sáb/Dom",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=280,
                 xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1385,7 +1399,7 @@ def _render_analise_periodo(itens):
             st.plotly_chart(fig_dia, use_container_width=True, config=_NO_INTERACT)
 
             # Tabela detalhada FDS
-            st.markdown("##### 📋 Tabela completa — Fim de Semana")
+            st.markdown("#####  Tabela completa — Fim de Semana")
             tab_fds_full = df_fds_summary.copy()
             tab_fds_full["km_fds"] = tab_fds_full["km_fds"].round(0).astype(int)
             tab_fds_full["pct_fds"] = tab_fds_full["pct_fds"].astype(str) + "%"
@@ -1399,10 +1413,10 @@ def _render_analise_periodo(itens):
             st.info("Nenhum registro de fim de semana no período selecionado.")
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 7 — 🕐 HORÁRIOS + HEATMAPS
+    # SEÇÃO 7 —  HORÁRIOS + HEATMAPS
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 🕐 Quando Trabalham — Horários e Padrões")
+    st.markdown("##  Quando Trabalham — Horários e Padrões")
 
     if not df_pt.empty and "hora" in df_pt.columns:
         col_h1, col_h2 = st.columns(2)
@@ -1420,7 +1434,7 @@ def _render_analise_periodo(itens):
             ))
             fig_hora.update_layout(
                 **_BASE,
-                title=dict(text=f"🕐 Horários — pico às {pico}h",
+                title=dict(text=f" Horários — pico às {pico}h",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=280,
                 xaxis=dict(tickmode="array", tickvals=list(range(0,24,2)),
@@ -1449,7 +1463,7 @@ def _render_analise_periodo(itens):
             ))
             fig_hm.update_layout(
                 **_BASE,
-                title=dict(text="🌡️ Heatmap: hora × dia (intensidade = atividade)",
+                title=dict(text="️ Heatmap: hora × dia (intensidade = atividade)",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=280,
                 xaxis=dict(tickfont=dict(size=9)),
@@ -1478,7 +1492,7 @@ def _render_analise_periodo(itens):
         ))
         fig_hm2.update_layout(
             **_BASE,
-            title=dict(text="👤 Quando cada motorista trabalha (top 20)",
+            title=dict(text=" Quando cada motorista trabalha (top 20)",
                        font=dict(size=13, color=_C["text"]), x=0),
             height=max(380, len(top_mots) * 22),
             xaxis=dict(tickfont=dict(size=9)),
@@ -1488,178 +1502,10 @@ def _render_analise_periodo(itens):
         st.plotly_chart(fig_hm2, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 7B — 🚗 HORÁRIO DE PARTIDA (Ignição + Movimento)
+    # SEÇÃO 8 —  ONDE ANDAM
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 🚗 Horário de Partida — Quando Ligam e Começam a Andar")
-    st.caption(
-        "Análise do primeiro registro diário de cada motorista: "
-        "hora da primeira ignição (vel ≥ 0) e hora do primeiro movimento (vel > 3 km/h)."
-    )
-
-    if not df_pt.empty and dt_detectado and vel_detectada:
-        df_start = df_pt.copy()
-        df_start["dt_parsed"] = pd.to_datetime(df_start["dt"])
-        df_start["hora_decimal"] = (df_start["dt_parsed"].dt.hour
-                                     + df_start["dt_parsed"].dt.minute / 60)
-
-        # Primeira atividade do dia (qualquer registro = carro ligou)
-        first_on = (df_start.sort_values("dt_parsed")
-                            .groupby(["motorista", "data"])
-                            .first()
-                            .reset_index())
-        first_on["hora_lig"] = first_on["hora_decimal"]
-
-        # Primeiro movimento do dia (vel > 3)
-        df_mov = df_start[df_start["velocidade"] > 3]
-        first_mov = (df_mov.sort_values("dt_parsed")
-                           .groupby(["motorista", "data"])
-                           .first()
-                           .reset_index())
-        first_mov["hora_mov"] = first_mov["hora_decimal"]
-
-        col_s1, col_s2 = st.columns(2)
-
-        with col_s1:
-            # Distribution of first ignition times (fleet-wide)
-            fig_lig = go.Figure()
-            if not first_on.empty:
-                bins_lig = first_on["hora_lig"].dropna()
-                fig_lig.add_trace(go.Histogram(
-                    x=bins_lig,
-                    nbinsx=24,
-                    marker_color="#7BBF6A",
-                    marker_line_width=0,
-                    opacity=0.85,
-                    hovertemplate="<b>%{x:.0f}h</b>: %{y} ocorrências<extra></extra>",
-                ))
-                media_lig = bins_lig.mean()
-                fig_lig.add_vline(x=media_lig, line_dash="dash", line_color="#F7B731",
-                                  annotation_text=f"Média: {int(media_lig)}:{int((media_lig%1)*60):02d}",
-                                  annotation_font_color="#F7B731",
-                                  annotation_font_size=11)
-            fig_lig.update_layout(
-                **_BASE,
-                title=dict(text="🔑 Primeira Ignição do Dia (frota)",
-                           font=dict(size=13, color=_C["text"]), x=0),
-                height=300,
-                xaxis=dict(tickmode="array", tickvals=list(range(0,24,2)),
-                           ticktext=[f"{h}h" for h in range(0,24,2)],
-                           gridcolor=_C["grid"], zeroline=False, range=[4,22]),
-                yaxis=dict(title="Dias", gridcolor=_C["grid"], zeroline=False),
-                bargap=0.08,
-            )
-            st.plotly_chart(fig_lig, use_container_width=True, config=_NO_INTERACT)
-
-        with col_s2:
-            # Distribution of first movement times
-            fig_mov = go.Figure()
-            if not first_mov.empty:
-                bins_mov = first_mov["hora_mov"].dropna()
-                fig_mov.add_trace(go.Histogram(
-                    x=bins_mov,
-                    nbinsx=24,
-                    marker_color="#4CC9F0",
-                    marker_line_width=0,
-                    opacity=0.85,
-                    hovertemplate="<b>%{x:.0f}h</b>: %{y} ocorrências<extra></extra>",
-                ))
-                media_mov = bins_mov.mean()
-                fig_mov.add_vline(x=media_mov, line_dash="dash", line_color="#F7B731",
-                                  annotation_text=f"Média: {int(media_mov)}:{int((media_mov%1)*60):02d}",
-                                  annotation_font_color="#F7B731",
-                                  annotation_font_size=11)
-            fig_mov.update_layout(
-                **_BASE,
-                title=dict(text="🏎️ Primeiro Movimento do Dia (vel > 3 km/h)",
-                           font=dict(size=13, color=_C["text"]), x=0),
-                height=300,
-                xaxis=dict(tickmode="array", tickvals=list(range(0,24,2)),
-                           ticktext=[f"{h}h" for h in range(0,24,2)],
-                           gridcolor=_C["grid"], zeroline=False, range=[4,22]),
-                yaxis=dict(title="Dias", gridcolor=_C["grid"], zeroline=False),
-                bargap=0.08,
-            )
-            st.plotly_chart(fig_mov, use_container_width=True, config=_NO_INTERACT)
-
-        # ── Individual start time cards (scroll infinito) ──────────────────────
-        st.markdown("### 👤 Padrão Individual de Partida")
-        st.caption("Horário médio de ignição e movimento por motorista, com consistência (desvio-padrão).")
-
-        _SEQ_S = ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"]
-
-        # Aggregate per driver
-        agg_lig = (first_on.groupby("motorista")["hora_lig"]
-                           .agg(["mean","std","count"])
-                           .rename(columns={"mean":"media_lig","std":"std_lig","count":"dias_lig"}))
-        agg_mov = (first_mov.groupby("motorista")["hora_mov"]
-                            .agg(["mean","std","count"])
-                            .rename(columns={"mean":"media_mov","std":"std_mov","count":"dias_mov"}))
-        agg_start = agg_lig.join(agg_mov, how="outer").fillna(0).sort_values("media_lig")
-
-        for idx, (mot, row_s) in enumerate(agg_start.iterrows()):
-            initials = "".join(w[0] for w in mot.split()[:2]).upper()
-            cor_av = _SEQ_S[idx % len(_SEQ_S)]
-
-            m_lig = row_s["media_lig"]
-            s_lig = row_s["std_lig"]
-            d_lig = int(row_s["dias_lig"])
-            m_mov = row_s["media_mov"]
-            s_mov = row_s["std_mov"]
-            d_mov = int(row_s["dias_mov"])
-
-            h_lig = f"{int(m_lig)}:{int((m_lig%1)*60):02d}" if d_lig > 0 else "—"
-            h_mov = f"{int(m_mov)}:{int((m_mov%1)*60):02d}" if d_mov > 0 else "—"
-
-            # Consistency label
-            if s_lig <= 0.5:
-                consist = "Muito consistente"
-                consist_cor = "#7BBF6A"
-            elif s_lig <= 1.0:
-                consist = "Consistente"
-                consist_cor = "#4CC9F0"
-            elif s_lig <= 2.0:
-                consist = "Variável"
-                consist_cor = "#F7B731"
-            else:
-                consist = "Irregular"
-                consist_cor = "#FF6B6B"
-
-            # Delta between ignition and movement
-            delta_min = int((m_mov - m_lig) * 60) if d_mov > 0 and d_lig > 0 else 0
-            delta_txt = f"{delta_min} min" if delta_min > 0 else "—"
-
-            card = f"""
-            <div class="st-card">
-              <div class="st-hdr">
-                <div class="st-av" style="background:linear-gradient(135deg,{cor_av},{cor_av}88)">{initials}</div>
-                <div style="flex:1;min-width:0">
-                  <div class="st-name">{mot}</div>
-                  <span style="font-size:.58rem;color:{consist_cor};background:rgba(255,255,255,.05);
-                        padding:2px 8px;border-radius:8px">{consist}</span>
-                </div>
-              </div>
-              <div class="st-grid">
-                <div class="st-met"><div class="v" style="color:#7BBF6A">{h_lig}</div>
-                  <div class="l">Liga carro</div></div>
-                <div class="st-met"><div class="v" style="color:#4CC9F0">{h_mov}</div>
-                  <div class="l">Começa andar</div></div>
-                <div class="st-met"><div class="v" style="color:#F7B731">{delta_txt}</div>
-                  <div class="l">Aquecimento</div></div>
-                <div class="st-met"><div class="v" style="color:#A29BFE">{d_lig}</div>
-                  <div class="l">Dias ativos</div></div>
-              </div>
-            </div>"""
-            st.markdown(card, unsafe_allow_html=True)
-
-    else:
-        st.info("Carregue dados do período acima para ver a análise de horários de partida.")
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 8 — 📍 ONDE ANDAM
-    # ═══════════════════════════════════════════════════════════════════════════
-    st.markdown("---")
-    st.markdown("## 📍 Onde Andam — Cidades e Regiões")
+    st.markdown("##  Onde Andam — Cidades e Regiões")
 
     if not df_pt.empty and "cidade" in df_pt.columns:
         col_c1, col_c2 = st.columns(2)
@@ -1686,7 +1532,7 @@ def _render_analise_periodo(itens):
                 ))
                 fig_cid.update_layout(
                     **_BASE,
-                    title=dict(text="📍 Top 15 cidades mais frequentes",
+                    title=dict(text=" Top 15 cidades mais frequentes",
                                font=dict(size=13, color=_C["text"]), x=0),
                     height=380,
                     xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1712,7 +1558,7 @@ def _render_analise_periodo(itens):
                 ))
                 fig_uf.update_layout(
                     **_BASE,
-                    title=dict(text="🗺️ Distribuição por Estado (UF)",
+                    title=dict(text="️ Distribuição por Estado (UF)",
                                font=dict(size=13, color=_C["text"]), x=0),
                     height=300,
                     xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1721,10 +1567,10 @@ def _render_analise_periodo(itens):
                 st.plotly_chart(fig_uf, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 9 — 🛣️ TABELAS COMPLETAS
+    # SEÇÃO 9 — ️ TABELAS COMPLETAS
     # ═══════════════════════════════════════════════════════════════════════════
     st.markdown("---")
-    st.markdown("## 📋 Tabelas Detalhadas")
+    st.markdown("##  Tabelas Detalhadas")
 
     tab_t1, tab_t2, tab_t3 = st.tabs(["Resumo por Motorista", "Rotas", "Dias com Excesso de Km"])
 
@@ -1766,7 +1612,7 @@ def _render_analise_periodo(itens):
                 df_dv["km_dia"] = df_dv["km_dia"].clip(lower=0, upper=1500)
             df_exc = df_dv[df_dv["km_dia"] > LIMIAR_KM_WA].sort_values("km_dia", ascending=False).copy()
             df_exc["status"] = df_exc["km_dia"].apply(
-                lambda x: "🔴 ALARME >500km" if x > LIMIAR_KM_AL else "🟡 ATENÇÃO >300km"
+                lambda x: " ALARME >500km" if x > LIMIAR_KM_AL else " ATENÇÃO >300km"
             )
             df_exc = df_exc[["motorista","data","km_dia","status"]].rename(columns={
                 "motorista":"Motorista","data":"Data","km_dia":"Km no dia","status":"Status",
@@ -1776,11 +1622,11 @@ def _render_analise_periodo(itens):
             st.info("Dados diários insuficientes.")
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 10 — 🚀 VELOCIDADE: quem dirige rápido demais
+    # SEÇÃO 10 —  VELOCIDADE: quem dirige rápido demais
     # ═══════════════════════════════════════════════════════════════════════════
     if not df_pt.empty and "velocidade" in df_pt.columns:
         st.markdown("---")
-        st.markdown("## 🚀 Velocidade — Quem Corre Mais")
+        st.markdown("##  Velocidade — Quem Corre Mais")
         st.caption("CTB Art. 61: limite 110 km/h pista dupla · 100 km/h pista simples · >120 km/h infração grave/gravíssima")
 
         df_vel = df_pt[df_pt["velocidade"] > 0]
@@ -1842,7 +1688,7 @@ def _render_analise_periodo(itens):
                     ))
                     fig_exc.update_layout(
                         **_BASE,
-                        title=dict(text=f"🚨 Excesso >110 km/h — {len(df_exc_vel)} registros total",
+                        title=dict(text=f" Excesso >110 km/h — {len(df_exc_vel)} registros total",
                                    font=dict(size=13, color=_C["text"]), x=0),
                         height=max(320, len(exc_cnt) * 24),
                         xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1866,7 +1712,7 @@ def _render_analise_periodo(itens):
                                    annotation_text="Econômico 80", annotation_font_color=_C["eco135"])
             fig_hist_vel.update_layout(
                 **_BASE,
-                title=dict(text="📊 Distribuição de velocidade (toda frota)",
+                title=dict(text=" Distribuição de velocidade (toda frota)",
                            font=dict(size=13, color=_C["text"]), x=0),
                 height=260,
                 xaxis=dict(title="km/h", gridcolor=_C["grid"], zeroline=False),
@@ -1875,13 +1721,13 @@ def _render_analise_periodo(itens):
             st.plotly_chart(fig_hist_vel, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 11 — 🌙 FORA DO HORÁRIO COMERCIAL (22h–6h)
+    # SEÇÃO 11 —  FORA DO HORÁRIO COMERCIAL (22h–6h)
     # ═══════════════════════════════════════════════════════════════════════════
     if not df_pt.empty and "hora" in df_pt.columns:
         df_noturno = df_pt[(df_pt["hora"] >= 22) | (df_pt["hora"] < 6)]
         if not df_noturno.empty:
             st.markdown("---")
-            st.markdown("## 🌙 Atividade Noturna (22h–6h)")
+            st.markdown("##  Atividade Noturna (22h–6h)")
             st.caption("Registros com ignição fora do horário comercial — possível uso não autorizado")
 
             col_n1, col_n2 = st.columns(2)
@@ -1910,7 +1756,7 @@ def _render_analise_periodo(itens):
                 ))
                 fig_not.update_layout(
                     **_BASE,
-                    title=dict(text=f"🌙 Ranking atividade noturna — {len(df_noturno)} reg total",
+                    title=dict(text=f" Ranking atividade noturna — {len(df_noturno)} reg total",
                                font=dict(size=13, color=_C["text"]), x=0),
                     height=max(320, len(not_mot) * 22),
                     xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1931,7 +1777,7 @@ def _render_analise_periodo(itens):
                 ))
                 fig_hnot.update_layout(
                     **_BASE,
-                    title=dict(text="🕐 Distribuição horária noturna",
+                    title=dict(text=" Distribuição horária noturna",
                                font=dict(size=13, color=_C["text"]), x=0),
                     height=260,
                     xaxis=dict(gridcolor=_C["grid"], zeroline=False),
@@ -1941,13 +1787,13 @@ def _render_analise_periodo(itens):
                 st.plotly_chart(fig_hnot, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 12 — 🗺️ IDLE POR CIDADE: onde ficam parados com motor ligado
+    # SEÇÃO 12 — ️ IDLE POR CIDADE: onde ficam parados com motor ligado
     # ═══════════════════════════════════════════════════════════════════════════
     if not df_pt.empty and "idle" in df_pt.columns and "cidade" in df_pt.columns:
         df_idle_cid = df_pt[(df_pt["idle"] == True) & (df_pt["cidade"] != "")]
         if not df_idle_cid.empty:
             st.markdown("---")
-            st.markdown("## 🗺️ Onde Ficam Parados com Motor Ligado")
+            st.markdown("## ️ Onde Ficam Parados com Motor Ligado")
             st.caption("Pontos GPS com ignição ON + velocidade ≤3 km/h — cada ponto ≈3 min de idle")
 
             col_ic1, col_ic2 = st.columns(2)
@@ -1977,7 +1823,7 @@ def _render_analise_periodo(itens):
                 ))
                 fig_icid.update_layout(
                     **_BASE,
-                    title=dict(text="🏙️ Top 15 cidades com mais idle (horas · custo est.)",
+                    title=dict(text="️ Top 15 cidades com mais idle (horas · custo est.)",
                                font=dict(size=12, color=_C["text"]), x=0),
                     height=380,
                     xaxis=dict(ticksuffix="h", gridcolor=_C["grid"], zeroline=False),
@@ -2009,7 +1855,7 @@ def _render_analise_periodo(itens):
                 ))
                 fig_imc.update_layout(
                     **_BASE,
-                    title=dict(text="👤🏙️ Motorista × Cidade com mais idle (Top 20)",
+                    title=dict(text="️ Motorista × Cidade com mais idle (Top 20)",
                                font=dict(size=12, color=_C["text"]), x=0),
                     height=max(380, len(idle_mc) * 22),
                     xaxis=dict(ticksuffix="h", gridcolor=_C["grid"], zeroline=False),
@@ -2018,11 +1864,11 @@ def _render_analise_periodo(itens):
                 st.plotly_chart(fig_imc, use_container_width=True, config=_NO_INTERACT)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SEÇÃO 13 — 🎯 RANKING FINAL: TOP 10 MOTORISTAS PROBLEMÁTICOS
+    # SEÇÃO 13 —  RANKING FINAL: TOP 10 MOTORISTAS PROBLEMÁTICOS
     # ═══════════════════════════════════════════════════════════════════════════
     if not df_mot.empty:
         st.markdown("---")
-        st.markdown("## 🎯 Ranking Final — Motoristas que Precisam de Atenção")
+        st.markdown("##  Ranking Final — Motoristas que Precisam de Atenção")
         st.caption(
             "Score de risco composto: (idle% × 3) + (fds% × 2) + (1 se km/dia > 300) + (excesso velocidade). "
             "Quanto maior o score, mais urgente a intervenção."
@@ -2101,7 +1947,7 @@ def _render_analise_periodo(itens):
         ))
         fig_risk.update_layout(
             **_BASE,
-            title=dict(text="🎯 Top 10 — Score de Risco Composto",
+            title=dict(text=" Top 10 — Score de Risco Composto",
                        font=dict(size=14, color=_C["text"]), x=0),
             height=max(350, len(top10) * 30),
             xaxis=dict(title="Score de risco", gridcolor=_C["grid"], zeroline=False),
@@ -2135,17 +1981,17 @@ def _render_analise_periodo(itens):
             with cols_w[i]:
                 problemas = []
                 if row["idle_pct"] > LIMIAR_IDLE_AL:
-                    problemas.append(f"🔴 Idle {row['idle_pct']:.0f}%")
+                    problemas.append(f" Idle {row['idle_pct']:.0f}%")
                 if row["fds_pct"] > 0:
-                    problemas.append(f"📅 FDS {row['fds_pct']:.0f}%")
+                    problemas.append(f" FDS {row['fds_pct']:.0f}%")
                 if row.get("km_dia_avg", 0) > LIMIAR_KM_WA:
-                    problemas.append(f"🚗 {row['km_dia_avg']:.0f} km/dia")
+                    problemas.append(f" {row['km_dia_avg']:.0f} km/dia")
                 if row.get("n_excesso_vel", 0) > 0:
-                    problemas.append(f"🚀 {int(row['n_excesso_vel'])}× >110km/h")
+                    problemas.append(f" {int(row['n_excesso_vel'])}× >110km/h")
                 if row.get("n_noturno", 0) > 0:
-                    problemas.append(f"🌙 {int(row['n_noturno'])} reg noturno")
+                    problemas.append(f" {int(row['n_noturno'])} reg noturno")
                 prob_html = "<br>".join(problemas) if problemas else "Sem infrações graves"
-                medal = ["🥇","🥈","🥉"][i]
+                medal = ["","",""][i]
                 st.markdown(f"""
                 <div style="background:rgba(255,70,70,0.10);border:1px solid #FF6B6B55;
                             border-radius:10px;padding:14px;min-height:180px">
@@ -2155,6 +2001,222 @@ def _render_analise_periodo(itens):
                     Score: {row['risk_score']:.0f} · Custo: R$ {row['custo_total']:,.0f}</div>
                   <div style="font-size:.8rem;color:#C8D8A8;line-height:1.5">{prob_html}</div>
                 </div>""", unsafe_allow_html=True)
+
+
+# =============================================================================
+# RENDER: FROTA NO DIA — todas as rotas + paradas
+# =============================================================================
+
+_CORES_FROTA = [
+    "#4CC9F0","#7BBF6A","#F7B731","#FF6B6B","#A29BFE",
+    "#FD79A8","#00CEC9","#FDCB6E","#55EFC4","#74B9FF",
+    "#E17055","#81ECEC","#B2BEC3","#6C5CE7","#FAB1A0",
+]
+
+
+def _detectar_paradas(pontos, vel_thresh=3, min_min=4):
+    """Detecta paradas: blocos de pontos com vel <= thresh por >= min_min minutos."""
+    paradas = []
+    i = 0
+    while i < len(pontos):
+        vel = pontos[i].get("velocidade", 0) or 0
+        if vel <= vel_thresh:
+            bloco = [pontos[i]]
+            j = i + 1
+            while j < len(pontos) and (pontos[j].get("velocidade", 0) or 0) <= vel_thresh:
+                bloco.append(pontos[j])
+                j += 1
+            # Calcula duração
+            try:
+                t0 = datetime.fromisoformat(bloco[0].get("dt","").replace("Z",""))
+                t1 = datetime.fromisoformat(bloco[-1].get("dt","").replace("Z",""))
+                dur_min = max((t1 - t0).total_seconds() / 60, len(bloco) * 3)
+            except Exception:
+                dur_min = len(bloco) * 3
+            if dur_min >= min_min:
+                lt = bloco[0].get("pos_coordenada_latitude") or bloco[0].get("lat")
+                ln = bloco[0].get("pos_coordenada_longitude") or bloco[0].get("lon")
+                try:
+                    lt, ln = float(lt), float(ln)
+                    h_ini = bloco[0].get("dt","")[-8:-3] if bloco[0].get("dt","") else "—"
+                    h_fim = bloco[-1].get("dt","")[-8:-3] if bloco[-1].get("dt","") else "—"
+                except Exception:
+                    lt = ln = None
+                cidade = bloco[0].get("pos_end_cidade","") or bloco[0].get("cidade","")
+                if lt and ln:
+                    paradas.append({
+                        "lat": lt, "lon": ln,
+                        "dur_min": round(dur_min),
+                        "cidade": cidade or "—",
+                        "h_ini": h_ini, "h_fim": h_fim,
+                    })
+            i = j
+        else:
+            i += 1
+    return paradas
+
+
+def _render_frota_dia(itens):
+    """Seleciona uma data e exibe rota de TODOS os veículos + paradas em scroll infinito."""
+    st.markdown("### Frota no Dia — Todas as Rotas")
+
+    c_date, c_btn, _ = st.columns([2, 1, 3])
+    with c_date:
+        dia_sel = st.date_input("Data:", value=date.today(), key="fd_data")
+    with c_btn:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        carregar = st.button("Carregar Frota", key="fd_btn", use_container_width=True)
+
+    if carregar:
+        resultados = {}
+        prog = st.progress(0, text="Buscando rotas...")
+        try:
+            sess, _ = _logos_login()
+            for idx, it in enumerate(itens):
+                prog.progress((idx + 1) / len(itens),
+                              text=f"Buscando {it['motorista']} ({idx+1}/{len(itens)})...")
+                try:
+                    hist = _logos_get_rota(
+                        sess, it["idvei"],
+                        dia_sel.strftime("%Y-%m-%d 00:00"),
+                        dia_sel.strftime("%Y-%m-%d 23:59"),
+                    )
+                except Exception:
+                    hist = []
+                if hist:
+                    resultados[it["motorista"]] = {
+                        "hist": hist, "cor": it["cor"],
+                        "placa": it["placa"], "contrato": it.get("contrato",""),
+                    }
+        except Exception as e:
+            st.error(f"Erro ao conectar: {e}")
+            return
+        finally:
+            prog.empty()
+        st.session_state["fd_resultados"] = resultados
+        st.session_state["fd_data_carregada"] = str(dia_sel)
+
+    resultados = st.session_state.get("fd_resultados", {})
+    if not resultados:
+        st.info("Selecione a data e clique em Carregar Frota.")
+        return
+
+    data_lbl = st.session_state.get("fd_data_carregada", str(dia_sel))
+    st.caption(f"Dados de {data_lbl} — {len(resultados)} veiculos com historico")
+
+    # ── Mapa unificado ────────────────────────────────────────────────────────
+    mapa = folium.Map(location=[-18.5, -47.5], zoom_start=6,
+                      tiles="CartoDB dark_matter", prefer_canvas=True)
+    all_lats, all_lons = [], []
+
+    for idx, (motorista, dados) in enumerate(resultados.items()):
+        cor = dados["cor"] if dados["cor"] else _CORES_FROTA[idx % len(_CORES_FROTA)]
+        coords = []
+        for p in dados["hist"]:
+            lt = p.get("pos_coordenada_latitude") or p.get("lat")
+            ln = p.get("pos_coordenada_longitude") or p.get("lon")
+            try:
+                lt, ln = float(lt), float(ln)
+                coords.append([lt, ln])
+                all_lats.append(lt); all_lons.append(ln)
+            except Exception:
+                pass
+
+        if len(coords) >= 2:
+            km = _km_from_hist(dados["hist"])
+            folium.PolyLine(
+                coords, color=cor, weight=3, opacity=0.85,
+                tooltip=folium.Tooltip(
+                    f"<b style='color:{cor}'>{motorista}</b><br>"
+                    f"{dados['placa']} — {km:,} km",
+                    style="background:#0D1B2A;color:#E8EFD8;border:1px solid #566E3D;"
+                          "font-family:Inter;font-size:12px;border-radius:6px;",
+                ),
+            ).add_to(mapa)
+            # Marcador inicio (verde pequeno)
+            folium.CircleMarker(
+                coords[0], radius=5, color="#00FF88", fill=True,
+                fill_color="#00FF88", fill_opacity=0.9,
+                tooltip=f"Inicio: {motorista}",
+            ).add_to(mapa)
+
+        # Paradas: circulos azuis com hover
+        paradas = _detectar_paradas(dados["hist"])
+        for par in paradas:
+            dur_txt = (f"{par['dur_min']//60}h {par['dur_min']%60}min"
+                       if par["dur_min"] >= 60 else f"{par['dur_min']} min")
+            folium.CircleMarker(
+                [par["lat"], par["lon"]],
+                radius=7 + min(par["dur_min"] // 20, 10),
+                color="#4CC9F0", fill=True,
+                fill_color="#4CC9F0", fill_opacity=0.55,
+                weight=2,
+                tooltip=folium.Tooltip(
+                    f"<b>{motorista}</b><br>"
+                    f"Parada: {dur_txt}<br>"
+                    f"{par['h_ini']} - {par['h_fim']}<br>"
+                    f"{par['cidade']}",
+                    style="background:#0D1B2A;color:#E8EFD8;border:1px solid #4CC9F0;"
+                          "font-family:Inter;font-size:12px;border-radius:6px;",
+                ),
+            ).add_to(mapa)
+
+    if all_lats:
+        mapa.fit_bounds([[min(all_lats), min(all_lons)], [max(all_lats), max(all_lons)]])
+
+    st_folium(mapa, width="100%", height=560, key="fd_mapa", returned_objects=[])
+
+    # ── Scroll infinito: cards por motorista ─────────────────────────────────
+    st.markdown("---")
+    st.markdown("#### Detalhamento por Motorista")
+    for idx, (motorista, dados) in enumerate(sorted(resultados.items())):
+        cor = dados["cor"] if dados["cor"] else _CORES_FROTA[idx % len(_CORES_FROTA)]
+        km   = _km_from_hist(dados["hist"])
+        n_pts = len(dados["hist"])
+        paradas = _detectar_paradas(dados["hist"])
+        total_parada_min = sum(p["dur_min"] for p in paradas)
+
+        st.markdown(
+            f'<div style="border-left:3px solid {cor};padding:4px 0 4px 12px;'
+            f'margin-bottom:4px">'
+            f'<span style="font-weight:700;color:{cor};font-size:.95rem">{motorista}</span>'
+            f' <span style="color:#8FA882;font-size:.78rem">{dados["placa"]} · {dados["contrato"]}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Km percorridos", f"{km:,} km")
+        c2.metric("Posicoes GPS", n_pts)
+        c3.metric("Paradas detectadas", len(paradas))
+        c4.metric("Tempo parado", f"{total_parada_min} min" if total_parada_min < 60
+                  else f"{total_parada_min//60}h{total_parada_min%60}min")
+
+        if paradas:
+            rows_html = "".join(
+                f'<tr>'
+                f'<td style="padding:4px 8px;color:#E8EFD8">{p["h_ini"]} - {p["h_fim"]}</td>'
+                f'<td style="padding:4px 8px;color:#4CC9F0;font-weight:600">'
+                f'{p["dur_min"]//60}h {p["dur_min"]%60}min' if p["dur_min"]>=60
+                else f'<td style="padding:4px 8px;color:#4CC9F0;font-weight:600">{p["dur_min"]} min'
+                f'</td>'
+                f'<td style="padding:4px 8px;color:#8FA882">{p["cidade"]}</td>'
+                f'</tr>'
+                for p in paradas
+            )
+            st.markdown(
+                f'<div style="overflow-x:auto;margin:6px 0 16px 0">'
+                f'<table style="border-collapse:collapse;font-family:Inter,sans-serif;'
+                f'font-size:.75rem;width:100%">'
+                f'<thead><tr>'
+                f'<th style="padding:4px 8px;color:#BFCF99;text-align:left;border-bottom:1px solid #566E3D">Horario</th>'
+                f'<th style="padding:4px 8px;color:#BFCF99;text-align:left;border-bottom:1px solid #566E3D">Duracao</th>'
+                f'<th style="padding:4px 8px;color:#BFCF99;text-align:left;border-bottom:1px solid #566E3D">Local</th>'
+                f'</tr></thead><tbody>{rows_html}</tbody></table></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("Nenhuma parada significativa detectada neste dia.")
+        st.markdown('<hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:8px 0">', unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -2168,9 +2230,9 @@ def _aba_rastreamento():
     with c1:
         if atu:
             n = len(st.session_state.get("logos_veiculos", []))
-            st.caption(f"✅ {n} veículos ECO · Atualizado: {atu}")
+            st.caption(f" {n} veículos ECO · Atualizado: {atu}")
     with c2:
-        atualizar = st.button("🔄 Atualizar", key="logos_btn", use_container_width=True)
+        atualizar = st.button(" Atualizar", key="logos_btn", use_container_width=True)
 
     if atualizar:
         with st.spinner("Conectando ao Logos..."):
@@ -2185,23 +2247,26 @@ def _aba_rastreamento():
                 st.session_state.pop("logos_rota", None)
                 st.session_state.pop("logos_periodo_result", None)
             except Exception as e:
-                st.error(f"❌ {e}")
+                st.error(f" {e}")
                 return
 
     veiculos = st.session_state.get("logos_veiculos", [])
     if not veiculos:
-        st.info("Clique em **🔄 Atualizar** para buscar os veículos ECO do Logos Rastreamento.")
+        st.info("Clique em ** Atualizar** para buscar os veículos ECO do Logos Rastreamento.")
         return
 
     itens = [_parse_eco(v, i) for i, v in enumerate(veiculos)]
 
-    tab_mapa_periodo, tab_stats, tab_rota = st.tabs([
-        "🗺️ Mapa & Análise de Período",
-        "📊 Estatísticas",
-        "🛣️ Rota Individual",
+    tab_frota, tab_mapa_periodo, tab_stats, tab_rota = st.tabs([
+        "Frota no Dia",
+        "Mapa & Periodo",
+        "Estatisticas",
+        "Rota Individual",
     ])
+    with tab_frota:
+        _render_frota_dia(itens)
     with tab_mapa_periodo:
-        st.markdown("### 📍 Posição Atual da Frota")
+        st.markdown("### Posicao Atual da Frota")
         _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=580)
         st.markdown("---")
         _render_analise_periodo(itens)

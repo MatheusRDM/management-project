@@ -90,14 +90,13 @@ st.markdown("""
     }
     .eco-kpi .val { font-size: 1.4rem !important; }
     .eco-kpi .lbl { font-size: 0.62rem !important; }
-    /* Calendar table: compact for mobile */
-    .cal-wrap { -webkit-overflow-scrolling: touch; overflow-x: auto; }
-    .cal-table { font-size: 0.52rem !important; min-width: 0 !important; }
-    .cal-table th { font-size: 0.48rem !important; padding: 3px 1px !important; }
-    .cal-table td { padding: 3px 1px !important; font-size: 0.50rem !important; }
-    .cal-table td.colab { min-width: 60px !important; max-width: 80px !important; font-size: 0.50rem !important; }
-    .cal-table td.funcao { display: none !important; }
-    .cal-table th:nth-child(2) { display: none !important; }
+    /* Calendar table: touch scroll + nomes menores */
+    .cal-wrap { -webkit-overflow-scrolling: touch; }
+    .cal-table { font-size: 0.60rem !important; min-width: 700px !important; }
+    .cal-table th { font-size: 0.55rem !important; padding: 4px 2px !important; }
+    .cal-table td { padding: 4px 2px !important; }
+    .cal-table td.colab { min-width: 100px !important; max-width: 130px !important; font-size: 0.62rem !important; }
+    .cal-table td.funcao { min-width: 70px !important; max-width: 100px !important; font-size: 0.55rem !important; }
     /* Legenda: wrap */
     .legend-item { font-size: 0.65rem !important; margin-right: 8px !important; }
     /* Plotly: garante full width */
@@ -189,9 +188,9 @@ st.markdown("""
 .cal-table {
     border-collapse: collapse;
     font-family: 'Poppins', sans-serif;
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     width: 100%;
-    min-width: 600px;
+    min-width: 900px;
 }
 .cal-table th {
     background: rgba(86,110,61,0.25);
@@ -243,7 +242,6 @@ from _eco_shared import _IS_CLOUD
 from _eco_checklist import _aba_checklist
 from _eco_ensaios import _aba_ensaios
 from _eco_rastreamento import _aba_rastreamento
-from _eco_resumo import _aba_resumo
 
 
 # =============================================================================
@@ -285,17 +283,17 @@ def _sidebar():
         st.markdown("""
         <div style="font-family:'Poppins',sans-serif; font-size:0.80rem; color:#E8EFD8; line-height:1.6">
             <b style="color:#BFCF99">ECO RODOVIAS 6771</b><br>
-            🛣️ BR-050 — Eco Minas Goiás<br>
-            🛣️ BR-365 — Eco Cerrado<br>
+            ️ BR-050 — Eco Minas Goiás<br>
+            ️ BR-365 — Eco Cerrado<br>
             <span style="color:#8FA882; font-size:0.72rem">Supervisão de Obras</span>
         </div>""", unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown('<div class="eco-sidebar-title">Acesso ao Servidor</div>', unsafe_allow_html=True)
         if _IS_CLOUD:
-            st.warning("🌐 Modo Cloud — dados do cache", icon=None)
+            st.warning(" Modo Cloud — dados do cache", icon=None)
         else:
-            st.success("✅ Servidor Y: conectado", icon=None)
+            st.success(" Servidor Y: conectado", icon=None)
 
 
 # =============================================================================
@@ -307,19 +305,15 @@ def main():
 
     st.markdown("""
     <div class="eco-header">
-        <h1>🛣️ Eco Rodovias — Contrato 6771</h1>
+        <h1>️ Eco Rodovias — Contrato 6771</h1>
         <p>BR-050 (Eco Minas Goiás) · BR-365 (Eco Cerrado) · Supervisão de Obras AFIRMA E-VIAS</p>
     </div>""", unsafe_allow_html=True)
 
-    tab_resumo, tab_checklist, tab_ensaios, tab_rastr = st.tabs([
-        "📊 Resumo",
-        "📋 Checklist",
-        "🔬 Ensaios",
-        "🛰️ Rastreamento",
+    tab_checklist, tab_ensaios, tab_rastr = st.tabs([
+        " Checklist APP",
+        " Ensaios AEVIAS",
+        "️ Rastreamento",
     ])
-
-    with tab_resumo:
-        _aba_resumo()
 
     with tab_checklist:
         _aba_checklist()
