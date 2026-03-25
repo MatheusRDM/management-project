@@ -137,7 +137,12 @@ def _km_from_hist(hist):
         except Exception:
             pass
     if odos and (max(odos) - min(odos)) > 0:
-        return max(odos) - min(odos)
+        delta = max(odos) - min(odos)
+        # Logos API retorna pos_odometro em metros quando max > 1.000.000
+        # (ex: 50.176.923 m = 50.177 km). Converte automaticamente.
+        if max(odos) > 1_000_000:
+            return round(delta / 1000, 1)
+        return round(delta, 1)
 
     # ── Método 2: Velocidade × tempo ─────────────────────────────────────────
     # Ordena por timestamp, calcula intervalo real entre pontos

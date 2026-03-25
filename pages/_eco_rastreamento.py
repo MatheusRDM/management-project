@@ -325,84 +325,206 @@ def _render_estatisticas(itens):
 # =============================================================================
 
 def _render_rota_individual(itens):
-    st.markdown("**Selecione o veículo e o período:**")
-    opcoes = {f"{it['motorista']}  [{it['ultima_data']}]": it for it in itens}
-    r1, r2, r3, r4 = st.columns([3, 2, 2, 1])
-    with r1:
-        sel = st.selectbox("Motorista [última data]:", list(opcoes.keys()), key="logos_sel_v")
-    it_sel = opcoes[sel]
-    with r2:
-        d_ini = st.date_input("De:", value=it_sel["ultima_data"], key="logos_r_ini")
-    with r3:
-        d_fim = st.date_input("Até:", value=it_sel["ultima_data"], key="logos_r_fim")
-    with r4:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        ver_rota = st.button("Ver Rota", key="logos_btn_rota", use_container_width=True)
+    """Rota de um veículo num período — mapa + métricas."""
+    opcoes = {f"{it['motorista']}  —  {it['placa']}": it for it in itens}
 
+    # ── Linha 1: Seleção de motorista (largura total) ─────────────────────────
+    sel = st.selectbox(
+        "Motorista / Veículo:",
+        list(opcoes.keys()),
+        key="logos_sel_v",
+    )
+    it_sel = opcoes[sel]
+
+    # ── Linha 2: Datas + Botão ────────────────────────────────────────────────
+    col_ini, col_fim, col_btn = st.columns([2, 2, 1])
+    with col_ini:
+        d_ini = st.date_input(
+            "Data início:",
+            value=it_sel["ultima_data"],
+            key="logos_r_ini",
+        )
+    with col_fim:
+        d_fim = st.date_input(
+            "Data fim:",
+            value=it_sel["ultima_data"],
+            key="logos_r_fim",
+        )
+    with col_btn:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        ver_rota = st.button("VER ROTA", key="logos_btn_rota", use_container_width=True)
+
+    # ── Busca a rota ao clicar ────────────────────────────────────────────────
     if ver_rota:
-        with st.spinner("Buscando rota..."):
+        with st.spinner(f"Buscando rota de {it_sel['motorista']}..."):
             try:
                 sess2, _ = _logos_login()
-                hist = _logos_get_rota(
+                hist_novo = _logos_get_rota(
                     sess2, it_sel["idvei"],
                     d_ini.strftime("%Y-%m-%d 00:00"),
                     d_fim.strftime("%Y-%m-%d 23:59"),
                 )
-                if not hist:
-                    st.warning(f"Nenhuma posição para {d_ini} – {d_fim}. Tente outras datas.")
-                    return
-                st.session_state["logos_rota"]     = hist
-                st.session_state["logos_rota_sel"] = sel
-                st.session_state["logos_rota_cor"] = it_sel["cor"]
+                if not hist_novo:
+                    st.warning(
+                        f"Nenhuma posição para **{it_sel['motorista']}** "
+                        f"em {d_ini.strftime('%d/%m/%Y')} – {d_fim.strftime('%d/%m/%Y')}. "
+                        "Tente outro período."
+                    )
+                else:
+                    st.session_state["logos_rota"]        = hist_novo
+                    st.session_state["logos_rota_sel"]    = sel
+                    st.session_state["logos_rota_cor"]    = it_sel["cor"]
+                    st.session_state["logos_rota_motor"]  = it_sel["motorista"]
+                    st.session_state["logos_rota_placa"]  = it_sel["placa"]
             except Exception as e:
-                st.error(f"{e}")
-                return
+                st.error(f"Erro ao buscar rota: {e}")
 
+    # ── Exibe resultado ───────────────────────────────────────────────────────
     hist = st.session_state.get("logos_rota", [])
     if not hist:
+        st.info("Selecione um motorista, escolha o período e clique em **VER ROTA**.")
         return
 
-    coords = []
-    cidades_rota = []
+    # Coleta coordenadas e cidades usando _pick() para robustez
+    coords, cidades_rota = [], []
     for p in hist:
-        lt = p.get("pos_coordenada_latitude")
-        ln = p.get("pos_coordenada_longitude")
+        lt = _pick(p, _HIST_LAT_FIELDS)
+        ln = _pick(p, _HIST_LON_FIELDS)
         if lt and ln:
             try:
                 coords.append([float(lt), float(ln)])
             except Exception:
                 pass
-        cidade = p.get("pos_end_cidade", "")
+        cidade = str(_pick(p, _HIST_CID_FIELDS, "") or "").strip()
         if cidade and (not cidades_rota or cidades_rota[-1] != cidade):
             cidades_rota.append(cidade)
 
     if not coords:
-        st.warning("Sem coordenadas válidas neste período.")
+        st.warning("Sem coordenadas GPS válidas neste período. Verifique as datas.")
         return
 
-    cor_rota  = st.session_state.get("logos_rota_cor", "#4CC9F0")
-    desc_rota = st.session_state.get("logos_rota_sel", sel)
+    km_rota      = _km_from_hist(hist)
+    cor_rota     = st.session_state.get("logos_rota_cor",   "#4CC9F0")
+    motor_label  = st.session_state.get("logos_rota_motor", sel.split("  —  ")[0])
+    placa_label  = st.session_state.get("logos_rota_placa", "")
+    n_cidades    = len(set(c for c in cidades_rota if c))
 
-    # Cards da rota
-    km_rota = _km_from_hist(hist)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Posições GPS", len(coords))
-    c2.metric("Km percorridos", f"{km_rota:,} km")
-    c3.metric("Cidades passadas", len(set(cidades_rota)))
+    # Paradas detectadas
+    paradas_r = _detectar_paradas(hist)
+    tempo_par = sum(p.get("dur_min", 0) for p in paradas_r)
+    if tempo_par >= 60:
+        tempo_par_txt = f"{tempo_par // 60}h{tempo_par % 60:02d}min"
+    elif tempo_par > 0:
+        tempo_par_txt = f"{tempo_par} min"
+    else:
+        tempo_par_txt = "—"
 
+    # Primeira ignição (1º ponto com vel>0)
+    prim_ign = None
+    ultimo_dt_r = None
+    for pt in hist:
+        vel   = float(_pick(pt, _HIST_VEL_FIELDS, 0) or 0)
+        dt_pt = _parse_dt(_pick(pt, _HIST_DT_FIELDS))
+        if dt_pt and vel > 0 and prim_ign is None:
+            prim_ign = dt_pt
+    if prim_ign is None:
+        for pt in hist:
+            dt_pt = _parse_dt(_pick(pt, _HIST_DT_FIELDS))
+            if dt_pt:
+                prim_ign = dt_pt
+                break
+    for pt in reversed(hist):
+        dt_pt = _parse_dt(_pick(pt, _HIST_DT_FIELDS))
+        lt = _pick(pt, _HIST_LAT_FIELDS)
+        if dt_pt and lt:
+            ultimo_dt_r = dt_pt
+            break
+
+    prim_txt = prim_ign.strftime("%H:%M") if prim_ign else "—"
+    if prim_ign and ultimo_dt_r and ultimo_dt_r > prim_ign:
+        jornada_min = int((ultimo_dt_r - prim_ign).total_seconds() / 60)
+        jornada_txt_r = (f"{jornada_min // 60}h{jornada_min % 60:02d}min"
+                         if jornada_min >= 60 else f"{jornada_min} min")
+    else:
+        jornada_txt_r = "—"
+
+    # ── Cards de métricas ─────────────────────────────────────────────────────
+    st.markdown(
+        f'<div style="background:rgba(13,27,42,.85);border:1px solid rgba(255,255,255,.06);'
+        f'border-left:4px solid {cor_rota};border-radius:12px;padding:14px 16px;margin:12px 0">'
+        f'<div style="font-weight:700;color:{cor_rota};font-size:1rem;margin-bottom:10px">'
+        f'{motor_label}'
+        f'<span style="color:#6b7f8d;font-size:.78rem;font-weight:400;margin-left:8px">'
+        f'{placa_label} · {d_ini.strftime("%d/%m/%Y")} → {d_fim.strftime("%d/%m/%Y")}'
+        f'</span></div>'
+        f'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        + "".join([
+            f'<div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px 14px;'
+            f'text-align:center;flex:1;min-width:100px">'
+            f'<div style="font-size:.55rem;color:#6b7f8d;letter-spacing:.06em;font-weight:600;margin-bottom:4px">{lbl}</div>'
+            f'<div style="font-size:1.05rem;font-weight:700;color:{clr}">{val}</div>'
+            f'</div>'
+            for lbl, val, clr in [
+                ("POSICOES GPS",    str(len(coords)),             "#E8EFD8"),
+                ("KM PERCORRIDOS",  f"{km_rota:.1f} km".replace(".", ","), "#7BBF6A"),
+                ("1a IGNICAO",      prim_txt,                     "#F7B731"),
+                ("JORNADA",         jornada_txt_r,                "#4CC9F0"),
+                ("TEMPO PARADO",    tempo_par_txt,                "#FF6B6B"),
+                ("CIDADES",         str(n_cidades),               "#A29BFE"),
+            ]
+        ])
+        + f'</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Rota cidades
     if cidades_rota:
-        st.caption("Rota: " + " → ".join(dict.fromkeys(cidades_rota)))
+        cids_unicas = list(dict.fromkeys(c for c in cidades_rota if c))
+        st.caption("Rota: " + " → ".join(cids_unicas))
 
-    mapa_r = folium.Map(tiles="CartoDB dark_matter")
-    folium.PolyLine(coords, color=cor_rota, weight=4, opacity=0.9,
-                    tooltip=desc_rota).add_to(mapa_r)
-    folium.CircleMarker(coords[0],  radius=8, color="#00FF00", fill=True,
-                        fill_color="#00FF00", tooltip="▶ Início").add_to(mapa_r)
-    folium.CircleMarker(coords[-1], radius=8, color="#FF4757", fill=True,
-                        fill_color="#FF4757", tooltip="⏹ Fim").add_to(mapa_r)
-    lats = [c[0] for c in coords]; lons = [c[1] for c in coords]
+    # ── Mapa ──────────────────────────────────────────────────────────────────
+    mapa_r = folium.Map(tiles="CartoDB dark_matter", prefer_canvas=True)
+    folium.PolyLine(
+        coords, color=cor_rota, weight=4, opacity=0.9,
+        tooltip=folium.Tooltip(
+            f"<b style='color:{cor_rota}'>{motor_label}</b><br>{km_rota:.1f} km",
+            style="background:#0D1B2A;color:#E8EFD8;border:1px solid #566E3D;"
+                  "font-family:Inter;font-size:12px;border-radius:6px;",
+        ),
+    ).add_to(mapa_r)
+
+    # Marcadores início / fim
+    folium.CircleMarker(
+        coords[0], radius=9, color="#00FF88", fill=True,
+        fill_color="#00FF88", fill_opacity=0.9,
+        tooltip=f"Inicio: {prim_txt}",
+    ).add_to(mapa_r)
+    folium.CircleMarker(
+        coords[-1], radius=9, color="#FF4757", fill=True,
+        fill_color="#FF4757", fill_opacity=0.9,
+        tooltip=f"Fim: {ultimo_dt_r.strftime('%H:%M') if ultimo_dt_r else '—'}",
+    ).add_to(mapa_r)
+
+    # Paradas no mapa
+    for par in paradas_r:
+        dur_txt = (f"{par['dur_min']//60}h{par['dur_min']%60:02d}min"
+                   if par["dur_min"] >= 60 else f"{par['dur_min']} min")
+        folium.CircleMarker(
+            [par["lat"], par["lon"]],
+            radius=6 + min(par["dur_min"] // 20, 10),
+            color="#4CC9F0", fill=True,
+            fill_color="#4CC9F0", fill_opacity=0.5, weight=2,
+            tooltip=folium.Tooltip(
+                f"<b>Parada: {dur_txt}</b><br>{par['h_ini']} – {par['h_fim']}<br>{par['cidade']}",
+                style="background:#0D1B2A;color:#E8EFD8;border:1px solid #4CC9F0;"
+                      "font-family:Inter;font-size:12px;border-radius:6px;",
+            ),
+        ).add_to(mapa_r)
+
+    lats = [c[0] for c in coords]
+    lons = [c[1] for c in coords]
     mapa_r.fit_bounds([[min(lats), min(lons)], [max(lats), max(lons)]])
-    st_folium(mapa_r, width="100%", height=500, key="logos_mapa_rota", returned_objects=[])
+    st_folium(mapa_r, width="100%", height=520, key="logos_mapa_rota", returned_objects=[])
 
 
 # =============================================================================
