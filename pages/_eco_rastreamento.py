@@ -2174,6 +2174,27 @@ _CORES_FROTA = [
 ]
 
 
+def _parse_dt(s):
+    """Parse robusto de datetime: ISO, brasileiro DD/MM/YYYY, sem T, etc."""
+    if not s:
+        return None
+    s = str(s).replace("Z", "").strip()
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
+        "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
+        "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
+        "%Y-%m-%d",
+    ):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(s)
+    except Exception:
+        return None
+
+
 def _haversine(lat1, lon1, lat2, lon2):
     """Distancia em metros entre dois pontos GPS."""
     from math import radians, cos, sin, asin, sqrt
@@ -2203,12 +2224,10 @@ def _detectar_paradas(pontos, vel_thresh=3, min_min=4):
                 else:
                     break
             # Duração do bloco
+            t0 = _parse_dt(_pick(bloco[0],  _HIST_DT_FIELDS))
+            t1 = _parse_dt(_pick(bloco[-1], _HIST_DT_FIELDS))
             try:
-                dt0_str = str(_pick(bloco[0],  _HIST_DT_FIELDS, "") or "").replace("Z","")
-                dt1_str = str(_pick(bloco[-1], _HIST_DT_FIELDS, "") or "").replace("Z","")
-                t0 = datetime.fromisoformat(dt0_str)
-                t1 = datetime.fromisoformat(dt1_str)
-                dur_min = max((t1 - t0).total_seconds() / 60, len(bloco) * 3)
+                dur_min = max((t1 - t0).total_seconds() / 60, len(bloco) * 3) if (t0 and t1) else len(bloco) * 3
             except Exception:
                 dur_min = len(bloco) * 3
 
@@ -2217,11 +2236,8 @@ def _detectar_paradas(pontos, vel_thresh=3, min_min=4):
                 ln = _pick(bloco[0], _HIST_LON_FIELDS)
                 try:
                     lt, ln = float(lt), float(ln)
-                    dt0_str = str(_pick(bloco[0],  _HIST_DT_FIELDS, "") or "")
-                    dt1_str = str(_pick(bloco[-1], _HIST_DT_FIELDS, "") or "")
-                    # Extrai HH:MM: os últimos 8 chars de "YYYY-MM-DDTHH:MM:SS" → "HH:MM:SS", pega [:5]
-                    h_ini = dt0_str[-8:][:5] if len(dt0_str) >= 8 else "—"
-                    h_fim = dt1_str[-8:][:5] if len(dt1_str) >= 8 else "—"
+                    h_ini = t0.strftime("%H:%M") if t0 else "—"
+                    h_fim = t1.strftime("%H:%M") if t1 else "—"
                 except Exception:
                     lt = ln = None
                     h_ini = h_fim = "—"
@@ -2548,56 +2564,53 @@ def _render_frota_dia(itens):
 
             # Cards dos motoristas
             for idx_g, (motorista, dados) in enumerate(membros):
-                cor = dados.get("cor") or GRUPOS[grupo_rast]["cor"]
-                km      = _km_from_hist(dados["hist"])
-                paradas = _detectar_paradas(dados["hist"])
+                cor     = dados.get("cor") or GRUPOS[grupo_rast]["cor"]
+                hist    = dados["hist"]
+                km      = _km_from_hist(hist)
+                paradas = _detectar_paradas(hist)
 
-                # --- Primeira ignição ---
-                # API de histórico não envia ignição por ponto → usamos o
-                # timestamp do primeiro ponto GPS válido do dia.
+                # ── Primeira ignição = 1º ponto com velocidade > 0 ──────────
+                # Percorre em ordem cronológica; fallback = 1º ponto GPS válido
                 primeira_ignicao = None
-                for pt in dados["hist"]:
-                    dt_str = str(_pick(pt, _HIST_DT_FIELDS, "") or "").replace("Z", "").strip()
-                    if not dt_str:
+                ultimo_dt        = None
+
+                for pt in hist:
+                    vel   = float(_pick(pt, _HIST_VEL_FIELDS, 0) or 0)
+                    dt_pt = _parse_dt(_pick(pt, _HIST_DT_FIELDS))
+                    if dt_pt is None:
                         continue
-                    lt = _pick(pt, _HIST_LAT_FIELDS)
-                    ln = _pick(pt, _HIST_LON_FIELDS)
-                    try:
-                        if lt and ln:
-                            primeira_ignicao = datetime.fromisoformat(dt_str)
+                    if vel > 0 and primeira_ignicao is None:
+                        primeira_ignicao = dt_pt
+
+                # Fallback: primeiro ponto com lat/lon válidos
+                if primeira_ignicao is None:
+                    for pt in hist:
+                        dt_pt = _parse_dt(_pick(pt, _HIST_DT_FIELDS))
+                        lt    = _pick(pt, _HIST_LAT_FIELDS)
+                        ln    = _pick(pt, _HIST_LON_FIELDS)
+                        if dt_pt and lt and ln:
+                            primeira_ignicao = dt_pt
                             break
-                    except Exception:
-                        continue
+
+                # ── Último ponto GPS válido (para jornada total) ─────────────
+                for pt in reversed(hist):
+                    dt_pt = _parse_dt(_pick(pt, _HIST_DT_FIELDS))
+                    lt    = _pick(pt, _HIST_LAT_FIELDS)
+                    ln    = _pick(pt, _HIST_LON_FIELDS)
+                    if dt_pt and lt and ln:
+                        ultimo_dt = dt_pt
+                        break
+
+                # ── Métricas calculadas ──
                 primeira_ign_txt = primeira_ignicao.strftime("%H:%M") if primeira_ignicao else "—"
 
-                # --- Jornada ---
-                # --- Jornada Total: do primeiro ao último ponto GPS válido ---
-                jornada_txt = "—"
-                if primeira_ignicao and dados["hist"]:
-                    try:
-                        # Percorre do final para achar o último timestamp válido
-                        ultimo_dt = None
-                        for pt in reversed(dados["hist"]):
-                            dt_str = str(_pick(pt, _HIST_DT_FIELDS, "") or "").replace("Z","").strip()
-                            lt = _pick(pt, _HIST_LAT_FIELDS)
-                            ln = _pick(pt, _HIST_LON_FIELDS)
-                            if dt_str and lt and ln:
-                                try:
-                                    ultimo_dt = datetime.fromisoformat(dt_str)
-                                    break
-                                except Exception:
-                                    pass
-                        if ultimo_dt and ultimo_dt > primeira_ignicao:
-                            jornada_min = int((ultimo_dt - primeira_ignicao).total_seconds() / 60)
-                            jornada_txt = (f"{jornada_min // 60}h{jornada_min % 60:02d}min"
-                                           if jornada_min >= 60 else f"{jornada_min} min")
-                    except Exception:
-                        jornada_txt = "—"
+                if primeira_ignicao and ultimo_dt and ultimo_dt > primeira_ignicao:
+                    jornada_min = int((ultimo_dt - primeira_ignicao).total_seconds() / 60)
+                    jornada_txt = (f"{jornada_min // 60}h{jornada_min % 60:02d}min"
+                                   if jornada_min >= 60 else f"{jornada_min} min")
+                else:
+                    jornada_txt = "—"
 
-                padroes_hist = st.session_state.get("fd_padroes", {}).get(motorista, [])
-                prev_hora, prev_cidade, prev_conf = _prever_retorno(padroes_hist, primeira_ignicao)
-
-                # --- Tempo parado ---
                 tempo_parado_min = sum(p.get("dur_min", 0) for p in paradas)
                 if tempo_parado_min >= 60:
                     tempo_parado_txt = f"{tempo_parado_min // 60}h{tempo_parado_min % 60:02d}min"
@@ -2606,47 +2619,77 @@ def _render_frota_dia(itens):
                 else:
                     tempo_parado_txt = "—"
 
-                # --- Header do veiculo ---
-                badges = ""
+                ultimo_local = paradas[-1]["cidade"] if paradas else "—"
+                ultima_hora  = ultimo_dt.strftime("%H:%M") if ultimo_dt else "—"
+
+                padroes_hist = st.session_state.get("fd_padroes", {}).get(motorista, [])
+                prev_hora, prev_cidade, prev_conf = _prever_retorno(padroes_hist, primeira_ignicao)
+
+                # ── Card HTML ──────────────────────────────────────────────────
+                badge_html = ""
                 if padroes_hist:
-                    lp_top = padroes_hist[0]
+                    lp_top    = padroes_hist[0]
                     badge_cor = "#4CC9F0" if lp_top.get("novo_padrao") else "#8FA882"
-                    badge_txt = "NOVO PADRAO" if lp_top.get("novo_padrao") else f"{lp_top['n_dias']}d historico"
-                    badges = (f'<span style="background:{badge_cor}22;color:{badge_cor};'
-                              f'font-size:.65rem;border-radius:4px;padding:1px 5px;margin-left:6px">'
-                              f'{badge_txt}</span>')
+                    badge_txt = "NOVO PADRAO" if lp_top.get("novo_padrao") else f"{lp_top['n_dias']}d hist."
+                    badge_html = (
+                        f'<span style="background:{badge_cor}22;color:{badge_cor};border:1px solid {badge_cor}44;'
+                        f'font-size:.58rem;font-weight:700;border-radius:4px;padding:1px 6px;'
+                        f'margin-left:8px;letter-spacing:.03em">{badge_txt}</span>'
+                    )
+
+                prev_html = ""
+                if prev_hora:
+                    loc_txt   = f" · {prev_cidade}" if prev_cidade and prev_cidade != "—" else ""
+                    prev_html = (
+                        f'<div style="margin-top:8px;background:rgba(76,201,240,.06);'
+                        f'border:1px solid rgba(76,201,240,.2);border-radius:8px;'
+                        f'padding:6px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+                        f'<span style="font-size:.62rem;color:#6b7f8d;letter-spacing:.04em">PREVISAO RETORNO</span>'
+                        f'<span style="font-size:.95rem;font-weight:700;color:#4CC9F0">~{prev_hora}</span>'
+                        f'<span style="font-size:.72rem;color:#8FA882">{loc_txt}</span>'
+                        f'<span style="font-size:.6rem;color:#566E3D;margin-left:auto">{prev_conf}% conf.</span>'
+                        f'</div>'
+                    )
+
+                def _met(label, value, c="#E8EFD8"):
+                    return (
+                        f'<div style="background:rgba(255,255,255,.04);border-radius:10px;'
+                        f'padding:10px 12px;text-align:center;flex:1;min-width:90px">'
+                        f'<div style="font-size:.55rem;color:#6b7f8d;letter-spacing:.06em;'
+                        f'margin-bottom:4px;font-weight:600">{label}</div>'
+                        f'<div style="font-size:1.05rem;font-weight:700;color:{c};line-height:1.2">'
+                        f'{value}</div></div>'
+                    )
 
                 st.markdown(
-                    f'<div style="border-left:3px solid {cor};padding:4px 0 4px 12px;margin-bottom:4px">'
-                    f'<span style="font-weight:700;color:{cor};font-size:.95rem">{motorista}</span>'
-                    f' <span style="color:#8FA882;font-size:.78rem">{dados["placa"]} · {dados["contrato"]}</span>'
-                    f'{badges}</div>',
+                    f'<div style="background:rgba(13,27,42,.85);border:1px solid rgba(255,255,255,.06);'
+                    f'border-left:4px solid {cor};border-radius:12px;padding:14px 16px;margin-bottom:12px">'
+                    # Header
+                    f'<div style="display:flex;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">'
+                    f'<span style="font-weight:700;color:{cor};font-size:1rem">{motorista}</span>'
+                    f'<span style="color:#6b7f8d;font-size:.75rem">{dados["placa"]}</span>'
+                    f'<span style="color:#3a4a5e;font-size:.7rem">·</span>'
+                    f'<span style="color:#6b7f8d;font-size:.72rem">{dados["contrato"]}</span>'
+                    f'{badge_html}'
+                    f'</div>'
+                    # Métricas
+                    f'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">'
+                    + _met("KM PERCORRIDOS",     f"{km:.1f} km".replace(".", ","))
+                    + _met("1ª IGNICAO",         primeira_ign_txt, "#7BBF6A")
+                    + _met("ULTIMO REG.",         ultima_hora,      "#4CC9F0")
+                    + _met("JORNADA TOTAL",       jornada_txt,      "#F7B731")
+                    + _met("PARADAS DETECTADAS",  f"{len(paradas)}", "#A29BFE")
+                    + _met("TEMPO PARADO",        tempo_parado_txt, "#FF6B6B")
+                    + f'</div>'
+                    # Ultima parada
+                    + (f'<div style="font-size:.65rem;color:#6b7f8d;margin-top:4px">'
+                       f'Ultimo local: <span style="color:#C8D8A8">{ultimo_local}</span>'
+                       f' · Fim: <span style="color:#C8D8A8">{ultima_hora}</span></div>'
+                       if ultimo_local != "—" else "")
+                    + prev_html
+                    + f'</div>',
                     unsafe_allow_html=True,
                 )
-
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Km percorridos",      f"{km:,.1f} km")
-                c2.metric("Primeira ignicao",    primeira_ign_txt)
-                c3.metric("Tempo parado ligado", tempo_parado_txt)
-                c4.metric("Jornada total",       jornada_txt)
-
-                if prev_hora:
-                    local_txt = f" — {prev_cidade}" if prev_cidade and prev_cidade != "—" else ""
-                    st.markdown(
-                        f'<div style="background:#1A2A1A;border:1px solid #566E3D;border-radius:6px;'
-                        f'padding:6px 12px;margin:4px 0 8px 0;font-family:Inter,sans-serif;font-size:.8rem">'
-                        f'<span style="color:#8FA882">Previsao retorno:</span> '
-                        f'<span style="color:#4CC9F0;font-weight:700;font-size:.95rem">~{prev_hora}</span>'
-                        f'<span style="color:#8FA882">{local_txt}</span>'
-                        f'<span style="color:#566E3D;font-size:.7rem;margin-left:8px">'
-                        f'confianca {prev_conf}% · {len(padroes_hist)} locais mapeados</span>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                elif padroes_hist:
-                    st.caption("Padrao identificado — historico insuficiente para previsao de horario.")
-
-                st.markdown('<hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:8px 0">', unsafe_allow_html=True)
 
 
 # =============================================================================
