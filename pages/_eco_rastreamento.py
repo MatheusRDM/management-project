@@ -168,78 +168,75 @@ def _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=560):
 def _render_estatisticas(itens):
     """Estatísticas — análise individual por motorista com scroll infinito."""
 
-    # ── CSS for stats cards ──────────────────────────────────────────────────
+    # ── CSS — prefixo rast- para não conflitar com classes internas do Streamlit ──
     st.markdown("""
     <style>
-    .st-card{background:rgba(18,25,38,.85);backdrop-filter:blur(12px);
+    .rast-card{background:rgba(18,25,38,.85);backdrop-filter:blur(12px);
       -webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.06);
       border-radius:16px;padding:16px;margin-bottom:12px;transition:border-color .2s}
-    .st-card:hover{border-color:rgba(123,191,106,.2)}
-    .st-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-    .st-av{width:44px;height:44px;border-radius:50%;display:flex;
+    .rast-card:hover{border-color:rgba(123,191,106,.2)}
+    .rast-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .rast-av{width:44px;height:44px;border-radius:50%;display:flex;
       align-items:center;justify-content:center;font-size:.9rem;
       font-weight:700;color:#fff;flex-shrink:0}
-    .st-name{font-size:.92rem;font-weight:700;color:#E8EFD8;flex:1;min-width:0;
+    .rast-name{font-size:.92rem;font-weight:700;color:#E8EFD8;flex:1;min-width:0;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .st-ign{font-size:.62rem;font-weight:700;padding:3px 10px;border-radius:12px;
-      display:inline-flex;align-items:center;gap:4px}
-    .st-ign.on{background:rgba(123,191,106,.15);color:#7BBF6A;border:1px solid rgba(123,191,106,.3)}
-    .st-ign.mov{background:rgba(247,183,49,.15);color:#F7B731;border:1px solid rgba(247,183,49,.3)}
-    .st-ign.off{background:rgba(255,71,87,.1);color:#FF4757;border:1px solid rgba(255,71,87,.2)}
-    .st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-bottom:8px}
-    .st-met{background:rgba(255,255,255,.04);border-radius:10px;padding:8px;text-align:center}
-    .st-met .v{font-size:.95rem;font-weight:700;line-height:1.2}
-    .st-met .l{font-size:.52rem;color:#6b7f8d;letter-spacing:.03em;margin-top:2px}
-    .st-loc{font-size:.7rem;color:#8FA882;padding:6px 0;
+    .rast-ign{font-size:.62rem;font-weight:700;padding:3px 10px;border-radius:12px;
+      display:inline-flex;align-items:center;gap:4px;flex-shrink:0}
+    .rast-ign.ign-on{background:rgba(123,191,106,.15);color:#7BBF6A;border:1px solid rgba(123,191,106,.3)}
+    .rast-ign.ign-mov{background:rgba(247,183,49,.15);color:#F7B731;border:1px solid rgba(247,183,49,.3)}
+    .rast-ign.ign-off{background:rgba(255,71,87,.1);color:#FF4757;border:1px solid rgba(255,71,87,.2)}
+    .rast-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:6px;margin-bottom:8px}
+    .rast-met{background:rgba(255,255,255,.04);border-radius:10px;padding:8px;text-align:center}
+    .rast-met .rv{font-size:.95rem;font-weight:700;line-height:1.2}
+    .rast-met .rl{font-size:.52rem;color:#6b7f8d;letter-spacing:.03em;margin-top:2px}
+    .rast-loc{font-size:.7rem;color:#8FA882;padding:6px 0;
       border-top:1px solid rgba(255,255,255,.04);margin-top:4px}
-    .st-placa{font-size:.6rem;color:#6b7f8d;background:rgba(255,255,255,.04);
+    .rast-placa{font-size:.6rem;color:#6b7f8d;background:rgba(255,255,255,.04);
       padding:2px 8px;border-radius:8px;display:inline-block}
-    .st-filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-    .st-fbtn{background:rgba(255,255,255,.06);backdrop-filter:blur(8px);
-      border:1px solid rgba(255,255,255,.08);border-radius:20px;
-      padding:8px 16px;display:flex;align-items:center;gap:6px;cursor:pointer;
-      transition:all .15s;flex-shrink:0}
-    .st-fbtn:hover{background:rgba(255,255,255,.1)}
-    .st-fbtn .fv{font-size:1rem;font-weight:700;line-height:1}
-    .st-fbtn .fl{font-size:.6rem;color:#8FA882}
+    .rast-kpis{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+    .rast-kpi{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);
+      border-radius:20px;padding:7px 14px;display:flex;align-items:center;
+      gap:6px;flex-shrink:0}
+    .rast-kpi .kv{font-size:.95rem;font-weight:700;line-height:1}
+    .rast-kpi .kl{font-size:.58rem;color:#8FA882}
     </style>""", unsafe_allow_html=True)
 
     df = pd.DataFrame(itens)
-    ligados    = int(df["ignicao"].sum())
-    deslig     = len(df) - ligados
-    em_mov     = int((df["velocidade"] > 3).sum())
+    ligados     = int(df["ignicao"].sum())
+    deslig      = len(df) - ligados
+    em_mov      = int((df["velocidade"] > 3).sum())
     h_dir_total = round(df["tempo_dir_h"].sum(), 1)
 
-    # ── Interactive KPI filter buttons ────────────────────────────────────────
+    # ── KPIs resumo ──────────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div class="rast-kpis">
+      <div class="rast-kpi"><span class="kv" style="color:#C8D8A8">{len(df)}</span>
+        <span class="kl">veículos</span></div>
+      <div class="rast-kpi"><span class="kv" style="color:#7BBF6A">{ligados}</span>
+        <span class="kl">ligados</span></div>
+      <div class="rast-kpi"><span class="kv" style="color:#F7B731">{em_mov}</span>
+        <span class="kl">em movimento</span></div>
+      <div class="rast-kpi"><span class="kv" style="color:#FF6B6B">{deslig}</span>
+        <span class="kl">desligados</span></div>
+      <div class="rast-kpi"><span class="kv" style="color:#A29BFE">{h_dir_total:.0f}h</span>
+        <span class="kl">total dirigindo</span></div>
+    </div>""", unsafe_allow_html=True)
+
+    # ── Filtro ────────────────────────────────────────────────────────────────
     filtro = st.radio(
-        "Filtrar por:",
-        options=["Todos", "🟢 Ligados", "🟡 Em Movimento", "🔴 Desligados"],
+        "Filtrar:",
+        options=["Todos", "Ligados", "Em Movimento", "Desligados"],
         index=0,
         horizontal=True,
         key="stats_filtro",
     )
 
-    # KPI chips with counts
-    st.markdown(f"""
-    <div class="st-filter-row">
-      <div class="st-fbtn"><span class="fv" style="color:#7BBF6A">{len(df)}</span>
-        <span class="fl">veículos</span></div>
-      <div class="st-fbtn"><span class="fv" style="color:#4CC9F0">{ligados}</span>
-        <span class="fl">ligados</span></div>
-      <div class="st-fbtn"><span class="fv" style="color:#F7B731">{em_mov}</span>
-        <span class="fl">andando</span></div>
-      <div class="st-fbtn"><span class="fv" style="color:#FF6B6B">{deslig}</span>
-        <span class="fl">desligados</span></div>
-      <div class="st-fbtn"><span class="fv" style="color:#A29BFE">{h_dir_total:.0f}h</span>
-        <span class="fl">dirigindo</span></div>
-    </div>""", unsafe_allow_html=True)
-
-    # Apply filter
-    if filtro == "🟢 Ligados":
+    if filtro == "Ligados":
         df_show = df[df["ignicao"] == True]
-    elif filtro == "🟡 Em Movimento":
+    elif filtro == "Em Movimento":
         df_show = df[(df["ignicao"] == True) & (df["velocidade"] > 3)]
-    elif filtro == "🔴 Desligados":
+    elif filtro == "Desligados":
         df_show = df[df["ignicao"] == False]
     else:
         df_show = df
@@ -248,85 +245,75 @@ def _render_estatisticas(itens):
         st.info("Nenhum veículo nesta categoria.")
         return
 
-    # ── Sort: moving first, then ON-stopped, then OFF ────────────────────────
+    # ── Ordena: em movimento → ligado parado → desligado ────────────────────
     def _sort_key(row):
-        if row["velocidade"] > 3:
-            return (0, -row["velocidade"])
-        if row["ignicao"]:
-            return (1, 0)
+        if row["velocidade"] > 3:   return (0, -row["velocidade"])
+        if row["ignicao"]:          return (1, 0)
         return (2, 0)
 
     df_sorted = df_show.copy()
-    df_sorted["_sort"] = df_sorted.apply(_sort_key, axis=1)
-    df_sorted = df_sorted.sort_values("_sort")
+    df_sorted["_sk"] = df_sorted.apply(_sort_key, axis=1)
+    df_sorted = df_sorted.sort_values("_sk")
 
-    # ── Individual cards — infinite scroll ────────────────────────────────────
     _SEQ = ["#7BBF6A","#4CC9F0","#F7B731","#FF6B6B","#A29BFE","#FD79A8","#00CEC9"]
 
     for idx, (_, row) in enumerate(df_sorted.iterrows()):
-        initials = "".join(w[0] for w in row["motorista"].split()[:2]).upper()
-        vel = row.get("velocidade", 0)
+        initials    = "".join(w[0] for w in row["motorista"].split()[:2]).upper()
+        vel         = float(row.get("velocidade", 0) or 0)
         em_movimento = vel > 3
-        cor_av = _SEQ[idx % len(_SEQ)]
+        cor_av      = _SEQ[idx % len(_SEQ)]
 
-        # Ignition badge
         if em_movimento:
-            ign_cls = "mov"
-            ign_txt = f"🟡 {int(vel)} km/h"
+            ign_cls = "ign-mov"
+            ign_txt = f"{int(vel)} km/h"
         elif row["ignicao"]:
-            ign_cls = "on"
-            ign_txt = "🟢 Ligado"
+            ign_cls = "ign-on"
+            ign_txt = "Ligado"
         else:
-            ign_cls = "off"
-            ign_txt = "🔴 Desligado"
+            ign_cls = "ign-off"
+            ign_txt = "Desligado"
 
-        # Metrics
-        odo = row.get("odometro", 0)
-        h_dir = row.get("tempo_dir_h", 0)
-        h_par = row.get("tempo_par_min", 0)
-        horim = row.get("horimetro", 0)
-        bat = row.get("bateria", "")
-        cidade = row.get("cidade", "—")
-        uf = row.get("uf", "")
-        placa = row.get("placa", "")
-        contrato = row.get("contrato", "")
-        dt_pos = row.get("dt_posicao", "—")
+        odo      = int(row.get("odometro", 0) or 0)
+        h_dir    = float(row.get("tempo_dir_h", 0) or 0)
+        h_par    = float(row.get("tempo_par_min", 0) or 0)
+        horim    = row.get("horimetro", 0)
+        cidade   = row.get("cidade", "—") or "—"
+        uf       = row.get("uf", "") or ""
+        placa    = row.get("placa", "") or ""
+        contrato = row.get("contrato", "") or ""
+        dt_pos   = row.get("dt_posicao", "—") or "—"
 
-        # Try to extract hour from dt_posicao for "ligou às" info
-        hora_lig = ""
-        if dt_pos and dt_pos != "—":
-            try:
-                hora_lig = dt_pos.split(" ")[1] if " " in dt_pos else ""
-            except Exception:
-                pass
+        horim_html = ""
+        if horim:
+            horim_html = (f'<div class="rast-met"><div class="rv" style="color:#00CEC9">{horim}</div>'
+                          f'<div class="rl">Horímetro</div></div>')
 
         card_html = f"""
-        <div class="st-card">
-          <div class="st-hdr">
-            <div class="st-av" style="background:linear-gradient(135deg,{cor_av},{cor_av}88)">{initials}</div>
+        <div class="rast-card">
+          <div class="rast-hdr">
+            <div class="rast-av" style="background:linear-gradient(135deg,{cor_av},{cor_av}88)">{initials}</div>
             <div style="flex:1;min-width:0">
-              <div class="st-name">{row['motorista']}</div>
+              <div class="rast-name">{row['motorista']}</div>
               <div style="display:flex;gap:4px;align-items:center;margin-top:2px">
-                <span class="st-placa">{placa}</span>
+                <span class="rast-placa">{placa}</span>
                 <span style="font-size:.58rem;color:#6b7f8d">{contrato}</span>
               </div>
             </div>
-            <span class="st-ign {ign_cls}">{ign_txt}</span>
+            <span class="rast-ign {ign_cls}">{ign_txt}</span>
           </div>
-          <div class="st-grid">
-            <div class="st-met"><div class="v" style="color:#7BBF6A">{h_dir:.1f}h</div>
-              <div class="l">Dirigindo</div></div>
-            <div class="st-met"><div class="v" style="color:#F7B731">{h_par:.0f}min</div>
-              <div class="l">Parado lig.</div></div>
-            <div class="st-met"><div class="v" style="color:#4CC9F0">{odo:,}</div>
-              <div class="l">Hodômetro km</div></div>
-            <div class="st-met"><div class="v" style="color:#A29BFE">{int(vel)}</div>
-              <div class="l">km/h agora</div></div>
-            {"<div class='st-met'><div class='v' style=color:#00CEC9>" + str(horim) + "</div><div class='l'>Horímetro</div></div>" if horim else ""}
+          <div class="rast-grid">
+            <div class="rast-met"><div class="rv" style="color:#7BBF6A">{h_dir:.1f}h</div>
+              <div class="rl">Dirigindo</div></div>
+            <div class="rast-met"><div class="rv" style="color:#F7B731">{h_par:.0f}min</div>
+              <div class="rl">Parado lig.</div></div>
+            <div class="rast-met"><div class="rv" style="color:#4CC9F0">{odo:,}</div>
+              <div class="rl">Hodômetro km</div></div>
+            <div class="rast-met"><div class="rv" style="color:#A29BFE">{int(vel)}</div>
+              <div class="rl">km/h agora</div></div>
+            {horim_html}
           </div>
-          <div class="st-loc">
+          <div class="rast-loc">
             📍 {cidade}{(' · ' + uf) if uf else ''} · Atualizado: {dt_pos}
-            {(' · Última atividade: ' + hora_lig) if hora_lig else ''}
           </div>
         </div>"""
 
@@ -2644,59 +2631,69 @@ def _render_frota_dia(itens):
 
 @st.fragment
 def _aba_rastreamento():
+    # ── Cabeçalho: status + botão atualizar ──────────────────────────────────
     atu = st.session_state.get("logos_ultima_atualizacao")
-    c1, c2 = st.columns([5, 1])
-    with c1:
+    col_info, col_btn = st.columns([5, 1])
+    with col_info:
         if atu:
             n = len(st.session_state.get("logos_veiculos", []))
-            st.caption(f" {n} veículos ECO · Atualizado: {atu}")
-    with c2:
-        atualizar = st.button(" Atualizar", key="logos_btn", use_container_width=True)
+            st.caption(f"{n} veículos ECO · Atualizado: {atu}")
+        else:
+            st.caption("Clique em **Atualizar** para buscar dados do Logos Rastreamento.")
+    with col_btn:
+        atualizar = st.button("Atualizar", key="logos_btn", use_container_width=True)
 
     if atualizar:
-        with st.spinner("Conectando ao Logos..."):
+        with st.spinner("Conectando ao Logos Rastreamento..."):
             try:
                 sess, idcli = _logos_login()
                 veiculos = _logos_get_eco(sess, idcli)
                 if not veiculos:
-                    st.warning("Nenhum veículo ECO encontrado.")
+                    st.warning("Nenhum veículo ECO encontrado no Logos.")
                     return
                 st.session_state["logos_veiculos"]           = veiculos
                 st.session_state["logos_ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-                st.session_state.pop("logos_rota", None)
-                st.session_state.pop("logos_periodo_result", None)
-            except Exception as e:
-                st.error(f" {e}")
+                # limpa caches de rota ao atualizar
+                for k in ("logos_rota", "logos_periodo_result", "fd_resultados", "fd_padroes"):
+                    st.session_state.pop(k, None)
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Erro ao conectar: {exc}")
                 return
 
     veiculos = st.session_state.get("logos_veiculos", [])
     if not veiculos:
-        st.info("Clique em ** Atualizar** para buscar os veículos ECO do Logos Rastreamento.")
+        st.info("Pressione **Atualizar** para carregar a frota.")
         return
 
+    # ── Normaliza e enriquece itens ──────────────────────────────────────────
     _funcoes = _chk_funcoes_cache()
-    itens_raw = [_parse_eco(v, i) for i, v in enumerate(veiculos)]
-    # Enriquece com grupo e cor do grupo
-    for it in itens_raw:
+    itens = []
+    for i, v in enumerate(veiculos):
+        it = _parse_eco(v, i)
         g = _motorista_para_grupo(it["motorista"], _funcoes)
-        it["grupo"] = g
+        it["grupo"]     = g
         it["cor_grupo"] = GRUPOS[g]["cor"]
-    itens = itens_raw
+        itens.append(it)
 
-    tab_frota, tab_mapa_periodo, tab_stats, tab_rota = st.tabs([
+    # ── 3 tabs principais ────────────────────────────────────────────────────
+    tab_pos, tab_frota, tab_rota = st.tabs([
+        "Posicao Atual",
         "Frota no Dia",
-        "Mapa & Periodo",
-        "Estatisticas",
         "Rota Individual",
     ])
+
+    # ── Tab 1: Posição Atual ─────────────────────────────────────────────────
+    with tab_pos:
+        st.markdown("#### Posicao Atual da Frota")
+        _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=520)
+        st.markdown("---")
+        _render_estatisticas(itens)
+
+    # ── Tab 2: Frota no Dia ──────────────────────────────────────────────────
     with tab_frota:
         _render_frota_dia(itens)
-    with tab_mapa_periodo:
-        st.markdown("### Posicao Atual da Frota")
-        _render_mapa_posicao(itens, map_key="logos_mapa_pos", height=580)
-        st.markdown("---")
-        _render_analise_periodo(itens)
-    with tab_stats:
-        _render_estatisticas(itens)
+
+    # ── Tab 3: Rota Individual ───────────────────────────────────────────────
     with tab_rota:
         _render_rota_individual(itens)
