@@ -270,6 +270,11 @@ def _aba_resumo():
         dates_range = [d_sel.strftime("%Y-%m-%d")]
     dates_range = [d for d in dates_range if d >= _DATA_MIN.strftime("%Y-%m-%d")]
 
+    # Helper: identifica registros de Diário de Obra (deve ser definido antes de usar)
+    def _e_diario(r):
+        t = str(r.get("tipo", "")).lower()
+        return "diario" in t or "diário" in t
+
     # ── Filtro 3: Tipo de Obra ─────────────────────────────────────────────
     obras_todas = sorted({
         e.get("obra","") for e in ensaios_raw
@@ -285,11 +290,6 @@ def _aba_resumo():
         prof_sel = st.selectbox("Profissional:", ["Todos"] + people_sorted, key="rs_prof")
     if prof_sel != "Todos":
         people_sorted = [prof_sel]
-
-    # Filtra ensaios por obra selecionada (Diario de Obra sempre incluido)
-    def _e_diario(r):
-        t = str(r.get("tipo", "")).lower()
-        return "diario" in t or "diário" in t
 
     if obra_sel != "Todas":
         ens_by_prof_filtrado = defaultdict(lambda: defaultdict(list))
