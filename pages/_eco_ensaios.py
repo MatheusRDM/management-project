@@ -647,22 +647,6 @@ def _aba_ensaios():
     # ── Cards de resumo ────────────────────────────────────────────────────────
     _cards_resumo(df, _mtime or "—")
 
-    # ── Sub-tabs ──────────────────────────────────────────────────────────────
+    # ── Por Frente de Servico ─────────────────────────────────────────────────
     st.markdown("---")
-    tab_frente, tab_analise = st.tabs(["Por Frente de Servico", "Analise Grafica"])
-
-    with tab_frente:
-        _render_por_frente_servico(df)
-
-    with tab_analise:
-        _grafico_timeline(df)
-        st.markdown("---")
-        _heatmap_profissional(df)
-        st.markdown("---")
-        _grafico_por_profissional(df)
-        st.markdown("---")
-        _pivot_quem_fez_o_que(df)
-        st.markdown("---")
-        _dias_sem_registro(df)
-        st.markdown("---")
-        _tabela_com_links(df)
+    _render_por_frente_servico(df)

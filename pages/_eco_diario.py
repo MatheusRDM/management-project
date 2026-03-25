@@ -43,8 +43,12 @@ _CSS = """
 }
 .do-table td.do-nome{
   text-align:left;font-weight:600;color:#E8EFD8;padding-left:8px;
-  min-width:140px;max-width:180px;overflow:hidden;text-overflow:ellipsis
+  min-width:140px;max-width:200px;white-space:normal;
+  vertical-align:middle;line-height:1.4
 }
+.do-nome-cargo{font-size:.55rem;color:#8FA882;font-weight:400;
+  display:block;margin-top:1px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:196px}
 .do-pend{background:rgba(247,183,49,.18);color:#F7B731;border-radius:4px;cursor:help}
 .do-ok{background:rgba(60,180,75,.18);color:#3cb44b;border-radius:4px;cursor:help}
 .do-rep{background:rgba(230,25,75,.18);color:#e6194b;border-radius:4px;cursor:help}
@@ -221,7 +225,12 @@ def _aba_diario():
             regs_por_dia = info["registros"]
             total_lab = sum(len(v) for v in regs_por_dia.values())
             funcao_td = info.get("funcao", "")
-            html.append(f'<tr><td class="do-nome" title="{funcao_td}">{lab}</td>')
+            cargo_html = (f'<span class="do-nome-cargo">{funcao_td}</span>'
+                          if funcao_td else "")
+            html.append(
+                f'<tr><td class="do-nome" title="{funcao_td}">'
+                f'{lab}{cargo_html}</td>'
+            )
             for d in datas_mes:
                 is_hj = (d == today_str)
                 recs_dia = regs_por_dia.get(d, [])

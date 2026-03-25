@@ -14,7 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import folium
 from streamlit_folium import st_folium
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 from _eco_shared import (
     COR_PRIMARY, COR_ACCENT, COR_BG, COR_CARD, COR_BORDER,
