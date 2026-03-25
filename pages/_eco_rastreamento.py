@@ -30,6 +30,45 @@ from _eco_rast_api import (
     _logos_login, _logos_get_eco, _logos_get_rota,
     _pick, _km_from_hist, _normalizar_contrato, _parse_eco,
 )
+from _eco_funcoes import cargo_para_grupo, header_grupo, ORDEM_GRUPOS, GRUPOS, badge_grupo
+
+
+# ---------------------------------------------------------------------------
+# Lookup: motorista → grupo de trabalho (via checklist cache)
+# ---------------------------------------------------------------------------
+@st.cache_data(ttl=3600, show_spinner=False)
+def _chk_funcoes_cache() -> dict[str, str]:
+    """Retorna {nome_normalizado: funcao} a partir do cache de checklist."""
+    import json, os
+    p = os.path.join(_CACHE_DIR, "eco_checklist.json")
+    if not os.path.exists(p):
+        return {}
+    with open(p, encoding="utf-8") as f:
+        dados = json.load(f)
+    mapa = {}
+    for med in dados.values():
+        for pessoas in med.get("sheets", {}).values():
+            for p_info in pessoas:
+                nome = (p_info.get("colaborador") or "").strip().lower()
+                func = p_info.get("funcao") or ""
+                if nome and func:
+                    mapa[nome] = func
+    return mapa
+
+
+def _motorista_para_grupo(motorista: str, funcoes_cache: dict) -> str:
+    """Resolve grupo a partir do nome do motorista, com fallback 'Pavimento'."""
+    nome = motorista.strip().lower()
+    # Busca exata
+    if nome in funcoes_cache:
+        return cargo_para_grupo(funcoes_cache[nome])
+    # Busca por sobrenome ou primeiro nome
+    partes = nome.split()
+    for n, func in funcoes_cache.items():
+        n_partes = n.split()
+        if any(p in n_partes for p in partes if len(p) > 3):
+            return cargo_para_grupo(func)
+    return "Pavimento"
 
 
 # =============================================================================
@@ -2454,105 +2493,149 @@ def _render_frota_dia(itens):
 
     st_folium(mapa, width="100%", height=560, key="fd_mapa", returned_objects=[])
 
-    # ── Scroll infinito: cards por motorista ─────────────────────────────────
+    # ── Detalhamento por Motorista — agrupado por grupo de trabalho ──────────
     st.markdown("---")
     st.markdown("#### Detalhamento por Motorista")
-    for idx, (motorista, dados) in enumerate(sorted(resultados.items())):
-        cor = dados["cor"] if dados["cor"] else _CORES_FROTA[idx % len(_CORES_FROTA)]
-        km      = _km_from_hist(dados["hist"])
-        paradas = _detectar_paradas(dados["hist"])
 
-        # --- Primeira ignição: 1º ponto com ignicao=True ou 1º ponto do histórico ---
-        primeira_ignicao = None
-        for pt in dados["hist"]:
-            ign    = pt.get("ignicao") or pt.get("ignition")
-            dt_str = pt.get("dt", "")
-            if ign and dt_str:
-                try:
-                    primeira_ignicao = datetime.fromisoformat(dt_str.replace("Z", ""))
-                    break
-                except Exception:
-                    pass
-        if primeira_ignicao is None and dados["hist"]:
-            try:
-                primeira_ignicao = datetime.fromisoformat(
-                    dados["hist"][0].get("dt", "").replace("Z", "")
+    # Agrupa resultados por grupo
+    from collections import defaultdict as _dd2
+    _funcoes_rast = _chk_funcoes_cache()
+    por_grupo_rast = _dd2(list)
+    for motorista, dados in sorted(resultados.items()):
+        g = _motorista_para_grupo(motorista, _funcoes_rast)
+        por_grupo_rast[g].append((motorista, dados))
+
+    grupos_rast = [g for g in ORDEM_GRUPOS if por_grupo_rast.get(g)]
+
+    for grupo_rast in grupos_rast:
+        g_info = GRUPOS[grupo_rast]
+        membros = por_grupo_rast[grupo_rast]
+        n_membros = len(membros)
+
+        # Mini gráfico de barras: km por motorista dentro do grupo
+        kms_g   = [(_km_from_hist(d["hist"]), m) for m, d in membros]
+        kms_g.sort(reverse=True)
+
+        with st.expander(
+            f"{g_info['label']} ({n_membros} veic.)",
+            expanded=(grupo_rast == grupos_rast[0]),
+        ):
+            st.markdown(header_grupo(grupo_rast), unsafe_allow_html=True)
+
+            # Gráfico de barras: km por motorista
+            if kms_g:
+                import plotly.graph_objects as _go2
+                fig_g = _go2.Figure(_go2.Bar(
+                    x=[km for km, _ in kms_g],
+                    y=[m.split()[0] for _, m in kms_g],
+                    orientation="h",
+                    marker_color=g_info["cor"],
+                    text=[f"{km:,.0f} km" for km, _ in kms_g],
+                    textposition="outside",
+                ))
+                fig_g.update_layout(
+                    paper_bgcolor="#0D1B2A", plot_bgcolor="#0D1B2A",
+                    font=dict(color="#E8EFD8", size=11),
+                    height=max(120, n_membros * 28),
+                    margin=dict(l=80, r=40, t=10, b=10),
+                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    yaxis=dict(showgrid=False),
+                    dragmode=False,
                 )
-            except Exception:
-                pass
-        primeira_ign_txt = primeira_ignicao.strftime("%H:%M") if primeira_ignicao else "—"
+                st.plotly_chart(fig_g, use_container_width=True, config={"displayModeBar": False})
 
-        # --- Jornada: 1ª ignição → última parada (retorno ao alojamento) ---
-        jornada_txt = "—"
-        if paradas and primeira_ignicao:
-            try:
-                h_ini_str = paradas[-1]["h_ini"]   # "HH:MM"
-                hh, mm    = int(h_ini_str[:2]), int(h_ini_str[3:])
-                t_retorno = primeira_ignicao.replace(hour=hh, minute=mm, second=0, microsecond=0)
-                jornada_min = max(0, int((t_retorno - primeira_ignicao).total_seconds() / 60))
-                jornada_txt = (f"{jornada_min // 60}h{jornada_min % 60:02d}min"
-                               if jornada_min >= 60 else f"{jornada_min} min")
-            except Exception:
+            # Cards dos motoristas
+            for idx_g, (motorista, dados) in enumerate(membros):
+                cor = dados.get("cor") or GRUPOS[grupo_rast]["cor"]
+                km      = _km_from_hist(dados["hist"])
+                paradas = _detectar_paradas(dados["hist"])
+
+                # --- Primeira ignição ---
+                primeira_ignicao = None
+                for pt in dados["hist"]:
+                    ign    = pt.get("ignicao") or pt.get("ignition")
+                    dt_str = pt.get("dt", "")
+                    if ign and dt_str:
+                        try:
+                            primeira_ignicao = datetime.fromisoformat(dt_str.replace("Z", ""))
+                            break
+                        except Exception:
+                            pass
+                if primeira_ignicao is None and dados["hist"]:
+                    try:
+                        primeira_ignicao = datetime.fromisoformat(
+                            dados["hist"][0].get("dt", "").replace("Z", "")
+                        )
+                    except Exception:
+                        pass
+                primeira_ign_txt = primeira_ignicao.strftime("%H:%M") if primeira_ignicao else "—"
+
+                # --- Jornada ---
                 jornada_txt = "—"
+                if paradas and primeira_ignicao:
+                    try:
+                        h_ini_str = paradas[-1]["h_ini"]
+                        hh, mm    = int(h_ini_str[:2]), int(h_ini_str[3:])
+                        t_retorno = primeira_ignicao.replace(hour=hh, minute=mm, second=0, microsecond=0)
+                        jornada_min = max(0, int((t_retorno - primeira_ignicao).total_seconds() / 60))
+                        jornada_txt = (f"{jornada_min // 60}h{jornada_min % 60:02d}min"
+                                       if jornada_min >= 60 else f"{jornada_min} min")
+                    except Exception:
+                        jornada_txt = "—"
 
-        # --- Padroes historicos deste motorista (se analisado) ---
-        padroes_hist = st.session_state.get("fd_padroes", {}).get(motorista, [])
-        prev_hora, prev_cidade, prev_conf = _prever_retorno(padroes_hist, primeira_ignicao)
+                padroes_hist = st.session_state.get("fd_padroes", {}).get(motorista, [])
+                prev_hora, prev_cidade, prev_conf = _prever_retorno(padroes_hist, primeira_ignicao)
 
-        # --- Tempo parado com motor ligado ---
-        tempo_parado_min = 0
-        for p in paradas:
-            tempo_parado_min += p.get("dur_min", 0)
-        if tempo_parado_min >= 60:
-            tempo_parado_txt = f"{tempo_parado_min // 60}h{tempo_parado_min % 60:02d}min"
-        elif tempo_parado_min > 0:
-            tempo_parado_txt = f"{tempo_parado_min} min"
-        else:
-            tempo_parado_txt = "—"
+                # --- Tempo parado ---
+                tempo_parado_min = sum(p.get("dur_min", 0) for p in paradas)
+                if tempo_parado_min >= 60:
+                    tempo_parado_txt = f"{tempo_parado_min // 60}h{tempo_parado_min % 60:02d}min"
+                elif tempo_parado_min > 0:
+                    tempo_parado_txt = f"{tempo_parado_min} min"
+                else:
+                    tempo_parado_txt = "—"
 
-        # --- Header do veiculo ---
-        badges = ""
-        if padroes_hist:
-            lp_top = padroes_hist[0]
-            badge_cor = "#4CC9F0" if lp_top.get("novo_padrao") else "#8FA882"
-            badge_txt = "NOVO PADRAO" if lp_top.get("novo_padrao") else f"{lp_top['n_dias']}d historico"
-            badges = (f'<span style="background:{badge_cor}22;color:{badge_cor};'
-                      f'font-size:.65rem;border-radius:4px;padding:1px 5px;margin-left:6px">'
-                      f'{badge_txt}</span>')
+                # --- Header do veiculo ---
+                badges = ""
+                if padroes_hist:
+                    lp_top = padroes_hist[0]
+                    badge_cor = "#4CC9F0" if lp_top.get("novo_padrao") else "#8FA882"
+                    badge_txt = "NOVO PADRAO" if lp_top.get("novo_padrao") else f"{lp_top['n_dias']}d historico"
+                    badges = (f'<span style="background:{badge_cor}22;color:{badge_cor};'
+                              f'font-size:.65rem;border-radius:4px;padding:1px 5px;margin-left:6px">'
+                              f'{badge_txt}</span>')
 
-        st.markdown(
-            f'<div style="border-left:3px solid {cor};padding:4px 0 4px 12px;margin-bottom:4px">'
-            f'<span style="font-weight:700;color:{cor};font-size:.95rem">{motorista}</span>'
-            f' <span style="color:#8FA882;font-size:.78rem">{dados["placa"]} · {dados["contrato"]}</span>'
-            f'{badges}</div>',
-            unsafe_allow_html=True,
-        )
+                st.markdown(
+                    f'<div style="border-left:3px solid {cor};padding:4px 0 4px 12px;margin-bottom:4px">'
+                    f'<span style="font-weight:700;color:{cor};font-size:.95rem">{motorista}</span>'
+                    f' <span style="color:#8FA882;font-size:.78rem">{dados["placa"]} · {dados["contrato"]}</span>'
+                    f'{badges}</div>',
+                    unsafe_allow_html=True,
+                )
 
-        # --- Metricas: 4 colunas ---
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Km percorridos",     f"{km:,.1f} km")
-        c2.metric("Primeira ignicao",   primeira_ign_txt)
-        c3.metric("Tempo parado ligado", tempo_parado_txt)
-        c4.metric("Jornada total",      jornada_txt)
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Km percorridos",      f"{km:,.1f} km")
+                c2.metric("Primeira ignicao",    primeira_ign_txt)
+                c3.metric("Tempo parado ligado", tempo_parado_txt)
+                c4.metric("Jornada total",       jornada_txt)
 
-        # --- Previsao de retorno (se padroes carregados) ---
-        if prev_hora:
-            local_txt = f" — {prev_cidade}" if prev_cidade and prev_cidade != "—" else ""
-            st.markdown(
-                f'<div style="background:#1A2A1A;border:1px solid #566E3D;border-radius:6px;'
-                f'padding:6px 12px;margin:4px 0 8px 0;font-family:Inter,sans-serif;font-size:.8rem">'
-                f'<span style="color:#8FA882">Previsao retorno:</span> '
-                f'<span style="color:#4CC9F0;font-weight:700;font-size:.95rem">~{prev_hora}</span>'
-                f'<span style="color:#8FA882">{local_txt}</span>'
-                f'<span style="color:#566E3D;font-size:.7rem;margin-left:8px">'
-                f'confianca {prev_conf}% · {len(padroes_hist)} locais mapeados</span>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-        elif padroes_hist:
-            st.caption("Padrao identificado — historico insuficiente para previsao de horario.")
+                if prev_hora:
+                    local_txt = f" — {prev_cidade}" if prev_cidade and prev_cidade != "—" else ""
+                    st.markdown(
+                        f'<div style="background:#1A2A1A;border:1px solid #566E3D;border-radius:6px;'
+                        f'padding:6px 12px;margin:4px 0 8px 0;font-family:Inter,sans-serif;font-size:.8rem">'
+                        f'<span style="color:#8FA882">Previsao retorno:</span> '
+                        f'<span style="color:#4CC9F0;font-weight:700;font-size:.95rem">~{prev_hora}</span>'
+                        f'<span style="color:#8FA882">{local_txt}</span>'
+                        f'<span style="color:#566E3D;font-size:.7rem;margin-left:8px">'
+                        f'confianca {prev_conf}% · {len(padroes_hist)} locais mapeados</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                elif padroes_hist:
+                    st.caption("Padrao identificado — historico insuficiente para previsao de horario.")
 
-        st.markdown('<hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:8px 0">', unsafe_allow_html=True)
+                st.markdown('<hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:8px 0">', unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -2591,7 +2674,14 @@ def _aba_rastreamento():
         st.info("Clique em ** Atualizar** para buscar os veículos ECO do Logos Rastreamento.")
         return
 
-    itens = [_parse_eco(v, i) for i, v in enumerate(veiculos)]
+    _funcoes = _chk_funcoes_cache()
+    itens_raw = [_parse_eco(v, i) for i, v in enumerate(veiculos)]
+    # Enriquece com grupo e cor do grupo
+    for it in itens_raw:
+        g = _motorista_para_grupo(it["motorista"], _funcoes)
+        it["grupo"] = g
+        it["cor_grupo"] = GRUPOS[g]["cor"]
+    itens = itens_raw
 
     tab_frota, tab_mapa_periodo, tab_stats, tab_rota = st.tabs([
         "Frota no Dia",

@@ -6,6 +6,7 @@ Layout Instagram-scroll, mobile-first.
 import sys, os, json
 from datetime import datetime, date, timedelta
 from collections import defaultdict
+from calendar import monthrange
 
 _PAGES_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT_DIR  = os.path.dirname(_PAGES_DIR)
@@ -18,6 +19,7 @@ from _eco_shared import (
     COR_TEXT, COR_MUTED,
     _BASE_DIR, _CACHE_DIR, _IS_CLOUD,
 )
+from _eco_funcoes import cargo_para_grupo, header_grupo, ORDEM_GRUPOS, GRUPOS
 
 _BASE44_URL = "https://aevias-controle.base44.app"
 
@@ -194,204 +196,213 @@ def _aba_resumo():
                     unsafe_allow_html=True)
         return
 
-    # ── Period selector ────────────────────────────────────────────────────
-    periodo = st.radio(
-        "Período:",
-        options=["Hoje", "7 dias", "30 dias"],
-        index=0,
-        horizontal=True,
-        key="resumo_periodo",
-    )
-    if periodo == "Hoje":
-        dates_range = [today_str]
-    elif periodo == "7 dias":
-        dates_range = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    # ── DATA MÍNIMA: 01/03/2026 ────────────────────────────────────────────
+    _DATA_MIN = date(2026, 3, 1)
+
+    # ── Filtro 1: Mês ──────────────────────────────────────────────────────
+    _PT = {1:"Jan",2:"Fev",3:"Mar",4:"Abr",5:"Mai",6:"Jun",
+           7:"Jul",8:"Ago",9:"Set",10:"Out",11:"Nov",12:"Dez"}
+    # Meses disponíveis: de 03/2026 até hoje
+    meses_disp = []
+    cur = _DATA_MIN.replace(day=1)
+    while cur <= today.replace(day=1):
+        meses_disp.append((cur.year, cur.month))
+        m2 = cur.month + 1
+        cur = cur.replace(year=cur.year + (1 if m2 > 12 else 0),
+                          month=(m2 - 1) % 12 + 1)
+    meses_disp.reverse()
+    opcoes_mes = {f"{_PT[m]}/{y}": (y, m) for y, m in meses_disp}
+
+    col_mes, col_dia, col_obra, col_prof = st.columns([2, 2, 2, 2])
+    with col_mes:
+        mes_lbl = st.selectbox("Mes:", list(opcoes_mes.keys()), key="rs_mes")
+    ano_sel, mes_sel = opcoes_mes[mes_lbl]
+
+    # ── Filtro 2: Dia do mês ───────────────────────────────────────────────
+    _, ultimo_dia = monthrange(ano_sel, mes_sel)
+    dias_disp = list(range(1, min(ultimo_dia, today.day if (ano_sel == today.year and mes_sel == today.month) else ultimo_dia) + 1))
+    opcoes_dia = {str(d): d for d in reversed(dias_disp)}
+    opcoes_dia = {"Todos os dias": 0, **opcoes_dia}
+    with col_dia:
+        dia_lbl = st.selectbox("Dia:", list(opcoes_dia.keys()), key="rs_dia")
+    dia_sel = opcoes_dia[dia_lbl]
+
+    # Calcula dates_range
+    if dia_sel == 0:
+        d_ini = max(date(ano_sel, mes_sel, 1), _DATA_MIN)
+        d_fim = date(ano_sel, mes_sel, min(ultimo_dia, today.day if (ano_sel == today.year and mes_sel == today.month) else ultimo_dia))
+        dates_range = [(d_ini + timedelta(days=i)).strftime("%Y-%m-%d")
+                       for i in range((d_fim - d_ini).days + 1)]
     else:
-        dates_range = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(30)]
-    dates_range.sort()
+        d_sel = date(ano_sel, mes_sel, dia_sel)
+        dates_range = [d_sel.strftime("%Y-%m-%d")]
+    dates_range = [d for d in dates_range if d >= _DATA_MIN.strftime("%Y-%m-%d")]
 
-    # ── Person filter ──────────────────────────────────────────────────────
+    # ── Filtro 3: Tipo de Obra ─────────────────────────────────────────────
+    obras_todas = sorted({
+        e.get("obra","") for e in ensaios_raw
+        if e.get("obra") and e.get("tipo") != "Diário de Obra"
+    })
+    with col_obra:
+        obra_sel = st.selectbox("Tipo de Obra:", ["Todas"] + obras_todas, key="rs_obra")
+
+    # ── Filtro 4: Profissional ─────────────────────────────────────────────
     people_sorted = sorted(all_people)
-    selected = st.multiselect(
-        "Filtrar profissional:",
-        options=people_sorted,
-        default=[],
-        key="resumo_filtro_pessoa",
-        placeholder="Todos os profissionais",
-    )
-    if selected:
-        people_sorted = selected
+    with col_prof:
+        prof_sel = st.selectbox("Profissional:", ["Todos"] + people_sorted, key="rs_prof")
+    if prof_sel != "Todos":
+        people_sorted = [prof_sel]
 
-    # ── Render cards ───────────────────────────────────────────────────────
+    # Filtra ensaios por obra selecionada
+    if obra_sel != "Todas":
+        ens_by_prof_filtrado = defaultdict(lambda: defaultdict(list))
+        for prof, dias in ens_by_prof.items():
+            for d, recs in dias.items():
+                recs_f = [r for r in recs if r.get("obra") == obra_sel]
+                if recs_f:
+                    ens_by_prof_filtrado[prof][d] = recs_f
+    else:
+        ens_by_prof_filtrado = ens_by_prof
+
+    # ── Agrupa pessoas por grupo de trabalho ──────────────────────────────
+    funcao_por_pessoa: dict[str, str] = {}
+    for med in checklist_cache.values():
+        for pessoas in med.get("sheets", {}).values():
+            for p in pessoas:
+                nome = p.get("colaborador","").strip()
+                func = p.get("funcao","")
+                if nome and func:
+                    funcao_por_pessoa[nome] = func
+
+    por_grupo_rs = defaultdict(list)
     for person in people_sorted:
-        initials = "".join(w[0] for w in person.split()[:2]).upper() if person else "?"
+        func = funcao_por_pessoa.get(person, "")
+        g = cargo_para_grupo(func)
+        por_grupo_rs[g].append(person)
 
-        # Collect person data
-        ens_data = ens_by_prof.get(person, {})
-        ck_data  = ck_by_person.get(person, {})
-        rastr    = rastr_by_person.get(person)
+    grupos_rs = [g for g in ORDEM_GRUPOS if por_grupo_rs.get(g)]
 
-        # Check if person has any data in range
-        has_data = False
-        for d in dates_range:
-            if d in ens_data or d in ck_data:
-                has_data = True
-                break
-        if rastr:
-            has_data = True
-        if not has_data and not selected:
-            continue
+    # ── Render cards por grupo ─────────────────────────────────────────────
+    for grupo_rs in grupos_rs:
+        st.markdown(header_grupo(grupo_rs), unsafe_allow_html=True)
+        for person in por_grupo_rs[grupo_rs]:
+            initials = "".join(w[0] for w in person.split()[:2]).upper() if person else "?"
 
-        # ── Card HTML start ────────────────────────────────────────────────
-        card_parts = []
-        card_parts.append(f'<div class="rs-card">')
+            # Collect person data
+            ens_data = ens_by_prof_filtrado.get(person, {})
+            ck_data  = ck_by_person.get(person, {})
+            rastr    = rastr_by_person.get(person)
 
-        # Header with avatar
-        role = ""
-        for p_list in checklist_cache.get(list(checklist_cache.keys())[-1] if checklist_cache else "", {}).get("sheets", {}).values():
-            for p in p_list:
-                if p.get("colaborador", "").strip() == person:
-                    role = p.get("funcao", "")
-                    break
+            # Skip if no data in selected range
+            has_data = any(d in ens_data or d in ck_data for d in dates_range) or bool(rastr)
+            if not has_data:
+                continue
 
-        # Rastreamento live status
-        ign_html = ""
-        if rastr:
-            em_mov = rastr.get("velocidade", 0) > 3
-            if rastr.get("ignicao"):
-                if em_mov:
-                    ign_html = (f'<span class="rs-ign ig-on">'
-                                f'🟡 {int(rastr["velocidade"])} km/h</span>')
+            # ── Card HTML ──────────────────────────────────────────────────
+            card_parts = ['<div class="rs-card">']
+
+            role = funcao_por_pessoa.get(person, "")
+            ign_html = ""
+            if rastr:
+                em_mov = rastr.get("velocidade", 0) > 3
+                if rastr.get("ignicao"):
+                    vel = int(rastr["velocidade"])
+                    ign_html = (f'<span class="rs-ign ig-on">{vel} km/h</span>' if em_mov
+                                else '<span class="rs-ign ig-on">Ligado</span>')
                 else:
-                    ign_html = '<span class="rs-ign ig-on">🟢 Ligado</span>'
-            else:
-                ign_html = '<span class="rs-ign ig-off">🔴 Desligado</span>'
-
-        card_parts.append(
-            f'<div class="rs-phdr">'
-            f'<div class="rs-avatar">{initials}</div>'
-            f'<div style="flex:1;min-width:0">'
-            f'<div class="rs-pname">{person}</div>'
-            f'<div class="rs-prole">{role}</div>'
-            f'</div>'
-            f'{ign_html}'
-            f'</div>'
-        )
-
-        # Rastreamento metrics (if available)
-        if rastr:
-            km = rastr.get("odometro", 0)
-            h_dir = rastr.get("tempo_dir_h", 0)
-            h_par = rastr.get("tempo_par_min", 0)
-            cidade = rastr.get("cidade", "—")
-            uf = rastr.get("uf", "")
-            dt_pos = rastr.get("dt_posicao", "—")
-            placa = rastr.get("placa", "")
+                    ign_html = '<span class="rs-ign ig-off">Desligado</span>'
 
             card_parts.append(
-                f'<div class="rs-metrics">'
-                f'<div class="rs-metric"><div class="mv" style="color:#7BBF6A">'
-                f'{h_dir:.1f}h</div><div class="ml">Dirigindo</div></div>'
-                f'<div class="rs-metric"><div class="mv" style="color:#F7B731">'
-                f'{h_par:.0f}min</div><div class="ml">Parado ligado</div></div>'
-                f'<div class="rs-metric"><div class="mv" style="color:#4CC9F0">'
-                f'{km:,} km</div><div class="ml">Hodômetro</div></div>'
-                f'<div class="rs-metric"><div class="mv" style="color:#8FA882">'
-                f'{cidade}</div><div class="ml">{uf} · {placa}</div></div>'
-                f'</div>'
+                f'<div class="rs-phdr">'
+                f'<div class="rs-avatar">{initials}</div>'
+                f'<div style="flex:1;min-width:0">'
+                f'<div class="rs-pname">{person}</div>'
+                f'<div class="rs-prole">{role}</div>'
+                f'</div>{ign_html}</div>'
             )
 
-        # Day-by-day breakdown
-        for d in reversed(dates_range):
-            try:
-                dt_obj = datetime.strptime(d, "%Y-%m-%d")
-            except Exception:
-                continue
+            if rastr:
+                h_dir  = rastr.get("tempo_dir_h", 0)
+                h_par  = rastr.get("tempo_par_min", 0)
+                km_odo = rastr.get("odometro", 0)
+                cidade = rastr.get("cidade", "—")
+                uf     = rastr.get("uf", "")
+                placa  = rastr.get("placa", "")
+                card_parts.append(
+                    f'<div class="rs-metrics">'
+                    f'<div class="rs-metric"><div class="mv" style="color:#7BBF6A">{h_dir:.1f}h</div>'
+                    f'<div class="ml">Dirigindo</div></div>'
+                    f'<div class="rs-metric"><div class="mv" style="color:#F7B731">{h_par:.0f}min</div>'
+                    f'<div class="ml">Parado ligado</div></div>'
+                    f'<div class="rs-metric"><div class="mv" style="color:#4CC9F0">{km_odo:,} km</div>'
+                    f'<div class="ml">Hodometro</div></div>'
+                    f'<div class="rs-metric"><div class="mv" style="color:#8FA882">{cidade}</div>'
+                    f'<div class="ml">{uf} · {placa}</div></div>'
+                    f'</div>'
+                )
 
-            day_ens = ens_data.get(d, [])
-            ck_val  = ck_data.get(d)
+            for d in reversed(dates_range):
+                try:
+                    dt_obj = datetime.strptime(d, "%Y-%m-%d")
+                except Exception:
+                    continue
+                day_ens = ens_data.get(d, [])
+                ck_val  = ck_data.get(d)
+                if not day_ens and not ck_val:
+                    continue
 
-            if not day_ens and not ck_val:
-                continue
+                day_name  = DAY_NAMES.get(dt_obj.weekday(), "")
+                day_label = f"{day_name} {dt_obj.day:02d}/{dt_obj.month:02d}"
+                card_parts.append(
+                    f'<div class="rs-day">'
+                    f'<div class="rs-day-hdr">'
+                    f'<span class="rs-day-title">{day_label}</span>'
+                    f'<span class="rs-day-date">{d}</span>'
+                    f'</div>'
+                )
 
-            day_name = DAY_NAMES.get(dt_obj.weekday(), "")
-            day_label = f"{day_name} {dt_obj.day:02d}/{dt_obj.month:02d}"
+                badges = []
+                if ck_val:
+                    vu = str(ck_val).upper().strip()
+                    if vu == "OK":
+                        badges.append('<span class="rs-badge rb-ok">Checklist OK</span>')
+                    elif vu in ("COBRAR","COBRE"):
+                        badges.append('<span class="rs-badge rb-miss">Checklist Pendente</span>')
+                    elif vu in ("N/E","NE"):
+                        badges.append('<span class="rs-badge rb-ne">N/E Campo</span>')
+                if day_ens:
+                    n_ok   = sum(1 for e in day_ens if "aprovado"  in str(e.get("status","")).lower())
+                    n_pend = sum(1 for e in day_ens if "pendente"  in str(e.get("status","")).lower())
+                    n_rep  = sum(1 for e in day_ens if "reprovado" in str(e.get("status","")).lower())
+                    if n_ok:   badges.append(f'<span class="rs-badge rb-ok">{n_ok} ensaio{"s" if n_ok>1 else ""} OK</span>')
+                    if n_pend: badges.append(f'<span class="rs-badge rb-pend">{n_pend} pendente{"s" if n_pend>1 else ""}</span>')
+                    if n_rep:  badges.append(f'<span class="rs-badge rb-miss">{n_rep} reprovado{"s" if n_rep>1 else ""}</span>')
+                if badges:
+                    card_parts.append(f'<div class="rs-badges">{"".join(badges)}</div>')
 
-            card_parts.append(f'<div class="rs-day">')
-            card_parts.append(
-                f'<div class="rs-day-hdr">'
-                f'<span class="rs-day-title">{day_label}</span>'
-                f'<span class="rs-day-date">{d}</span>'
-                f'</div>'
-            )
-
-            # Checklist status
-            badges = []
-            if ck_val:
-                vu = str(ck_val).upper().strip()
-                if vu == "OK":
-                    badges.append('<span class="rs-badge rb-ok">✓ Checklist OK</span>')
-                elif vu in ("COBRAR", "COBRE"):
-                    badges.append('<span class="rs-badge rb-miss">✗ Checklist Pendente</span>')
-                elif vu in ("N/E", "NE"):
-                    badges.append('<span class="rs-badge rb-ne">N/E Campo</span>')
-
-            # Ensaios counts
-            if day_ens:
-                n_ok = sum(1 for e in day_ens if "aprovado" in str(e.get("status","")).lower())
-                n_pend = sum(1 for e in day_ens if "pendente" in str(e.get("status","")).lower())
-                n_rep = sum(1 for e in day_ens if "reprovado" in str(e.get("status","")).lower())
-
-                if n_ok:
-                    badges.append(f'<span class="rs-badge rb-ok">{n_ok} ensaio{"s" if n_ok > 1 else ""} OK</span>')
-                if n_pend:
-                    badges.append(f'<span class="rs-badge rb-pend">{n_pend} pendente{"s" if n_pend > 1 else ""}</span>')
-                if n_rep:
-                    badges.append(f'<span class="rs-badge rb-miss">{n_rep} reprovado{"s" if n_rep > 1 else ""}</span>')
-
-                # Check for Diário de Obra
-                diarios = [e for e in day_ens if "diário" in str(e.get("tipo","")).lower()
-                           or "diario" in str(e.get("tipo","")).lower()]
-                if diarios:
-                    badges.append('<span class="rs-badge rb-ok">📋 Diário de Obra</span>')
-
-            if badges:
-                card_parts.append(f'<div class="rs-badges">{"".join(badges)}</div>')
-
-            # Ensaio details
-            if day_ens:
-                for e in day_ens:
-                    tipo = e.get("tipo", "—")
-                    obra = e.get("obra", "")
-                    status = e.get("status", "")
-                    url = e.get("reportUrl", "")
-                    s_lower = status.lower()
-                    dot_c = "#3cb44b" if "aprovado" in s_lower else "#F7B731" if "pendente" in s_lower else "#FF6B6B" if "reprovado" in s_lower else "#6b7f8d"
-
-                    link = f' · <a href="{_BASE44_URL}{url}" target="_blank" style="color:#4CC9F0;text-decoration:none;font-size:.62rem">Ver ↗</a>' if url else ""
-                    card_parts.append(
-                        f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0">'
-                        f'<span style="width:6px;height:6px;border-radius:50%;background:{dot_c};flex-shrink:0"></span>'
-                        f'<span style="font-size:.7rem;color:#C8D8A8">{tipo}</span>'
-                        f'<span style="font-size:.6rem;color:#6b7f8d">{obra}</span>'
-                        f'<span style="font-size:.58rem;color:{dot_c};font-weight:600">{status}</span>'
-                        f'{link}'
-                        f'</div>'
-                    )
-
-                # Diário de Obra description
-                for e in day_ens:
-                    desc = e.get("descricao") or e.get("description") or e.get("observacao") or ""
-                    if desc and ("diário" in str(e.get("tipo","")).lower() or
-                                 "diario" in str(e.get("tipo","")).lower()):
+                if day_ens:
+                    for e in day_ens:
+                        tipo   = e.get("tipo","—")
+                        obra   = e.get("obra","")
+                        status = e.get("status","")
+                        url    = e.get("reportUrl","")
+                        s_l    = status.lower()
+                        dot_c  = ("#3cb44b" if "aprovado" in s_l else
+                                  "#F7B731" if "pendente" in s_l else
+                                  "#FF6B6B" if "reprovado" in s_l else "#6b7f8d")
+                        link = (f' · <a href="{_BASE44_URL}{url}" target="_blank" '
+                                f'style="color:#4CC9F0;text-decoration:none;font-size:.62rem">Ver</a>'
+                                if url else "")
                         card_parts.append(
-                            f'<div class="rs-diario">'
-                            f'<div class="rs-diario-label">DIÁRIO DE OBRA</div>'
-                            f'{desc}'
-                            f'</div>'
+                            f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0">'
+                            f'<span style="width:6px;height:6px;border-radius:50%;background:{dot_c};flex-shrink:0"></span>'
+                            f'<span style="font-size:.7rem;color:#C8D8A8">{tipo}</span>'
+                            f'<span style="font-size:.6rem;color:#6b7f8d">{obra}</span>'
+                            f'<span style="font-size:.58rem;color:{dot_c};font-weight:600">{status}</span>'
+                            f'{link}</div>'
                         )
 
-            card_parts.append('</div>')  # close rs-day
+                card_parts.append('</div>')  # close rs-day
 
-        card_parts.append('</div>')  # close rs-card
-        st.markdown("".join(card_parts), unsafe_allow_html=True)
+            card_parts.append('</div>')  # close rs-card
+            st.markdown("".join(card_parts), unsafe_allow_html=True)

@@ -220,7 +220,8 @@ def _aba_diario():
         for lab, info in labs_grupo:
             regs_por_dia = info["registros"]
             total_lab = sum(len(v) for v in regs_por_dia.values())
-            html.append(f'<tr><td class="do-nome" title="{info.get(\"funcao\",\"\")}\">{lab}</td>')
+            funcao_td = info.get("funcao", "")
+            html.append(f'<tr><td class="do-nome" title="{funcao_td}">{lab}</td>')
             for d in datas_mes:
                 is_hj = (d == today_str)
                 recs_dia = regs_por_dia.get(d, [])
