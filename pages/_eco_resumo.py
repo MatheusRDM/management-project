@@ -178,12 +178,39 @@ def _aba_resumo():
                     for d, v in p.get("dias", {}).items():
                         ck_by_person[nome][d] = v
 
-    # ── Build rastreamento index: motorista → data ─────────────────────────
-    rastr_by_person = {}
+    # ── Build rastreamento index: motorista → data (com fuzzy match) ─────────
+    rastr_by_motorista: dict[str, dict] = {}
     for it in rastr_itens:
-        motorista = it.get("motorista", "").strip()
-        if motorista:
-            rastr_by_person[motorista] = it
+        m = it.get("motorista", "").strip()
+        if m:
+            rastr_by_motorista[m] = it
+
+    def _normalizar(nome: str) -> set[str]:
+        """Retorna set de tokens longos (>=4 chars) do nome em minúsculas."""
+        import unicodedata
+        s = unicodedata.normalize("NFD", nome.lower())
+        s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+        return {t for t in s.split() if len(t) >= 4}
+
+    # Pré-computa tokens dos motoristas
+    _rastr_tokens: list[tuple[set, dict]] = [
+        (_normalizar(m), it) for m, it in rastr_by_motorista.items()
+    ]
+
+    def _buscar_rastr(nome_pessoa: str) -> dict | None:
+        """Tenta localizar o veículo do colaborador por sobreposição de tokens."""
+        tokens_p = _normalizar(nome_pessoa)
+        if not tokens_p:
+            return None
+        melhor, melhor_n = None, 0
+        for tokens_m, it in _rastr_tokens:
+            n = len(tokens_p & tokens_m)
+            if n > melhor_n:
+                melhor_n, melhor = n, it
+        return melhor if melhor_n >= 1 else None
+
+    # Compatibilidade: mantém rastr_by_person para lookup direto
+    rastr_by_person: dict[str, dict] = rastr_by_motorista
 
     # ── Collect all unique person names ────────────────────────────────────
     all_people = set()
@@ -282,127 +309,138 @@ def _aba_resumo():
 
     grupos_rs = [g for g in ORDEM_GRUPOS if por_grupo_rs.get(g)]
 
-    # ── Render cards por grupo ─────────────────────────────────────────────
+    # ── Render cards por grupo (expander por grupo + expander por pessoa) ─────
     for grupo_rs in grupos_rs:
-        st.markdown(header_grupo(grupo_rs), unsafe_allow_html=True)
-        for person in por_grupo_rs[grupo_rs]:
-            initials = "".join(w[0] for w in person.split()[:2]).upper() if person else "?"
+        g_info = GRUPOS[grupo_rs]
+        n_grupo = len(por_grupo_rs[grupo_rs])
 
-            # Collect person data
-            ens_data = ens_by_prof_filtrado.get(person, {})
-            ck_data  = ck_by_person.get(person, {})
-            rastr    = rastr_by_person.get(person)
+        with st.expander(f"{g_info['label']}  ({n_grupo} pessoas)", expanded=True):
+            st.markdown(header_grupo(grupo_rs), unsafe_allow_html=True)
 
-            # Skip if no data in selected range
-            has_data = any(d in ens_data or d in ck_data for d in dates_range) or bool(rastr)
-            if not has_data:
-                continue
+            for person in por_grupo_rs[grupo_rs]:
+                ens_data = ens_by_prof_filtrado.get(person, {})
+                ck_data  = ck_by_person.get(person, {})
+                rastr    = _buscar_rastr(person)   # fuzzy match por tokens
 
-            # ── Card HTML ──────────────────────────────────────────────────
-            card_parts = ['<div class="rs-card">']
-
-            role = funcao_por_pessoa.get(person, "")
-            ign_html = ""
-            if rastr:
-                em_mov = rastr.get("velocidade", 0) > 3
-                if rastr.get("ignicao"):
-                    vel = int(rastr["velocidade"])
-                    ign_html = (f'<span class="rs-ign ig-on">{vel} km/h</span>' if em_mov
-                                else '<span class="rs-ign ig-on">Ligado</span>')
-                else:
-                    ign_html = '<span class="rs-ign ig-off">Desligado</span>'
-
-            card_parts.append(
-                f'<div class="rs-phdr">'
-                f'<div class="rs-avatar">{initials}</div>'
-                f'<div style="flex:1;min-width:0">'
-                f'<div class="rs-pname">{person}</div>'
-                f'<div class="rs-prole">{role}</div>'
-                f'</div>{ign_html}</div>'
-            )
-
-            if rastr:
-                h_dir  = rastr.get("tempo_dir_h", 0)
-                h_par  = rastr.get("tempo_par_min", 0)
-                km_odo = rastr.get("odometro", 0)
-                cidade = rastr.get("cidade", "—")
-                uf     = rastr.get("uf", "")
-                placa  = rastr.get("placa", "")
-                card_parts.append(
-                    f'<div class="rs-metrics">'
-                    f'<div class="rs-metric"><div class="mv" style="color:#7BBF6A">{h_dir:.1f}h</div>'
-                    f'<div class="ml">Dirigindo</div></div>'
-                    f'<div class="rs-metric"><div class="mv" style="color:#F7B731">{h_par:.0f}min</div>'
-                    f'<div class="ml">Parado ligado</div></div>'
-                    f'<div class="rs-metric"><div class="mv" style="color:#4CC9F0">{km_odo:,} km</div>'
-                    f'<div class="ml">Hodometro</div></div>'
-                    f'<div class="rs-metric"><div class="mv" style="color:#8FA882">{cidade}</div>'
-                    f'<div class="ml">{uf} · {placa}</div></div>'
-                    f'</div>'
-                )
-
-            for d in reversed(dates_range):
-                try:
-                    dt_obj = datetime.strptime(d, "%Y-%m-%d")
-                except Exception:
-                    continue
-                day_ens = ens_data.get(d, [])
-                ck_val  = ck_data.get(d)
-                if not day_ens and not ck_val:
+                has_data = any(d in ens_data or d in ck_data for d in dates_range) or bool(rastr)
+                if not has_data:
                     continue
 
-                day_name  = DAY_NAMES.get(dt_obj.weekday(), "")
-                day_label = f"{day_name} {dt_obj.day:02d}/{dt_obj.month:02d}"
-                card_parts.append(
-                    f'<div class="rs-day">'
-                    f'<div class="rs-day-hdr">'
-                    f'<span class="rs-day-title">{day_label}</span>'
-                    f'<span class="rs-day-date">{d}</span>'
-                    f'</div>'
-                )
+                role = funcao_por_pessoa.get(person, "")
+                initials = "".join(w[0] for w in person.split()[:2]).upper() if person else "?"
 
-                badges = []
-                if ck_val:
-                    vu = str(ck_val).upper().strip()
-                    if vu == "OK":
-                        badges.append('<span class="rs-badge rb-ok">Checklist OK</span>')
-                    elif vu in ("COBRAR","COBRE"):
-                        badges.append('<span class="rs-badge rb-miss">Checklist Pendente</span>')
-                    elif vu in ("N/E","NE"):
-                        badges.append('<span class="rs-badge rb-ne">N/E Campo</span>')
-                if day_ens:
-                    n_ok   = sum(1 for e in day_ens if "aprovado"  in str(e.get("status","")).lower())
-                    n_pend = sum(1 for e in day_ens if "pendente"  in str(e.get("status","")).lower())
-                    n_rep  = sum(1 for e in day_ens if "reprovado" in str(e.get("status","")).lower())
-                    if n_ok:   badges.append(f'<span class="rs-badge rb-ok">{n_ok} ensaio{"s" if n_ok>1 else ""} OK</span>')
-                    if n_pend: badges.append(f'<span class="rs-badge rb-pend">{n_pend} pendente{"s" if n_pend>1 else ""}</span>')
-                    if n_rep:  badges.append(f'<span class="rs-badge rb-miss">{n_rep} reprovado{"s" if n_rep>1 else ""}</span>')
-                if badges:
-                    card_parts.append(f'<div class="rs-badges">{"".join(badges)}</div>')
+                # Status ignição para label do expander
+                ign_label = ""
+                if rastr:
+                    if rastr.get("ignicao"):
+                        v = rastr.get("velocidade", 0)
+                        ign_label = f" · {int(v)} km/h" if v > 3 else " · Ligado"
+                    else:
+                        ign_label = " · Desligado"
 
-                if day_ens:
-                    for e in day_ens:
-                        tipo   = e.get("tipo","—")
-                        obra   = e.get("obra","")
-                        status = e.get("status","")
-                        url    = e.get("reportUrl","")
-                        s_l    = status.lower()
-                        dot_c  = ("#3cb44b" if "aprovado" in s_l else
-                                  "#F7B731" if "pendente" in s_l else
-                                  "#FF6B6B" if "reprovado" in s_l else "#6b7f8d")
-                        link = (f' · <a href="{_BASE44_URL}{url}" target="_blank" '
-                                f'style="color:#4CC9F0;text-decoration:none;font-size:.62rem">Ver</a>'
-                                if url else "")
-                        card_parts.append(
-                            f'<div style="display:flex;align-items:center;gap:6px;padding:3px 0">'
-                            f'<span style="width:6px;height:6px;border-radius:50%;background:{dot_c};flex-shrink:0"></span>'
-                            f'<span style="font-size:.7rem;color:#C8D8A8">{tipo}</span>'
-                            f'<span style="font-size:.6rem;color:#6b7f8d">{obra}</span>'
-                            f'<span style="font-size:.58rem;color:{dot_c};font-weight:600">{status}</span>'
-                            f'{link}</div>'
+                with st.expander(f"{person}{ign_label}  —  {role}", expanded=False):
+
+                    # ── Rastreamento (veículo) ─────────────────────────────
+                    if rastr:
+                        st.markdown(
+                            '<div style="font-size:.65rem;font-weight:700;color:#4CC9F0;'
+                            'letter-spacing:.06em;margin-bottom:4px">VEICULO / RASTREAMENTO</div>',
+                            unsafe_allow_html=True,
                         )
+                        h_dir  = rastr.get("tempo_dir_h", 0)
+                        h_par  = rastr.get("tempo_par_min", 0)
+                        km_odo = rastr.get("odometro", 0)
+                        cidade = rastr.get("cidade", "—")
+                        uf     = rastr.get("uf", "")
+                        placa  = rastr.get("placa", "")
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("Dirigindo",  f"{h_dir:.1f}h")
+                        c2.metric("Parado",     f"{h_par:.0f}min")
+                        c3.metric("Hodometro",  f"{km_odo:,} km")
+                        c4.metric("Local",      f"{cidade} {uf}")
+                        st.caption(f"Placa: {placa}")
+                        st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
 
-                card_parts.append('</div>')  # close rs-day
+                    # ── Checklist + Diário + Ensaios por dia ───────────────
+                    for d in reversed(dates_range):
+                        try:
+                            dt_obj = datetime.strptime(d, "%Y-%m-%d")
+                        except Exception:
+                            continue
+                        day_all   = ens_data.get(d, [])
+                        ck_val    = ck_data.get(d)
+                        day_ck    = [e for e in day_all if str(e.get("tipo","")).lower().startswith("checklist")]
+                        day_do    = [e for e in day_all if "diário" in str(e.get("tipo","")).lower()
+                                     or "diario" in str(e.get("tipo","")).lower()]
+                        day_ens_r = [e for e in day_all if e not in day_ck and e not in day_do]
 
-            card_parts.append('</div>')  # close rs-card
-            st.markdown("".join(card_parts), unsafe_allow_html=True)
+                        if not day_all and not ck_val:
+                            continue
+
+                        day_name  = DAY_NAMES.get(dt_obj.weekday(), "")
+                        day_label = f"{day_name} {dt_obj.day:02d}/{dt_obj.month:02d}"
+                        parts = [
+                            f'<div class="rs-day">'
+                            f'<div class="rs-day-hdr">'
+                            f'<span class="rs-day-title">{day_label}</span>'
+                            f'<span class="rs-day-date">{d}</span>'
+                            f'</div>'
+                        ]
+
+                        def _dot_row(e):
+                            tipo   = e.get("tipo","—")
+                            obra   = e.get("obra","")
+                            status = e.get("status","")
+                            url    = e.get("reportUrl","")
+                            s_l    = status.lower()
+                            dot_c  = ("#3cb44b" if "aprovado" in s_l else
+                                      "#F7B731" if "pendente" in s_l else
+                                      "#FF6B6B" if "reprovado" in s_l else "#6b7f8d")
+                            link = (f'<a href="{_BASE44_URL}{url}" target="_blank" '
+                                    f'style="color:#4CC9F0;font-size:.6rem;margin-left:4px">Ver</a>'
+                                    if url else "")
+                            return (
+                                f'<div style="display:flex;align-items:center;gap:5px;padding:2px 0">'
+                                f'<span style="width:6px;height:6px;border-radius:50%;background:{dot_c};flex-shrink:0"></span>'
+                                f'<span style="font-size:.68rem;color:#C8D8A8">{tipo}</span>'
+                                f'<span style="font-size:.58rem;color:#6b7f8d">{obra}</span>'
+                                f'<span style="font-size:.58rem;color:{dot_c};font-weight:600">{status}</span>'
+                                f'{link}</div>'
+                            )
+
+                        # Bloco CHECKLIST
+                        if ck_val or day_ck:
+                            vu = str(ck_val or "").upper().strip()
+                            ck_cor = ("#3cb44b" if vu=="OK" else
+                                      "#e6194b" if vu in ("COBRAR","COBRE") else
+                                      "#7a90a8" if vu in ("N/E","NE") else "#566E3D")
+                            ck_lbl = {"OK":"OK", "COBRAR":"Pendente","COBRE":"Pendente",
+                                      "N/E":"N/E","NE":"N/E"}.get(vu, vu or "—")
+                            parts.append(
+                                f'<div style="margin:4px 0 2px;font-size:.6rem;font-weight:700;'
+                                f'color:#BFCF99;letter-spacing:.04em">CHECKLIST</div>'
+                                f'<div style="display:flex;align-items:center;gap:6px;padding:2px 0">'
+                                f'<span style="background:{ck_cor}22;color:{ck_cor};font-size:.62rem;'
+                                f'font-weight:700;border-radius:4px;padding:1px 6px">{ck_lbl}</span>'
+                                + "".join(_dot_row(e) for e in day_ck)
+                                + '</div>'
+                            )
+
+                        # Bloco DIÁRIO DE OBRA
+                        if day_do:
+                            parts.append(
+                                f'<div style="margin:4px 0 2px;font-size:.6rem;font-weight:700;'
+                                f'color:#4CC9F0;letter-spacing:.04em">DIARIO DE OBRA</div>'
+                            )
+                            parts.extend(_dot_row(e) for e in day_do)
+
+                        # Bloco ENSAIOS
+                        if day_ens_r:
+                            parts.append(
+                                f'<div style="margin:4px 0 2px;font-size:.6rem;font-weight:700;'
+                                f'color:#7BBF6A;letter-spacing:.04em">ENSAIOS</div>'
+                            )
+                            parts.extend(_dot_row(e) for e in day_ens_r)
+
+                        parts.append('</div>')  # close rs-day
+                        st.markdown("".join(parts), unsafe_allow_html=True)
