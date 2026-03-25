@@ -30,8 +30,29 @@ proteger_pagina("Eco Rodovias")
 # ── CSS (cal-table styles + component styles needed at runtime) ───────────────
 st.markdown("""
 <style>
-/* Esconder navegacao automatica lateral do Streamlit */
-[data-testid="stSidebarNav"],[data-testid="stSidebarNavItems"],[data-testid="collapsedControl"]{display:none!important}
+/* ── Ocultar sidebar completamente nesta pagina ─────────────────────────── */
+section[data-testid="stSidebar"],
+[data-testid="stSidebarNav"],
+[data-testid="stSidebarNavItems"],
+[data-testid="collapsedControl"],
+button[aria-label="Close sidebar"],
+button[aria-label="Open sidebar"],
+button[kind="header"],
+[data-testid="stSidebarToggle"] {
+    display: none !important;
+    width:  0   !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+}
+/* Garantir que o conteudo principal ocupe toda a largura */
+.main > .block-container {
+    max-width: 100% !important;
+    padding-left:  1.2rem !important;
+    padding-right: 1.2rem !important;
+}
+[data-testid="stAppViewContainer"] > .main {
+    margin-left: 0 !important;
+}
 
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
