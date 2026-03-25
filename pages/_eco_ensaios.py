@@ -26,6 +26,7 @@ from _eco_shared import (
     PLOTLY_LAYOUT, PLOTLY_CONFIG,
     _BASE_DIR, _CACHE_DIR, _IS_CLOUD,
 )
+from _eco_funcoes import cargo_para_grupo, header_grupo, ORDEM_GRUPOS, badge_grupo
 
 # =============================================================================
 # CONSTANTES
@@ -431,6 +432,126 @@ def _tabela_com_links(df: pd.DataFrame):
 # ENTRADA PRINCIPAL
 # =============================================================================
 
+def _render_por_frente_servico(df):
+    """
+    Agrupa os ensaios por Frente de Servico (SST / Pavimento / Topografia / Escritório)
+    usando o campo 'obra'. Dentro de cada grupo, mostra cards por profissional.
+    """
+    from collections import defaultdict
+
+    col_lab = "lab" if "lab" in df.columns else ("profissional" if "profissional" in df.columns else None)
+    if col_lab is None:
+        st.warning("Campo de profissional nao encontrado.")
+        return
+
+    today_str = date.today().strftime("%Y-%m-%d")
+
+    # Mapeia obra → grupo
+    def _obra_para_grupo(obra: str) -> str:
+        o = (obra or "").lower()
+        if "sst" in o or "segurança" in o or "seguranca" in o:
+            return "SST"
+        if "topografia" in o:
+            return "Topografia"
+        if "escritório" in o or "escritorio" in o:
+            return "Escritório"
+        return "Pavimento"
+
+    df = df.copy()
+    df["_grupo"] = df.get("obra", "").fillna("").apply(_obra_para_grupo)
+    df["_dstr"]  = df["data_dt"].dt.strftime("%Y-%m-%d").fillna("")
+
+    # Status normalizado
+    def _norm_status(s):
+        s = str(s or "").lower()
+        if "aprovado" in s: return "ok"
+        if "reprovado" in s: return "rep"
+        return "pend"
+    df["_status"] = df.get("status", "").apply(_norm_status)
+
+    # Datas únicas no período (sem futuro)
+    datas = sorted([d for d in df["_dstr"].unique() if d and d <= today_str])
+    _DAY_ABBR = {0:"SEG",1:"TER",2:"QUA",3:"QUI",4:"SEX",5:"SAB",6:"DOM"}
+
+    for grupo in ORDEM_GRUPOS:
+        df_g = df[df["_grupo"] == grupo]
+        if df_g.empty:
+            continue
+
+        st.markdown(header_grupo(grupo), unsafe_allow_html=True)
+
+        # Por profissional dentro do grupo
+        labs = sorted(df_g[col_lab].dropna().unique())
+        sem_reg = [l for l in labs if df_g[df_g[col_lab]==l].empty]
+
+        cards_html = ['<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;padding:4px 0">']
+        for lab in labs:
+            df_lab = df_g[df_g[col_lab] == lab]
+            tipos_lab = sorted(df_lab["tipo"].dropna().unique().tolist()) if "tipo" in df_lab.columns else []
+
+            # Pills por data
+            pills = ""
+            for d in datas:
+                recs_dia = df_lab[df_lab["_dstr"] == d]
+                is_hj = (d == today_str)
+                try:
+                    dt_obj = datetime.strptime(d, "%Y-%m-%d")
+                    dd_lbl = "HOJE" if is_hj else f"{_DAY_ABBR[dt_obj.weekday()]} {dt_obj.day:02d}"
+                except Exception:
+                    dd_lbl = d[-5:]
+                dd_sty = "color:#F7B731;font-weight:700" if is_hj else "color:#8FA882"
+
+                if recs_dia.empty:
+                    pill_cls = "background:rgba(255,255,255,.03);color:#2D3748;border:1px dashed #1a2a1a"
+                    pill_txt = "HOJE" if is_hj else "—"
+                else:
+                    statuses = recs_dia["_status"].tolist()
+                    if "rep"  in statuses: pill_cls = "background:rgba(230,25,75,.2);color:#e6194b;border:1px solid rgba(230,25,75,.4)"
+                    elif "pend" in statuses: pill_cls = "background:rgba(247,183,49,.18);color:#F7B731;border:1px solid rgba(247,183,49,.35)"
+                    else: pill_cls = "background:rgba(60,180,75,.2);color:#3cb44b;border:1px solid rgba(60,180,75,.35)"
+                    n = len(recs_dia)
+                    pill_txt = f"×{n}" if n > 1 else "OK"
+                    if "rep" in statuses: pill_txt = f"REP" + (f"×{n}" if n>1 else "")
+                    elif "pend" in statuses: pill_txt = f"PND" + (f"×{n}" if n>1 else "")
+
+                hj_out = "outline:2px solid #F7B731;outline-offset:1px;" if is_hj else ""
+                pills += (
+                    f'<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
+                    f'<span style="font-size:.57rem;{dd_sty}">{dd_lbl}</span>'
+                    f'<div style="min-width:34px;min-height:24px;border-radius:5px;font-size:.62rem;'
+                    f'font-weight:700;display:flex;align-items:center;justify-content:center;'
+                    f'{pill_cls};{hj_out}">{pill_txt}</div></div>'
+                )
+
+            n_ok   = int((df_lab["_status"]=="ok").sum())
+            n_pend = int((df_lab["_status"]=="pend").sum())
+            n_rep  = int((df_lab["_status"]=="rep").sum())
+            borda = "#e6194b" if n_rep else ("#F7B731" if n_pend else "#3cb44b")
+            tipo_lbl = " · ".join(tipos_lab[:2])
+
+            cards_html.append(
+                f'<div style="background:rgba(13,27,42,.8);border:1px solid rgba(86,110,61,.25);'
+                f'border-left:3px solid {borda};border-radius:10px;padding:12px">'
+                f'<div style="font-weight:700;color:#E8EFD8;font-size:.88rem;margin-bottom:2px">{lab}</div>'
+                f'<div style="font-size:.65rem;color:#8FA882;margin-bottom:8px">{tipo_lbl}</div>'
+                f'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">{pills}</div>'
+                f'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+                f'<span style="font-size:.65rem;background:rgba(60,180,75,.18);color:#3cb44b;'
+                f'border-radius:999px;padding:2px 7px">{n_ok} ok</span>'
+                + (f'<span style="font-size:.65rem;background:rgba(247,183,49,.18);color:#F7B731;'
+                   f'border-radius:999px;padding:2px 7px">{n_pend} pend.</span>' if n_pend else "")
+                + (f'<span style="font-size:.65rem;background:rgba(230,25,75,.18);color:#e6194b;'
+                   f'border-radius:999px;padding:2px 7px">{n_rep} reprov.</span>' if n_rep else "")
+                + '</div></div>'
+            )
+        cards_html.append("</div>")
+        st.markdown("".join(cards_html), unsafe_allow_html=True)
+
+        # Rodapé: sem registro
+        if sem_reg:
+            st.caption(f"Sem registros no periodo: {', '.join(sem_reg)}")
+
+
 def _aba_ensaios():
     # ── Cabeçalho + sincronização ──────────────────────────────────────────────
     c_titulo, c_btn = st.columns([6, 1])
@@ -479,10 +600,15 @@ def _aba_ensaios():
 
     df = _df_ensaios(dados)
 
-    # ── Filtro mensal ─────────────────────────────────────────────────────────
+    # ── Exclui Diário de Obra (tem aba própria) e dados antes de 01/03 ─────────
+    _DATA_MIN = date(2026, 3, 1)
+    df = df[df["tipo"] != "Diário de Obra"]
+    if "data_dt" in df.columns:
+        df = df[df["data_dt"].dt.date >= _DATA_MIN]
+
+    # ── Filtro 1: Mês ─────────────────────────────────────────────────────────
     dts_valid = df["data_dt"].dropna()
     if not dts_valid.empty:
-        # Gera lista de meses disponíveis: "Mar/2026", "Fev/2026", etc.
         meses_disp = (
             dts_valid.dt.to_period("M")
             .drop_duplicates()
@@ -490,39 +616,53 @@ def _aba_ensaios():
         )
         _MESES_PT = {1:"Jan",2:"Fev",3:"Mar",4:"Abr",5:"Mai",6:"Jun",
                      7:"Jul",8:"Ago",9:"Set",10:"Out",11:"Nov",12:"Dez"}
-        opcoes_mes = {
-            f"{_MESES_PT[p.month]}/{p.year}": p
-            for p in meses_disp
-        }
-        col_mes, _ = st.columns([2, 4])
+        opcoes_mes = {f"{_MESES_PT[p.month]}/{p.year}": p for p in meses_disp}
+        col_mes, col_obra, col_prof = st.columns([2, 2, 2])
         with col_mes:
-            mes_sel_lbl = st.selectbox(
-                "Mes:", list(opcoes_mes.keys()), key="ens_mes_sel"
-            )
+            mes_sel_lbl = st.selectbox("Mes:", list(opcoes_mes.keys()), key="ens_mes_sel")
         per_sel = opcoes_mes[mes_sel_lbl]
         d_ini_g = per_sel.to_timestamp().date()
         d_fim_g = (per_sel + 1).to_timestamp().date() - timedelta(days=1)
-        df = df[(df["data_dt"].dt.date >= d_ini_g) &
-                (df["data_dt"].dt.date <= d_fim_g)]
+        df = df[(df["data_dt"].dt.date >= d_ini_g) & (df["data_dt"].dt.date <= d_fim_g)]
+
+        # ── Filtro 2: Tipo de Obra ─────────────────────────────────────────────
+        obras_disp = sorted(df["obra"].dropna().unique().tolist()) if "obra" in df.columns else []
+        with col_obra:
+            obra_sel = st.selectbox("Tipo de Obra:", ["Todas"] + obras_disp, key="ens_obra_sel")
+        if obra_sel != "Todas":
+            df = df[df["obra"] == obra_sel]
+
+        # ── Filtro 3: Profissional ─────────────────────────────────────────────
+        col_lab = "lab" if "lab" in df.columns else ("profissional" if "profissional" in df.columns else None)
+        profs_disp = sorted(df[col_lab].dropna().unique().tolist()) if col_lab else []
+        with col_prof:
+            prof_sel = st.selectbox("Profissional:", ["Todos"] + profs_disp, key="ens_prof_sel")
+        if prof_sel != "Todos" and col_lab:
+            df = df[df[col_lab] == prof_sel]
+
+    if df.empty:
+        st.info("Nenhum registro no filtro selecionado.")
+        return
 
     # ── Cards de resumo ────────────────────────────────────────────────────────
     _cards_resumo(df, _mtime or "—")
 
-    # ── Seções analíticas ──────────────────────────────────────────────────────
+    # ── Sub-tabs ──────────────────────────────────────────────────────────────
     st.markdown("---")
-    _grafico_timeline(df)
+    tab_frente, tab_analise = st.tabs(["Por Frente de Servico", "Analise Grafica"])
 
-    st.markdown("---")
-    _heatmap_profissional(df)
+    with tab_frente:
+        _render_por_frente_servico(df)
 
-    st.markdown("---")
-    _grafico_por_profissional(df)
-
-    st.markdown("---")
-    _pivot_quem_fez_o_que(df)
-
-    st.markdown("---")
-    _dias_sem_registro(df)
-
-    st.markdown("---")
-    _tabela_com_links(df)
+    with tab_analise:
+        _grafico_timeline(df)
+        st.markdown("---")
+        _heatmap_profissional(df)
+        st.markdown("---")
+        _grafico_por_profissional(df)
+        st.markdown("---")
+        _pivot_quem_fez_o_que(df)
+        st.markdown("---")
+        _dias_sem_registro(df)
+        st.markdown("---")
+        _tabela_com_links(df)

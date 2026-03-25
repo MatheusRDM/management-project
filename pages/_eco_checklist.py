@@ -108,6 +108,7 @@ def _kpi_card(val, label, cor="#BFCF99"):
 
 
 import unicodedata as _ucd
+from _eco_funcoes import cargo_para_grupo, header_grupo, ORDEM_GRUPOS, badge_grupo
 
 def _norm(s: str) -> str:
     """Lowercase + remove acentos + strip — para comparação robusta."""
@@ -376,8 +377,17 @@ def _renderizar_calendario(people: list[dict], mes_ref: str):
     # Todos os dias do mês (sem limitar a 7)
     datas_janela = datas_mes
 
-    # ── View rápida: cards 7 dias (só ativos) ────────────────────────────────
-    _renderizar_cards(people_ativos, datas_janela)
+    # ── View por grupo (SST / Pavimento / Topografia / Escritório) ───────────
+    from collections import defaultdict as _dd
+    por_grupo = _dd(list)
+    for p in people_ativos:
+        g = cargo_para_grupo(p.get("funcao", ""))
+        por_grupo[g].append(p)
+
+    grupos_presentes = [g for g in ORDEM_GRUPOS if por_grupo.get(g)]
+    for g in grupos_presentes:
+        st.markdown(header_grupo(g), unsafe_allow_html=True)
+        _renderizar_cards(por_grupo[g], datas_janela)
 
     # ── Rodapé compacto ───────────────────────────────────────────────────────
     rodape = []
@@ -1262,7 +1272,7 @@ def _aba_checklist():
 
     # Filtro mensal — compacto, sem KPIs
     med_escolhida = st.selectbox(
-        "📅 Mês / Medição:",
+        "Mes / Medicao:",
         options=meds_reversed,
         format_func=lambda x: x,
         key="eco_med_sel",
