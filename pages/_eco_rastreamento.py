@@ -2148,6 +2148,16 @@ _CORES_FROTA = [
 ]
 
 
+def _haversine(lat1, lon1, lat2, lon2):
+    """Distancia em metros entre dois pontos GPS."""
+    from math import radians, cos, sin, asin, sqrt
+    R = 6_371_000
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    return 2 * R * asin(sqrt(a))
+
+
 def _detectar_paradas(pontos, vel_thresh=3, min_min=4):
     """Detecta paradas: blocos de pontos com vel <= thresh por >= min_min minutos."""
     paradas = []
@@ -2190,16 +2200,132 @@ def _detectar_paradas(pontos, vel_thresh=3, min_min=4):
     return paradas
 
 
+def _buscar_historico_veiculo(sess, idvei, n_dias=14):
+    """Busca ultimos n_dias de historico para um veiculo. Ignora dias sem dados."""
+    historico = []
+    hoje = date.today()
+    for delta in range(1, n_dias + 1):
+        dia = hoje - timedelta(days=delta)
+        dia_str = dia.strftime("%Y-%m-%d")
+        try:
+            pontos = _logos_get_rota(
+                sess, idvei,
+                f"{dia_str} 00:00",
+                f"{dia_str} 23:59",
+            )
+            if pontos:
+                historico.append((dia_str, pontos))
+        except Exception:
+            pass
+    return historico
+
+
+def _identificar_locais_padrao(historico_dias, raio_m=300, min_aparicoes=3):
+    """
+    historico_dias: [(date_str, [pontos]), ...]
+    Agrupa paradas geograficamente proximas em clusters (locais padrao).
+    Dados mais recentes pesam mais. Detecta novos padroes emergindo.
+    Retorna lista ordenada por peso decrescente.
+    """
+    hoje = date.today()
+    todas_paradas = []
+    for data_str, pontos in historico_dias:
+        try:
+            data_pt = date.fromisoformat(data_str)
+        except Exception:
+            data_pt = hoje
+        dias_atras = max(0, (hoje - data_pt).days)
+        peso = max(0.3, 1.0 - dias_atras * 0.05)   # decai 5% por dia, minimo 0.3
+        for p in _detectar_paradas(pontos):
+            todas_paradas.append({**p, "data": data_str, "data_pt": data_pt, "peso": peso})
+
+    # Clustering greedy por proximidade
+    clusters = []
+    for parada in todas_paradas:
+        melhor, melhor_dist = None, raio_m + 1
+        for c in clusters:
+            d = _haversine(parada["lat"], parada["lon"], c["lat_c"], c["lon_c"])
+            if d < melhor_dist:
+                melhor_dist, melhor = d, c
+        if melhor:
+            melhor["aps"].append(parada)
+            n = len(melhor["aps"])
+            melhor["lat_c"] = sum(a["lat"] for a in melhor["aps"]) / n
+            melhor["lon_c"] = sum(a["lon"] for a in melhor["aps"]) / n
+        else:
+            clusters.append({"lat_c": parada["lat"], "lon_c": parada["lon"], "aps": [parada]})
+
+    resultado = []
+    for c in clusters:
+        aps = c["aps"]
+        if len(aps) < min_aparicoes:
+            continue
+        dias_unicos = sorted({a["data"] for a in aps}, reverse=True)
+        # Horario medio de chegada
+        mins = []
+        for a in aps:
+            try:
+                mins.append(int(a["h_ini"][:2]) * 60 + int(a["h_ini"][3:]))
+            except Exception:
+                pass
+        avg_min = int(sum(mins) / len(mins)) if mins else None
+        horario_medio = f"{avg_min//60:02d}:{avg_min%60:02d}" if avg_min is not None else "—"
+        # Cidade predominante
+        cidades = [a.get("cidade","") for a in aps if a.get("cidade")]
+        cidade = max(set(cidades), key=cidades.count) if cidades else "—"
+        # Novo padrao: apareceu em >= 3 dos ultimos 5 dias
+        ultimos_5 = {a["data"] for a in aps if (hoje - a["data_pt"]).days <= 5}
+        # Padrao antigo: apareceu ha mais de 10 dias e nao aparece mais recentemente
+        recentes  = {a["data"] for a in aps if (hoje - a["data_pt"]).days <= 7}
+        novo      = len(ultimos_5) >= 3
+        inativo   = len(recentes) == 0 and len(dias_unicos) >= 3
+
+        resultado.append({
+            "lat": c["lat_c"], "lon": c["lon_c"],
+            "cidade": cidade,
+            "n_aparicoes": len(aps),
+            "n_dias": len(dias_unicos),
+            "ultimo_dia": dias_unicos[0] if dias_unicos else "—",
+            "horario_medio": horario_medio,
+            "avg_min": avg_min,
+            "peso": round(sum(a["peso"] for a in aps), 1),
+            "novo_padrao": novo,
+            "inativo": inativo,
+        })
+
+    resultado.sort(key=lambda x: x["peso"], reverse=True)
+    return resultado
+
+
+def _prever_retorno(locais_padrao, primeira_ignicao_dt):
+    """
+    Retorna (hora_str, cidade, confianca_pct) do local padrao mais provavel de retorno.
+    Considera apenas locais ativos (nao marcados como inativos) com horario definido.
+    """
+    if not locais_padrao or primeira_ignicao_dt is None:
+        return None, None, 0
+    for lp in locais_padrao:
+        if lp.get("inativo"):
+            continue
+        if lp["avg_min"] is not None and lp["n_dias"] >= 3:
+            confianca = min(95, lp["n_dias"] * 5 + (5 if lp["novo_padrao"] else 0))
+            return lp["horario_medio"], lp["cidade"], confianca
+    return None, None, 0
+
+
 def _render_frota_dia(itens):
     """Seleciona uma data e exibe rota de TODOS os veículos + paradas em scroll infinito."""
     st.markdown("### Frota no Dia — Todas as Rotas")
 
-    c_date, c_btn, _ = st.columns([2, 1, 3])
+    c_date, c_btn, c_pat, _ = st.columns([2, 1, 1, 1])
     with c_date:
         dia_sel = st.date_input("Data:", value=date.today(), key="fd_data")
     with c_btn:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         carregar = st.button("Carregar Frota", key="fd_btn", use_container_width=True)
+    with c_pat:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        analisar = st.button("Analisar Padroes (14d)", key="fd_pat_btn", use_container_width=True)
 
     if carregar:
         resultados = {}
@@ -2221,6 +2347,7 @@ def _render_frota_dia(itens):
                     resultados[it["motorista"]] = {
                         "hist": hist, "cor": it["cor"],
                         "placa": it["placa"], "contrato": it.get("contrato",""),
+                        "idvei": it["idvei"],
                     }
         except Exception as e:
             st.error(f"Erro ao conectar: {e}")
@@ -2229,6 +2356,33 @@ def _render_frota_dia(itens):
             prog.empty()
         st.session_state["fd_resultados"] = resultados
         st.session_state["fd_data_carregada"] = str(dia_sel)
+        # Limpa padroes antigos ao recarregar dia diferente
+        st.session_state.pop("fd_padroes", None)
+
+    if analisar:
+        resultados_base = st.session_state.get("fd_resultados", {})
+        if not resultados_base:
+            st.warning("Carregue a frota primeiro antes de analisar padroes.")
+        else:
+            padroes_todos = {}
+            prog2 = st.progress(0, text="Analisando historico (14 dias)...")
+            try:
+                sess, _ = _logos_login()
+                items_list = list(resultados_base.items())
+                for idx, (motorista, dados) in enumerate(items_list):
+                    prog2.progress(
+                        (idx + 1) / len(items_list),
+                        text=f"Historico {motorista} ({idx+1}/{len(items_list)})...",
+                    )
+                    historico_dias = _buscar_historico_veiculo(sess, dados.get("idvei",""), n_dias=14)
+                    locais = _identificar_locais_padrao(historico_dias, raio_m=300, min_aparicoes=3)
+                    padroes_todos[motorista] = locais
+            except Exception as e:
+                st.error(f"Erro na analise: {e}")
+            finally:
+                prog2.empty()
+            st.session_state["fd_padroes"] = padroes_todos
+            st.success(f"Padroes identificados para {len(padroes_todos)} veiculos.")
 
     resultados = st.session_state.get("fd_resultados", {})
     if not resultados:
@@ -2341,45 +2495,63 @@ def _render_frota_dia(itens):
             except Exception:
                 jornada_txt = "—"
 
+        # --- Padroes historicos deste motorista (se analisado) ---
+        padroes_hist = st.session_state.get("fd_padroes", {}).get(motorista, [])
+        prev_hora, prev_cidade, prev_conf = _prever_retorno(padroes_hist, primeira_ignicao)
+
+        # --- Tempo parado com motor ligado ---
+        tempo_parado_min = 0
+        for p in paradas:
+            tempo_parado_min += p.get("dur_min", 0)
+        if tempo_parado_min >= 60:
+            tempo_parado_txt = f"{tempo_parado_min // 60}h{tempo_parado_min % 60:02d}min"
+        elif tempo_parado_min > 0:
+            tempo_parado_txt = f"{tempo_parado_min} min"
+        else:
+            tempo_parado_txt = "—"
+
+        # --- Header do veiculo ---
+        badges = ""
+        if padroes_hist:
+            lp_top = padroes_hist[0]
+            badge_cor = "#4CC9F0" if lp_top.get("novo_padrao") else "#8FA882"
+            badge_txt = "NOVO PADRAO" if lp_top.get("novo_padrao") else f"{lp_top['n_dias']}d historico"
+            badges = (f'<span style="background:{badge_cor}22;color:{badge_cor};'
+                      f'font-size:.65rem;border-radius:4px;padding:1px 5px;margin-left:6px">'
+                      f'{badge_txt}</span>')
+
         st.markdown(
-            f'<div style="border-left:3px solid {cor};padding:4px 0 4px 12px;'
-            f'margin-bottom:4px">'
+            f'<div style="border-left:3px solid {cor};padding:4px 0 4px 12px;margin-bottom:4px">'
             f'<span style="font-weight:700;color:{cor};font-size:.95rem">{motorista}</span>'
             f' <span style="color:#8FA882;font-size:.78rem">{dados["placa"]} · {dados["contrato"]}</span>'
-            f'</div>',
+            f'{badges}</div>',
             unsafe_allow_html=True,
         )
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Km percorridos",       f"{km:,.1f} km")
-        c2.metric("Primeira ignicao",     primeira_ign_txt)
-        c3.metric("Paradas detectadas",   len(paradas))
-        c4.metric("Jornada (ignicao->retorno)", jornada_txt)
 
-        if paradas:
-            rows_html = "".join(
-                f'<tr>'
-                f'<td style="padding:4px 8px;color:#E8EFD8">{p["h_ini"]} - {p["h_fim"]}</td>'
-                f'<td style="padding:4px 8px;color:#4CC9F0;font-weight:600">'
-                f'{p["dur_min"]//60}h {p["dur_min"]%60}min' if p["dur_min"]>=60
-                else f'<td style="padding:4px 8px;color:#4CC9F0;font-weight:600">{p["dur_min"]} min'
-                f'</td>'
-                f'<td style="padding:4px 8px;color:#8FA882">{p["cidade"]}</td>'
-                f'</tr>'
-                for p in paradas
-            )
+        # --- Metricas: 4 colunas ---
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Km percorridos",     f"{km:,.1f} km")
+        c2.metric("Primeira ignicao",   primeira_ign_txt)
+        c3.metric("Tempo parado ligado", tempo_parado_txt)
+        c4.metric("Jornada total",      jornada_txt)
+
+        # --- Previsao de retorno (se padroes carregados) ---
+        if prev_hora:
+            local_txt = f" — {prev_cidade}" if prev_cidade and prev_cidade != "—" else ""
             st.markdown(
-                f'<div style="overflow-x:auto;margin:6px 0 16px 0">'
-                f'<table style="border-collapse:collapse;font-family:Inter,sans-serif;'
-                f'font-size:.75rem;width:100%">'
-                f'<thead><tr>'
-                f'<th style="padding:4px 8px;color:#BFCF99;text-align:left;border-bottom:1px solid #566E3D">Horario</th>'
-                f'<th style="padding:4px 8px;color:#BFCF99;text-align:left;border-bottom:1px solid #566E3D">Duracao</th>'
-                f'<th style="padding:4px 8px;color:#BFCF99;text-align:left;border-bottom:1px solid #566E3D">Local</th>'
-                f'</tr></thead><tbody>{rows_html}</tbody></table></div>',
+                f'<div style="background:#1A2A1A;border:1px solid #566E3D;border-radius:6px;'
+                f'padding:6px 12px;margin:4px 0 8px 0;font-family:Inter,sans-serif;font-size:.8rem">'
+                f'<span style="color:#8FA882">Previsao retorno:</span> '
+                f'<span style="color:#4CC9F0;font-weight:700;font-size:.95rem">~{prev_hora}</span>'
+                f'<span style="color:#8FA882">{local_txt}</span>'
+                f'<span style="color:#566E3D;font-size:.7rem;margin-left:8px">'
+                f'confianca {prev_conf}% · {len(padroes_hist)} locais mapeados</span>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
-        else:
-            st.caption("Nenhuma parada significativa detectada neste dia.")
+        elif padroes_hist:
+            st.caption("Padrao identificado — historico insuficiente para previsao de horario.")
+
         st.markdown('<hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:8px 0">', unsafe_allow_html=True)
 
 
