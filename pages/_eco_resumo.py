@@ -223,6 +223,10 @@ def _aba_resumo():
                     unsafe_allow_html=True)
         return
 
+    # Aviso se rastreamento nao foi carregado
+    if not rastr_itens:
+        st.info("Rastreamento nao carregado. Va em Rastreamento > Atualizar para ver dados de veiculo aqui.")
+
     # ── DATA MÍNIMA: 01/03/2026 ────────────────────────────────────────────
     _DATA_MIN = date(2026, 3, 1)
 
@@ -240,8 +244,9 @@ def _aba_resumo():
     meses_disp.reverse()
     opcoes_mes = {f"{_PT[m]}/{y}": (y, m) for y, m in meses_disp}
 
-    col_mes, col_dia, col_obra, col_prof = st.columns([2, 2, 2, 2])
-    with col_mes:
+    # Filtros em 2 linhas: linha 1 = Mes + Dia, linha 2 = Obra + Profissional
+    fl1, fl2 = st.columns([1, 1])
+    with fl1:
         mes_lbl = st.selectbox("Mes:", list(opcoes_mes.keys()), key="rs_mes")
     ano_sel, mes_sel = opcoes_mes[mes_lbl]
 
@@ -250,7 +255,7 @@ def _aba_resumo():
     dias_disp = list(range(1, min(ultimo_dia, today.day if (ano_sel == today.year and mes_sel == today.month) else ultimo_dia) + 1))
     opcoes_dia = {str(d): d for d in reversed(dias_disp)}
     opcoes_dia = {"Todos os dias": 0, **opcoes_dia}
-    with col_dia:
+    with fl2:
         dia_lbl = st.selectbox("Dia:", list(opcoes_dia.keys()), key="rs_dia")
     dia_sel = opcoes_dia[dia_lbl]
 
@@ -268,24 +273,30 @@ def _aba_resumo():
     # ── Filtro 3: Tipo de Obra ─────────────────────────────────────────────
     obras_todas = sorted({
         e.get("obra","") for e in ensaios_raw
-        if e.get("obra") and e.get("tipo") != "Diário de Obra"
+        if e.get("obra") and not _e_diario(e)
     })
-    with col_obra:
+    fl3, fl4 = st.columns([1, 1])
+    with fl3:
         obra_sel = st.selectbox("Tipo de Obra:", ["Todas"] + obras_todas, key="rs_obra")
 
     # ── Filtro 4: Profissional ─────────────────────────────────────────────
     people_sorted = sorted(all_people)
-    with col_prof:
+    with fl4:
         prof_sel = st.selectbox("Profissional:", ["Todos"] + people_sorted, key="rs_prof")
     if prof_sel != "Todos":
         people_sorted = [prof_sel]
 
-    # Filtra ensaios por obra selecionada
+    # Filtra ensaios por obra selecionada (Diario de Obra sempre incluido)
+    def _e_diario(r):
+        t = str(r.get("tipo", "")).lower()
+        return "diario" in t or "diário" in t
+
     if obra_sel != "Todas":
         ens_by_prof_filtrado = defaultdict(lambda: defaultdict(list))
         for prof, dias in ens_by_prof.items():
             for d, recs in dias.items():
-                recs_f = [r for r in recs if r.get("obra") == obra_sel]
+                recs_f = [r for r in recs
+                          if r.get("obra") == obra_sel or _e_diario(r)]
                 if recs_f:
                     ens_by_prof_filtrado[prof][d] = recs_f
     else:
@@ -322,7 +333,7 @@ def _aba_resumo():
                 ck_data  = ck_by_person.get(person, {})
                 rastr    = _buscar_rastr(person)   # fuzzy match por tokens
 
-                has_data = any(d in ens_data or d in ck_data for d in dates_range) or bool(rastr)
+                has_data = any(d in ens_data or d in ck_data for d in dates_range)
                 if not has_data:
                     continue
 
@@ -370,8 +381,7 @@ def _aba_resumo():
                         day_all   = ens_data.get(d, [])
                         ck_val    = ck_data.get(d)
                         day_ck    = [e for e in day_all if str(e.get("tipo","")).lower().startswith("checklist")]
-                        day_do    = [e for e in day_all if "diário" in str(e.get("tipo","")).lower()
-                                     or "diario" in str(e.get("tipo","")).lower()]
+                        day_do    = [e for e in day_all if _e_diario(e)]
                         day_ens_r = [e for e in day_all if e not in day_ck and e not in day_do]
 
                         if not day_all and not ck_val:

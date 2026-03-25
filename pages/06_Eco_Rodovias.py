@@ -30,6 +30,9 @@ proteger_pagina("Eco Rodovias")
 # ── CSS (cal-table styles + component styles needed at runtime) ───────────────
 st.markdown("""
 <style>
+/* Esconder navegacao automatica lateral do Streamlit */
+[data-testid="stSidebarNav"],[data-testid="stSidebarNavItems"],[data-testid="collapsedControl"]{display:none!important}
+
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 /* ═══════════════════════════════════════════════════════════
@@ -55,14 +58,18 @@ st.markdown("""
         padding-right: 0.5rem !important;
         padding-top: 1rem !important;
     }
-    /* Sidebar: inicia recolhido no mobile */
-    section[data-testid="stSidebar"] {
-        width: 0 !important;
-        min-width: 0 !important;
-    }
+    /* Sidebar expandida no mobile */
     section[data-testid="stSidebar"][aria-expanded="true"] {
         width: 280px !important;
         min-width: 280px !important;
+        overflow: visible !important;
+    }
+    /* Sidebar colapsada: ocultar no mobile */
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        overflow: hidden !important;
     }
     /* Tabs: fonte menor, scroll horizontal */
     .stTabs [data-baseweb="tab-list"] {
