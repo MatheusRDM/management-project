@@ -2185,34 +2185,47 @@ def _haversine(lat1, lon1, lat2, lon2):
 
 
 def _detectar_paradas(pontos, vel_thresh=3, min_min=4):
-    """Detecta paradas: blocos de pontos com vel <= thresh por >= min_min minutos."""
+    """Detecta paradas: blocos de pontos com vel <= thresh por >= min_min minutos.
+    Usa _pick() para lidar com os diferentes nomes de campo da API Logos.
+    """
     paradas = []
     i = 0
     while i < len(pontos):
-        vel = pontos[i].get("velocidade", 0) or 0
+        vel = float(_pick(pontos[i], _HIST_VEL_FIELDS, 0) or 0)
         if vel <= vel_thresh:
             bloco = [pontos[i]]
             j = i + 1
-            while j < len(pontos) and (pontos[j].get("velocidade", 0) or 0) <= vel_thresh:
-                bloco.append(pontos[j])
-                j += 1
-            # Calcula duração
+            while j < len(pontos):
+                vel_j = float(_pick(pontos[j], _HIST_VEL_FIELDS, 0) or 0)
+                if vel_j <= vel_thresh:
+                    bloco.append(pontos[j])
+                    j += 1
+                else:
+                    break
+            # Duração do bloco
             try:
-                t0 = datetime.fromisoformat(bloco[0].get("dt","").replace("Z",""))
-                t1 = datetime.fromisoformat(bloco[-1].get("dt","").replace("Z",""))
+                dt0_str = str(_pick(bloco[0],  _HIST_DT_FIELDS, "") or "").replace("Z","")
+                dt1_str = str(_pick(bloco[-1], _HIST_DT_FIELDS, "") or "").replace("Z","")
+                t0 = datetime.fromisoformat(dt0_str)
+                t1 = datetime.fromisoformat(dt1_str)
                 dur_min = max((t1 - t0).total_seconds() / 60, len(bloco) * 3)
             except Exception:
                 dur_min = len(bloco) * 3
+
             if dur_min >= min_min:
-                lt = bloco[0].get("pos_coordenada_latitude") or bloco[0].get("lat")
-                ln = bloco[0].get("pos_coordenada_longitude") or bloco[0].get("lon")
+                lt = _pick(bloco[0], _HIST_LAT_FIELDS)
+                ln = _pick(bloco[0], _HIST_LON_FIELDS)
                 try:
                     lt, ln = float(lt), float(ln)
-                    h_ini = bloco[0].get("dt","")[-8:-3] if bloco[0].get("dt","") else "—"
-                    h_fim = bloco[-1].get("dt","")[-8:-3] if bloco[-1].get("dt","") else "—"
+                    dt0_str = str(_pick(bloco[0],  _HIST_DT_FIELDS, "") or "")
+                    dt1_str = str(_pick(bloco[-1], _HIST_DT_FIELDS, "") or "")
+                    # Extrai HH:MM: os últimos 8 chars de "YYYY-MM-DDTHH:MM:SS" → "HH:MM:SS", pega [:5]
+                    h_ini = dt0_str[-8:][:5] if len(dt0_str) >= 8 else "—"
+                    h_fim = dt1_str[-8:][:5] if len(dt1_str) >= 8 else "—"
                 except Exception:
                     lt = ln = None
-                cidade = bloco[0].get("pos_end_cidade","") or bloco[0].get("cidade","")
+                    h_ini = h_fim = "—"
+                cidade = _pick(bloco[0], _HIST_CID_FIELDS, "") or ""
                 if lt and ln:
                     paradas.append({
                         "lat": lt, "lon": ln,
@@ -2427,12 +2440,14 @@ def _render_frota_dia(itens):
         cor = dados["cor"] if dados["cor"] else _CORES_FROTA[idx % len(_CORES_FROTA)]
         coords = []
         for p in dados["hist"]:
-            lt = p.get("pos_coordenada_latitude") or p.get("lat")
-            ln = p.get("pos_coordenada_longitude") or p.get("lon")
+            lt = _pick(p, _HIST_LAT_FIELDS)
+            ln = _pick(p, _HIST_LON_FIELDS)
             try:
                 lt, ln = float(lt), float(ln)
-                coords.append([lt, ln])
-                all_lats.append(lt); all_lons.append(ln)
+                if lt and ln:
+                    coords.append([lt, ln])
+                    all_lats.append(lt)
+                    all_lons.append(ln)
             except Exception:
                 pass
 
@@ -2537,22 +2552,23 @@ def _render_frota_dia(itens):
                 km      = _km_from_hist(dados["hist"])
                 paradas = _detectar_paradas(dados["hist"])
 
-                # --- Primeira ignição ---
+                # --- Primeira ignição (usa _pick para nomes de campo variáveis da API) ---
                 primeira_ignicao = None
                 for pt in dados["hist"]:
-                    ign    = pt.get("ignicao") or pt.get("ignition")
-                    dt_str = pt.get("dt", "")
+                    ign    = _pick(pt, _HIST_IGN_FIELDS)
+                    dt_str = str(_pick(pt, _HIST_DT_FIELDS, "") or "").replace("Z", "")
                     if ign and dt_str:
                         try:
-                            primeira_ignicao = datetime.fromisoformat(dt_str.replace("Z", ""))
+                            primeira_ignicao = datetime.fromisoformat(dt_str)
                             break
                         except Exception:
                             pass
+                # Fallback: primeiro ponto do histórico mesmo sem ignição confirmada
                 if primeira_ignicao is None and dados["hist"]:
                     try:
-                        primeira_ignicao = datetime.fromisoformat(
-                            dados["hist"][0].get("dt", "").replace("Z", "")
-                        )
+                        dt_str = str(_pick(dados["hist"][0], _HIST_DT_FIELDS, "") or "").replace("Z", "")
+                        if dt_str:
+                            primeira_ignicao = datetime.fromisoformat(dt_str)
                     except Exception:
                         pass
                 primeira_ign_txt = primeira_ignicao.strftime("%H:%M") if primeira_ignicao else "—"
