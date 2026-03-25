@@ -2552,37 +2552,45 @@ def _render_frota_dia(itens):
                 km      = _km_from_hist(dados["hist"])
                 paradas = _detectar_paradas(dados["hist"])
 
-                # --- Primeira ignição (usa _pick para nomes de campo variáveis da API) ---
+                # --- Primeira ignição ---
+                # API de histórico não envia ignição por ponto → usamos o
+                # timestamp do primeiro ponto GPS válido do dia.
                 primeira_ignicao = None
                 for pt in dados["hist"]:
-                    ign    = _pick(pt, _HIST_IGN_FIELDS)
-                    dt_str = str(_pick(pt, _HIST_DT_FIELDS, "") or "").replace("Z", "")
-                    if ign and dt_str:
-                        try:
+                    dt_str = str(_pick(pt, _HIST_DT_FIELDS, "") or "").replace("Z", "").strip()
+                    if not dt_str:
+                        continue
+                    lt = _pick(pt, _HIST_LAT_FIELDS)
+                    ln = _pick(pt, _HIST_LON_FIELDS)
+                    try:
+                        if lt and ln:
                             primeira_ignicao = datetime.fromisoformat(dt_str)
                             break
-                        except Exception:
-                            pass
-                # Fallback: primeiro ponto do histórico mesmo sem ignição confirmada
-                if primeira_ignicao is None and dados["hist"]:
-                    try:
-                        dt_str = str(_pick(dados["hist"][0], _HIST_DT_FIELDS, "") or "").replace("Z", "")
-                        if dt_str:
-                            primeira_ignicao = datetime.fromisoformat(dt_str)
                     except Exception:
-                        pass
+                        continue
                 primeira_ign_txt = primeira_ignicao.strftime("%H:%M") if primeira_ignicao else "—"
 
                 # --- Jornada ---
+                # --- Jornada Total: do primeiro ao último ponto GPS válido ---
                 jornada_txt = "—"
-                if paradas and primeira_ignicao:
+                if primeira_ignicao and dados["hist"]:
                     try:
-                        h_ini_str = paradas[-1]["h_ini"]
-                        hh, mm    = int(h_ini_str[:2]), int(h_ini_str[3:])
-                        t_retorno = primeira_ignicao.replace(hour=hh, minute=mm, second=0, microsecond=0)
-                        jornada_min = max(0, int((t_retorno - primeira_ignicao).total_seconds() / 60))
-                        jornada_txt = (f"{jornada_min // 60}h{jornada_min % 60:02d}min"
-                                       if jornada_min >= 60 else f"{jornada_min} min")
+                        # Percorre do final para achar o último timestamp válido
+                        ultimo_dt = None
+                        for pt in reversed(dados["hist"]):
+                            dt_str = str(_pick(pt, _HIST_DT_FIELDS, "") or "").replace("Z","").strip()
+                            lt = _pick(pt, _HIST_LAT_FIELDS)
+                            ln = _pick(pt, _HIST_LON_FIELDS)
+                            if dt_str and lt and ln:
+                                try:
+                                    ultimo_dt = datetime.fromisoformat(dt_str)
+                                    break
+                                except Exception:
+                                    pass
+                        if ultimo_dt and ultimo_dt > primeira_ignicao:
+                            jornada_min = int((ultimo_dt - primeira_ignicao).total_seconds() / 60)
+                            jornada_txt = (f"{jornada_min // 60}h{jornada_min % 60:02d}min"
+                                           if jornada_min >= 60 else f"{jornada_min} min")
                     except Exception:
                         jornada_txt = "—"
 

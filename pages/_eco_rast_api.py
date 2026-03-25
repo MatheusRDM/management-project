@@ -52,7 +52,7 @@ _HIST_IGN_FIELDS = [
 ]
 _HIST_DT_FIELDS  = [
     "pos_dt_posicao", "dt_posicao", "data_hora", "dataHora",
-    "data", "datetime", "timestamp",
+    "dt", "data", "datetime", "timestamp",
 ]
 _HIST_CID_FIELDS = [
     "pos_end_cidade", "cidade", "municipio", "city",
